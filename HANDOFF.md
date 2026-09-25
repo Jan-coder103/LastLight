@@ -4,7 +4,7 @@ Updated: 2026-09-25
 
 ## Current position
 
-Phases 1–3 are **Accepted**. On 2026-09-25, the owner reported “All green lights from my site” after playtesting Phase 3 and authorized the next phase. Phase 4 is implemented and **Awaiting owner playtest**. The Phase 4 build is committed as `COMMIT` on `main`.
+Phases 1–3 are **Accepted**. On 2026-09-25, the owner reported “All green lights from my site” after playtesting Phase 3 and authorized the next phase. Phase 4 is implemented and **Awaiting owner playtest**. The Phase 4 build is committed as `4ff3475` on `main`.
 
 ## Read first
 
