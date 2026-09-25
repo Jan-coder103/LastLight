@@ -61,7 +61,7 @@ export class CameraRig {
     this.transition = undefined;
   }
 
-  switchMode(playerPosition: Vector3, playerFacing: number): CameraMode {
+  switchMode(playerPosition: Vector3): CameraMode {
     this.mode = this.mode === 'third-person' ? 'top-down' : 'third-person';
     if (this.mode === 'top-down' && document.pointerLockElement === this.canvas)
       document.exitPointerLock();
@@ -70,7 +70,7 @@ export class CameraRig {
       startPosition: this.camera.position.clone(),
       startTarget: this.currentTarget.clone(),
     };
-    this.setDestination(playerPosition, playerFacing);
+    this.setDestination(playerPosition);
     return this.mode;
   }
 
@@ -80,9 +80,9 @@ export class CameraRig {
     this.pitch = Math.max(-0.62, Math.min(0.95, this.pitch + deltaY * 0.0022));
   }
 
-  update(deltaSeconds: number, playerPosition: Vector3, playerFacing: number): void {
+  update(deltaSeconds: number, playerPosition: Vector3): void {
     const delta = Math.min(deltaSeconds, 0.05);
-    this.setDestination(playerPosition, playerFacing);
+    this.setDestination(playerPosition);
     if (this.transition) {
       this.transition.elapsed += delta;
       const amount = Math.min(1, this.transition.elapsed / transitionSeconds);
@@ -90,6 +90,9 @@ export class CameraRig {
       this.camera.position.lerpVectors(this.transition.startPosition, this.idealPosition, eased);
       this.currentTarget.lerpVectors(this.transition.startTarget, this.idealTarget, eased);
       if (amount >= 1) this.transition = undefined;
+    } else if (this.mode === 'third-person') {
+      this.camera.position.copy(this.idealPosition);
+      this.currentTarget.copy(this.idealTarget);
     } else {
       const blend = 1 - Math.exp(-11 * delta);
       this.camera.position.lerp(this.idealPosition, blend);
@@ -98,18 +101,18 @@ export class CameraRig {
     this.camera.lookAt(this.currentTarget);
   }
 
-  reset(playerPosition: Vector3, playerFacing: number): void {
+  reset(playerPosition: Vector3): void {
     this.transition = undefined;
     this.mode = 'third-person';
     this.yaw = 0;
     this.pitch = 0.2;
-    this.setDestination(playerPosition, playerFacing);
+    this.setDestination(playerPosition);
     this.camera.position.copy(this.idealPosition);
     this.currentTarget.copy(this.idealTarget);
     this.camera.lookAt(this.currentTarget);
   }
 
-  private setDestination(playerPosition: Vector3, playerFacing: number): void {
+  private setDestination(playerPosition: Vector3): void {
     const terrainY = playerPosition.y;
     if (this.mode === 'top-down') {
       this.idealTarget.set(playerPosition.x, terrainY + 1.35, playerPosition.z);
@@ -122,8 +125,6 @@ export class CameraRig {
     const horizontalDistance = distance + aimLead;
     const sine = Math.sin(this.yaw);
     const cosine = Math.cos(this.yaw);
-    const shoulderX = Math.cos(playerFacing) * shoulderOffset;
-    const shoulderZ = -Math.sin(playerFacing) * shoulderOffset;
     const targetY = terrainY + 3.2 - Math.tan(this.pitch) * horizontalDistance;
     this.idealTarget.set(
       playerPosition.x - sine * aimLead,
@@ -131,9 +132,9 @@ export class CameraRig {
       playerPosition.z - cosine * aimLead,
     );
     this.idealPosition.set(
-      playerPosition.x - sine * distance + shoulderX,
+      playerPosition.x - sine * distance + cosine * shoulderOffset,
       terrainY + 3.2,
-      playerPosition.z + cosine * distance + shoulderZ,
+      playerPosition.z + cosine * distance + sine * shoulderOffset,
     );
     this.constrainToWorld(this.idealTarget, this.idealPosition);
   }

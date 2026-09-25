@@ -168,8 +168,13 @@ export class PlayerController {
     const directionX = x - this.position.x;
     const directionZ = z - this.position.z;
     if (directionX * directionX + directionZ * directionZ < 0.001) return;
-    this.facing = Math.atan2(-directionX, -directionZ);
+    this.setFacingDirection(directionX, directionZ);
     this.aimFacingRemaining = 0.45;
+  }
+
+  setFacingDirection(directionX: number, directionZ: number): void {
+    if (directionX * directionX + directionZ * directionZ < 0.001) return;
+    this.facing = Math.atan2(-directionX, -directionZ);
     this.visual.rotation.y = this.facing;
   }
 
@@ -194,7 +199,7 @@ export class PlayerController {
         this.moveBy(this.velocity.x * delta, this.velocity.z * delta);
         this.lastMoveDirection.copy(direction);
         this.hasMoved = true;
-        if (!keepAimFacing) {
+        if (mode === 'top-down' && !keepAimFacing) {
           const facing = Math.atan2(-direction.x, -direction.z);
           this.facing = angleTowards(this.facing, facing, 1 - Math.exp(-12 * delta));
         }

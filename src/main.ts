@@ -139,7 +139,7 @@ function updateModeUi(): void {
 }
 
 function switchView(): void {
-  cameraRig.switchMode(player.position, player.visual.rotation.y);
+  cameraRig.switchMode(player.position);
   autoAttackTargetId = undefined;
   player.clearKeyboardMovement();
   if (cameraRig.mode !== 'third-person') releaseLookDrag();
@@ -289,7 +289,7 @@ function setSeed(seed: string): void {
   player.setWorld(world);
   player.setEnabled(true);
   cameraRig.setWorld(world);
-  cameraRig.reset(player.position, player.visual.rotation.y);
+  cameraRig.reset(player.position);
   createZombieViews();
   elements.deathOverlay!.setAttribute('hidden', '');
   elements.seedHint!.textContent = 'Map regenerated from this seed.';
@@ -411,7 +411,7 @@ player = new PlayerController(
   },
 );
 scene.add(player.visual);
-cameraRig.reset(player.position, player.visual.rotation.y);
+cameraRig.reset(player.position);
 createZombieViews();
 
 elements.seedForm!.addEventListener('submit', (event) => {
@@ -423,7 +423,7 @@ elements.restartButton!.addEventListener('click', () => {
   combat.reset();
   player.setPosition(world.spawn.x, world.spawn.z);
   player.setEnabled(true);
-  cameraRig.reset(player.position, player.visual.rotation.y);
+  cameraRig.reset(player.position);
   navigationGoal = undefined;
   observedDash = false;
   autoAttackTargetId = undefined;
@@ -785,7 +785,13 @@ function animate(now: number): void {
     const visual = zombieViews.get(zombie.id);
     if (visual) syncZombieVisual(visual, zombie);
   }
-  cameraRig.update(delta, player.position, player.visual.rotation.y);
+  cameraRig.update(delta, player.position);
+  if (cameraRig.mode === 'third-person') {
+    player.setFacingDirection(
+      cameraRig.currentTarget.x - camera.position.x,
+      cameraRig.currentTarget.z - camera.position.z,
+    );
+  }
   animateEffects(delta);
   routeRefresh += delta;
   updateRouteLine();
