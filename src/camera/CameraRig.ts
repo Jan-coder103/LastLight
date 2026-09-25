@@ -61,7 +61,7 @@ export class CameraRig {
     this.transition = undefined;
   }
 
-  switchMode(playerPosition: Vector3): CameraMode {
+  switchMode(playerPosition: Vector3, playerFacing: number): CameraMode {
     this.mode = this.mode === 'third-person' ? 'top-down' : 'third-person';
     if (this.mode === 'top-down' && document.pointerLockElement === this.canvas)
       document.exitPointerLock();
@@ -70,7 +70,7 @@ export class CameraRig {
       startPosition: this.camera.position.clone(),
       startTarget: this.currentTarget.clone(),
     };
-    this.setDestination(playerPosition);
+    this.setDestination(playerPosition, playerFacing);
     return this.mode;
   }
 
@@ -80,9 +80,9 @@ export class CameraRig {
     this.pitch = Math.max(-0.62, Math.min(0.95, this.pitch + deltaY * 0.0022));
   }
 
-  update(deltaSeconds: number, playerPosition: Vector3): void {
+  update(deltaSeconds: number, playerPosition: Vector3, playerFacing: number): void {
     const delta = Math.min(deltaSeconds, 0.05);
-    this.setDestination(playerPosition);
+    this.setDestination(playerPosition, playerFacing);
     if (this.transition) {
       this.transition.elapsed += delta;
       const amount = Math.min(1, this.transition.elapsed / transitionSeconds);
@@ -98,18 +98,18 @@ export class CameraRig {
     this.camera.lookAt(this.currentTarget);
   }
 
-  reset(playerPosition: Vector3): void {
+  reset(playerPosition: Vector3, playerFacing: number): void {
     this.transition = undefined;
     this.mode = 'third-person';
     this.yaw = 0;
     this.pitch = 0.2;
-    this.setDestination(playerPosition);
+    this.setDestination(playerPosition, playerFacing);
     this.camera.position.copy(this.idealPosition);
     this.currentTarget.copy(this.idealTarget);
     this.camera.lookAt(this.currentTarget);
   }
 
-  private setDestination(playerPosition: Vector3): void {
+  private setDestination(playerPosition: Vector3, playerFacing: number): void {
     const terrainY = playerPosition.y;
     if (this.mode === 'top-down') {
       this.idealTarget.set(playerPosition.x, terrainY + 1.35, playerPosition.z);
@@ -122,6 +122,8 @@ export class CameraRig {
     const horizontalDistance = distance + aimLead;
     const sine = Math.sin(this.yaw);
     const cosine = Math.cos(this.yaw);
+    const shoulderX = Math.cos(playerFacing) * shoulderOffset;
+    const shoulderZ = -Math.sin(playerFacing) * shoulderOffset;
     const targetY = terrainY + 3.2 - Math.tan(this.pitch) * horizontalDistance;
     this.idealTarget.set(
       playerPosition.x - sine * aimLead,
@@ -129,9 +131,9 @@ export class CameraRig {
       playerPosition.z - cosine * aimLead,
     );
     this.idealPosition.set(
-      playerPosition.x - sine * distance + cosine * shoulderOffset,
+      playerPosition.x - sine * distance + shoulderX,
       terrainY + 3.2,
-      playerPosition.z + cosine * distance + sine * shoulderOffset,
+      playerPosition.z + cosine * distance + shoulderZ,
     );
     this.constrainToWorld(this.idealTarget, this.idealPosition);
   }

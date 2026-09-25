@@ -26,7 +26,7 @@ import {
 } from 'three';
 import type { AbilitySlot } from './input/controlMap';
 import { CameraRig } from './camera/CameraRig';
-import { CombatSimulation } from './game/CombatSimulation';
+import { CombatSimulation, type ZombieState } from './game/CombatSimulation';
 import { createZombieVisual, syncZombieVisual } from './game/zombieVisual';
 import { GridNavigator } from './navigation/GridNavigator';
 import { PlayerController } from './player/PlayerController';
@@ -127,6 +127,8 @@ let navigationGoal: { x: number; z: number } | undefined;
 let pointerX = window.innerWidth / 2;
 let pointerY = window.innerHeight / 2;
 let observedDash = false;
+let autoAttackTargetId: string | undefined;
+const enemyAimAssistRadius = 44;
 
 function updateModeUi(): void {
   const label = cameraRig.mode === 'third-person' ? 'THIRD PERSON' : 'TOP-DOWN';
@@ -137,7 +139,8 @@ function updateModeUi(): void {
 }
 
 function switchView(): void {
-  cameraRig.switchMode(player.position);
+  cameraRig.switchMode(player.position, player.visual.rotation.y);
+  autoAttackTargetId = undefined;
   player.clearKeyboardMovement();
   if (cameraRig.mode !== 'third-person') releaseLookDrag();
   canvas?.focus({ preventScroll: true });
@@ -281,11 +284,12 @@ function setSeed(seed: string): void {
   combat = new CombatSimulation(world, navigator);
   navigationGoal = undefined;
   observedDash = false;
+  autoAttackTargetId = undefined;
   wasAlive = true;
   player.setWorld(world);
   player.setEnabled(true);
   cameraRig.setWorld(world);
-  cameraRig.reset(player.position);
+  cameraRig.reset(player.position, player.visual.rotation.y);
   createZombieViews();
   elements.deathOverlay!.setAttribute('hidden', '');
   elements.seedHint!.textContent = 'Map regenerated from this seed.';
@@ -401,11 +405,13 @@ player = new PlayerController(
   },
   () => {
     if (cameraRig.mode === 'top-down') updateTopDownDashAim(pointerX, pointerY);
-    return combat.tryDash();
+    const started = combat.tryDash();
+    if (started && cameraRig.mode === 'top-down') autoAttackTargetId = undefined;
+    return started;
   },
 );
 scene.add(player.visual);
-cameraRig.reset(player.position);
+cameraRig.reset(player.position, player.visual.rotation.y);
 createZombieViews();
 
 elements.seedForm!.addEventListener('submit', (event) => {
@@ -417,9 +423,10 @@ elements.restartButton!.addEventListener('click', () => {
   combat.reset();
   player.setPosition(world.spawn.x, world.spawn.z);
   player.setEnabled(true);
-  cameraRig.reset(player.position);
+  cameraRig.reset(player.position, player.visual.rotation.y);
   navigationGoal = undefined;
   observedDash = false;
+  autoAttackTargetId = undefined;
   wasAlive = true;
   elements.deathOverlay!.setAttribute('hidden', '');
   createZombieViews();
@@ -492,6 +499,47 @@ function firstWorldOrLivingHit(raycaster: Raycaster) {
   });
 }
 
+function canSeeZombie(zombie: ZombieState): boolean {
+  const origin = camera.getWorldPosition(new Vector3());
+  const aimPoint = zombie.position.clone().add(new Vector3(0, 1.05, 0));
+  const direction = aimPoint.sub(origin);
+  const distance = direction.length();
+  direction.normalize();
+  const raycaster = new Raycaster(origin, direction, 0, distance + 0.05);
+  return findZombieId(firstWorldOrLivingHit(raycaster)?.object) === zombie.id;
+}
+
+function findAssistedZombie(
+  clientX: number,
+  clientY: number,
+  directHit: Object3D | undefined,
+): ZombieState | undefined {
+  const directId = findZombieId(directHit);
+  const directTarget = combat.zombies.find((zombie) => zombie.id === directId && zombie.alive);
+  if (directTarget) return directTarget;
+
+  camera.updateMatrixWorld(true);
+  let nearest: ZombieState | undefined;
+  let nearestDistanceSquared = enemyAimAssistRadius * enemyAimAssistRadius;
+  for (const zombie of combat.zombies) {
+    if (!zombie.alive || !canSeeZombie(zombie)) continue;
+    const screen = zombie.position
+      .clone()
+      .add(new Vector3(0, 1.05, 0))
+      .project(camera);
+    if (screen.z < -1 || screen.z > 1) continue;
+    const screenX = ((screen.x + 1) * window.innerWidth) / 2;
+    const screenY = ((1 - screen.y) * window.innerHeight) / 2;
+    const dx = screenX - clientX;
+    const dy = screenY - clientY;
+    const distanceSquared = dx * dx + dy * dy;
+    if (distanceSquared >= nearestDistanceSquared) continue;
+    nearest = zombie;
+    nearestDistanceSquared = distanceSquared;
+  }
+  return nearest;
+}
+
 function updateEnemyHover(clientX: number, clientY: number, overScene: boolean): void {
   const pointerLocked = document.pointerLockElement === canvas;
   if (!overScene && !pointerLocked) {
@@ -508,34 +556,71 @@ function updateEnemyHover(clientX: number, clientY: number, overScene: boolean):
   elements.reticle!.classList.toggle('enemy-hover', hoveringEnemy);
 }
 
-function fireAt(event: PointerEvent): void {
-  if (!combat.alive) return;
-  const ndc = pointToNdc(event);
-  const viewRay = new Raycaster();
-  viewRay.setFromCamera(ndc, camera);
-  const aimHit = firstWorldOrLivingHit(viewRay);
-  const aimPoint = aimHit?.point ?? viewRay.ray.at(70, new Vector3());
+function fireAlongRay(aimPoint: Vector3): boolean {
+  if (!combat.alive) return false;
   if (cameraRig.mode === 'top-down') player.faceToward(aimPoint.x, aimPoint.z);
   const muzzle = player.muzzlePosition();
   const shotDirection = aimPoint.clone().sub(muzzle);
   const shotLength = Math.min(90, shotDirection.length());
-  if (shotLength < 0.001) return;
+  if (shotLength < 0.001) return false;
   shotDirection.normalize();
   const weaponRay = new Raycaster(muzzle, shotDirection, 0, shotLength + 0.05);
   const weaponHit = firstWorldOrLivingHit(weaponRay);
   const hitPoint = weaponHit?.point ?? aimPoint;
   const targetId = findZombieId(weaponHit?.object);
-  if (!combat.tryFire(targetId)) return;
+  if (!combat.tryFire(targetId)) return false;
   addShotEffect(muzzle, hitPoint);
   for (const zombie of combat.zombies) {
     const visual = zombieViews.get(zombie.id);
     if (visual) syncZombieVisual(visual, zombie);
   }
   updateCombatUi();
+  return true;
+}
+
+function fireAtZombie(zombie: ZombieState): boolean {
+  return fireAlongRay(zombie.position.clone().add(new Vector3(0, 1.05, 0)));
+}
+
+function fireAt(event: PointerEvent): void {
+  if (!combat.alive) return;
+  const ndc = pointToNdc(event);
+  const viewRay = new Raycaster();
+  viewRay.setFromCamera(ndc, camera);
+  const aimHit = firstWorldOrLivingHit(viewRay);
+  if (cameraRig.mode === 'top-down') {
+    const target = findAssistedZombie(event.clientX, event.clientY, aimHit?.object);
+    if (target) {
+      autoAttackTargetId = target.id;
+      player.setNavigationPath([]);
+      navigationGoal = undefined;
+      updateRouteLine(true);
+      fireAtZombie(target);
+      return;
+    }
+  }
+  autoAttackTargetId = undefined;
+  const aimPoint = aimHit?.point ?? viewRay.ray.at(70, new Vector3());
+  fireAlongRay(aimPoint);
+}
+
+function updateAutoAttack(): void {
+  if (!autoAttackTargetId) return;
+  if (!combat.alive || cameraRig.mode !== 'top-down') {
+    autoAttackTargetId = undefined;
+    return;
+  }
+  const target = combat.zombies.find((zombie) => zombie.id === autoAttackTargetId && zombie.alive);
+  if (!target) {
+    autoAttackTargetId = undefined;
+    return;
+  }
+  if (combat.fireCooldownRemaining <= 0) fireAtZombie(target);
 }
 
 function moveToPointer(event: MouseEvent): void {
   if (cameraRig.mode !== 'top-down' || !combat.alive) return;
+  autoAttackTargetId = undefined;
   pointerX = event.clientX;
   pointerY = event.clientY;
   updateTopDownDashAim(pointerX, pointerY);
@@ -681,6 +766,7 @@ function animate(now: number): void {
       cameraRig.yaw,
       combat.adrenalineRemaining > 0 ? 1.5 : 1,
     );
+    updateAutoAttack();
     if (wasDashing && !player.isDashing) replanNavigationGoal();
     observedDash = player.isDashing;
     if (cameraRig.mode === 'top-down' && !player.isDashing && player.navigationPath.length === 0) {
@@ -699,7 +785,7 @@ function animate(now: number): void {
     const visual = zombieViews.get(zombie.id);
     if (visual) syncZombieVisual(visual, zombie);
   }
-  cameraRig.update(delta, player.position);
+  cameraRig.update(delta, player.position, player.visual.rotation.y);
   animateEffects(delta);
   routeRefresh += delta;
   updateRouteLine();
