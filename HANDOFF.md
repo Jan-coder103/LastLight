@@ -4,7 +4,7 @@ Updated: 2026-09-25
 
 ## Current position
 
-Phases 1–6 are **Accepted**. Phase 7 rendering and performance work is in progress. The owner reported stable 60 FPS (17 ms or less per frame) with 10,000 enemies during the Phase 6 playtest; browser and hardware were not specified. Phase 7 adds runtime profiling and updates only changed horde instance buffers. The first local profile covers idle camp in third-person only; active-run and 10,000-agent profiles in both camera modes remain to be collected on the reference setup.
+Phases 1–6 are **Accepted**. Phase 7 rendering and performance work is in progress in commit `f675799`. The owner reported stable 60 FPS (17 ms or less per frame) with 10,000 enemies during the Phase 6 playtest; browser and hardware were not specified. Phase 7 adds runtime profiling and updates only changed horde instance buffers. The first local profile covers idle camp in third-person only; active-run and 10,000-agent profiles in both camera modes remain to be collected on the reference setup.
 
 ## Read first
 
