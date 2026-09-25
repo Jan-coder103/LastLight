@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#111510" />
+    <meta
+      name="description"
+      content="Last Light — a seeded, low-poly survival map and camera-control prototype."
+    />
+    <title>Last Light // Field Test</title>
+  </head>
+  <body>
+    <main id="game" aria-label="Last Light game prototype">
+      <canvas id="scene" tabindex="0" aria-label="Three-dimensional game scene"></canvas>
+
+      <header class="topbar">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div>
+            <p class="eyebrow">FIELD TEST 01 <span>·</span> CITY / FOREST</p>
+            <h1>LAST LIGHT</h1>
+          </div>
+        </div>
+        <form class="seed-card" id="seed-form">
+          <label for="seed-input">WORLD SEED</label>
+          <div class="seed-controls">
+            <input id="seed-input" name="seed" maxlength="32" value="RAVEN-07" autocomplete="off" />
+            <button
+              type="submit"
+              class="icon-button"
+              aria-label="Reload world with this seed"
+              title="Reload world with this seed"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path
+                  d="M16.2 7.3A6.4 6.4 0 0 0 4.9 5.1L3.3 6.8M3.3 6.8V3.7M3.3 6.8h3.2M3.8 12.7a6.4 6.4 0 0 0 11.3 2.2l1.6-1.7m0 0v3.1m0-3.1h-3.2"
+                />
+              </svg>
+            </button>
+          </div>
+          <span id="seed-hint">Same seed, same streets.</span>
+        </form>
+      </header>
+
+      <section class="map-label" aria-label="Map location">
+        <div class="signal-dot"></div>
+        <div>
+          <span class="eyebrow">ZONE 04 / NORTH SECTOR</span><strong>Greywood Outskirts</strong>
+        </div>
+        <span class="map-separator"></span>
+        <div class="coords"><span class="eyebrow">STATUS</span><strong>SCOUTING</strong></div>
+      </section>
+
+      <section class="controls-card" aria-label="Controls">
+        <div class="card-heading">
+          <span>FIELD CONTROLS</span><span class="live-dot">LIVE</span>
+        </div>
+        <div class="control-row">
+          <span class="key-group"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span
+          ><span>Move</span>
+        </div>
+        <div class="control-row">
+          <span class="key-group"><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span
+          ><span>Move</span>
+        </div>
+        <div class="control-row"><kbd class="wide-key">TAB</kbd><span>Switch camera</span></div>
+        <div class="control-row">
+          <kbd class="wide-key">DRAG</kbd><span>Look around (3rd person)</span>
+        </div>
+        <div class="control-row"><kbd class="wide-key">ESC</kbd><span>Release mouse</span></div>
+      </section>
+
+      <footer class="bottom-bar">
+        <div class="movement-state">
+          <span class="state-icon" aria-hidden="true">⌖</span>
+          <div>
+            <span class="eyebrow">CURRENT VIEW</span><strong id="view-name">THIRD PERSON</strong>
+          </div>
+        </div>
+        <div class="footer-divider"></div>
+        <button id="view-button" class="view-button" type="button">
+          <span class="switch-glyph" aria-hidden="true">↔</span><span>CHANGE VIEW</span
+          ><span class="button-key">TAB</span>
+        </button>
+        <button id="lock-button" class="lock-button" type="button">
+          <span class="lock-icon" aria-hidden="true">⌖</span
+          ><span id="lock-label">CAPTURE MOUSE</span><span class="button-key">OPTIONAL</span>
+        </button>
+        <p class="footer-note">PHASE 01 <span>—</span> MOVEMENT / CAMERA STUDY</p>
+      </footer>
+
+      <aside class="diagnostics" aria-label="Development diagnostics">
+        <div class="diag-heading">
+          <span class="diag-pulse"></span><span>DEV TELEMETRY</span
+          ><span class="diag-tag">LOCAL</span>
+        </div>
+        <div class="diag-grid">
+          <div>
+            <span>FRAME RATE</span><strong id="fps-value">— <small>FPS</small></strong>
+          </div>
+          <div>
+            <span>FRAME TIME</span><strong id="frame-value">— <small>MS</small></strong>
+          </div>
+          <div><span>WORLD OBJECTS</span><strong id="entity-value">—</strong></div>
+          <div><span>SEED</span><strong id="diag-seed">RAVEN-07</strong></div>
+        </div>
+      </aside>
+      <div class="transition-wash" id="transition-wash" aria-hidden="true"></div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
