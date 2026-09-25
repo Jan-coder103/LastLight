@@ -19,7 +19,7 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. The target 
 | ------------------------------ | ----------------------------------- | ----------------------------------- |
 | W / A / S / D or arrow keys    | Move relative to the camera         | —                                   |
 | Right-click                    | —                                   | Move around static obstacles        |
-| Left-click                     | Fire at the cursor                  | Fire at the cursor                  |
+| Left-click                     | Fire at the cursor                  | Attack with cursor assist           |
 | Drag on the scene              | Orbit camera and aim                | —                                   |
 | Optional **Capture Mouse**     | Continuous look; Escape releases it | Not available                       |
 | Q                              | Dash; 2.5-second cooldown, no cost  | Dash; 2.5-second cooldown, no cost  |
@@ -28,7 +28,7 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. The target 
 | Tab or **Change View**         | Switch camera without moving player | Switch camera without moving player |
 | World Seed field + reload icon | Rebuild the map and encounter       | Rebuild the map and encounter       |
 
-The same player and combat state continue through camera changes. In top-down view, Q dashes toward the cursor and briefly shows its direction; the player replans the remaining click-to-move route after landing. A dash already in progress keeps its world direction through a camera change. Switching views clears held movement keys. The shock pulse damages and briefly stuns nearby hostiles; adrenaline increases movement speed for five seconds; field dressing restores health when injured. Dead players can restart the encounter from the overlay.
+The same player and combat state continue through camera changes. In top-down view, left-clicking within an invisible 44-pixel radius of a visible hostile selects it and keeps firing until you move, dash, click empty space, switch views, or the hostile dies. Clicking another hostile switches the target. Aiming directly at a hostile also selects it. Q dashes toward the cursor and briefly shows its direction; the player replans the remaining click-to-move route after landing. A dash already in progress keeps its world direction through a camera change. Switching views clears held movement keys. The shock pulse damages and briefly stuns nearby hostiles; adrenaline increases movement speed for five seconds; field dressing restores health when injured. Dead players can restart the encounter from the overlay.
 
 ## Project commands
 
@@ -63,8 +63,8 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 
 1. Run `npm run dev`; confirm the health bar, three hostiles, controls, and scene appear.
 2. In third-person, move with WASD, hover a zombie and confirm the cursor becomes a rectangle, aim and fire twice to eliminate it, dash with Q, and try abilities 1/2/3. Drag the camera upward and check that you can aim above the horizon; check that the player is framed slightly right of center.
-3. Switch to top-down. Right-click around a building and confirm the scout follows the route; move the cursor away from that route and press Q. The dash should follow the cursor cue, then continue along a replanned route without walking backward. W/E/R activate abilities and do not move the player.
-4. Fire in top-down while facing away from a zombie and confirm the scout turns toward the shot. Hover a zombie and confirm the cursor becomes a rectangle. Fire and dash in both camera modes. Switch views during movement or a dash and confirm the player keeps position and the dash completes.
+3. Switch to top-down. Click near (without directly on) a visible zombie and confirm it is selected and repeatedly shot. Right-click to move and confirm firing stops; select another zombie, then click elsewhere and confirm that target is released. Right-click around a building and confirm the scout follows the route; move the cursor away from that route and press Q. The dash should follow the cursor cue, then continue along a replanned route without walking backward. W/E/R activate abilities and do not move the player.
+4. Fire in top-down while facing away from a zombie and confirm the scout turns toward the shot. Hover a zombie and confirm the cursor becomes a rectangle. In third-person, orbit the camera across both sides and check that it stays over the player's right shoulder. Fire and dash in both camera modes. Switch views during movement or a dash and confirm the player keeps position and the dash completes.
 5. Let zombies reach the scout and confirm health loss and the restart overlay. Restart and defeat the group.
 6. Test seed reload, resize, focus loss, and mouse capture/release.
 
