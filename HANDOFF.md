@@ -4,48 +4,49 @@ Updated: 2026-09-25
 
 ## Current position
 
-Phase 1 implementation is ready for the owner playtest. The phase is **Awaiting owner playtest**; phase 2 has not started. This project is on branch `main`. The implementation is committed as `03b2736` (`Build phase 1 exploration prototype`).
+Phase 1 is **Accepted**. The owner said “Playtest was good” and explicitly requested Phase 2. Phase 2 implementation is committed as `66a254c` (`Implement phase 2 combat field test`) on branch `main` and is **Awaiting owner playtest**. Do not begin Phase 3 until the owner accepts Phase 2 and initiates it.
 
 ## Read first
 
 1. `plan.md` for the vision, technical direction, phase scope, and acceptance criteria.
-2. `tracker.md` for the phase checklist, verification evidence, and owner feedback.
-3. `README.md` for startup commands, controls, asset authoring, and the playtest checklist.
+2. `tracker.md` for phase status, verification evidence, decisions, and the owner playtest log.
+3. `README.md` for startup commands, both control maps, and the Phase 2 playtest checklist.
 
-The earlier handoff referenced `My_Plan.txt`, but that file is not present in this workspace. The existing roadmap and planning notes were kept intact.
+## Phase 2 decisions and tuning
 
-## Phase 1 decisions
-
-- Toolchain: Three.js 0.186.1, Vite 8.3.1, TypeScript 7.0.2, Vitest 5.0.2, `@types/three` 0.186.0, and Prettier 3.9.9, locked in `package-lock.json`.
-- Runtime used here: Node 22.19.0 and npm 11.6.0. Vite's documented Node minimum is 20.19+ or 22.12+.
-- Browser target: desktop Chrome/Edge or Firefox with WebGL2. Pointer Lock is optional; drag-to-look is the fallback.
-- Phase 1 movement uses WASD or arrow keys in both views. Third-person movement follows the orbit camera; top-down movement follows the map axes.
-- The initial named seed is `RAVEN-07`. Regeneration normalizes an empty seed to this value and trims names to 32 characters.
-- The dev overlay is a first baseline only. Final hardware and frame-time targets remain open for later measurement.
+- Third-person abilities use `1/2/3`. Top-down abilities use `W/E/R`; the active map is shown in the field controls and HUD. `Tab` switches views.
+- `Q` dashes for 0.22 seconds at 20 m/s (about 4.4 m) with a 2.5-second cooldown and no resource cost. Switching views preserves the dash direction; switching clears held movement keys.
+- Field dressing restores 35 health and has a 12-second cooldown. Shock pulse deals 40 damage and stuns hostiles within 9 m for 1.8 seconds; cooldown is 9 seconds. Adrenaline raises movement speed by 50% for 5 seconds; cooldown is 14 seconds.
+- The rifle deals 50 damage with a 0.24-second firing cooldown. Hostiles have 100 health. The three-hostile encounter is intentionally small and uses A* repaths around static colliders every 0.7 seconds.
+- Player health is 100. Each hostile attack deals 8 damage every 1.3 seconds while in melee range. Death shows a restart overlay. These are first-pass feel values for the owner's playtest.
+- Top-down player movement uses a 2 m A* grid with static collider clearance. Third-person movement remains direct, camera-relative, and collision-aware. Dynamic obstacles and doorway routes remain later scope.
+- Aim uses the cursor (or screen center under Pointer Lock); the nearest static geometry blocks a shot before a hostile. Firing uses a short tracer and muzzle flash.
 
 ## What changed
 
-- Added a Vite/TypeScript browser app, locked dependencies, test/build/format commands, and `.gitignore`.
-- Added seeded terrain, an explicit city/forest road layout, generated buildings/trees/boulders, a water-tower landmark, map bounds, and collision data separate from scene meshes.
-- Added a low-poly player scout, shared movement/collision controller, third-person orbit/follow and angled top-down cameras, and smooth camera transitions.
-- Added seed reload, view/control UI, optional Pointer Lock, drag-to-look, and a development telemetry overlay.
-- Added versioned asset metadata and a short guide for adding authored assets.
+- Added the view-specific input map and a visible control panel that changes with camera mode.
+- Added player dash, top-down click-to-move, direct third-person movement, collision checks, and the visible rifle.
+- Added `CombatSimulation` for health, rifle fire rate, abilities, hostile damage, pursuit, stun, death, and restart state.
+- Added three low-poly zombies, obstacle-aware pursuit, and combat feedback HUD/effects.
+- Added unit tests for damage/death, rifle and ability/dash cooldowns, input maps, and routes around generated obstacles.
+- Updated the roadmap decision, README controls, and Phase 2 playtest instructions.
 
 ## Verification
 
-- `npm run build` — passed TypeScript checking and Vite production build. Vite reports the minified Three.js bundle is 554.45 kB, above its default 500 kB advisory threshold; the gzip bundle is 140.38 kB.
-- `npm test` — passed: 1 test file, 3 tests covering repeatability, seed variation/map bounds, and a clear spawn.
+- `npm test` — passed: 4 test files, 11 tests.
+- `npm run build` — passed TypeScript checking and Vite production build. Minified bundle is 576.81 kB (147.21 kB gzip); Vite reports its existing/default advisory above 500 kB.
 - `npm run format:check` — passed.
-- Browser smoke check in the Codex in-app browser — the scene, UI, and 60 FPS / 16.7 ms diagnostics rendered; same-seed regeneration kept the displayed layout/object count, alternate seed `MILL-ALPHA` changed the map and count; both view button and Tab switched camera modes; dragging the scene orbited the third-person camera; the 640×700 preview kept the HUD within the viewport.
-- Pointer Lock was rejected by the in-app browser. The scene drag fallback worked. The browser did not expose host GPU/model information, so this is not a hardware-qualified performance result.
+- Embedded-browser smoke — 59–60 FPS / 16.7 ms in the 1280×720 in-app preview; control panel and status HUD rendered; top-down mode and right-click route displayed; a cursor shot registered “Hostile hit”; zombie damage and the death/restart overlay appeared. The observed FPS is a preview reading, not a reference-hardware performance claim.
+- Pointer Lock was denied in the embedded browser during Phase 1. Phase 2 retains drag-to-look and click aiming; use a desktop target browser if testing Pointer Lock itself.
+- Build/runtime used Three.js 0.186.1, Vite 8.3.1, TypeScript 7.0.2, Vitest 5.0.2, Node 22.19.0, and npm 11.6.0.
 
-## Known issues and next action
+## Known limits and next action
 
-- The owner still needs to playtest movement and obstacle collision, camera comfort and transitions while walking, and map readability. Record requested fixes here and in `tracker.md`; complete them before accepting phase 1.
-- Pointer Lock should be tried in the owner's target browser if they want continuous mouse look; drag-to-look remains available.
-- The large-chunk warning is expected from the current Three.js bundle and is not a phase 1 performance gate.
-- Do not start phase 2 until the owner explicitly accepts phase 1 and initiates the next phase.
+- Phase 2 is waiting for the owner to test responsiveness and combat feel in both views, especially dash, ability cooldowns, enemy spacing, and pressure. Record feedback and any revisions in `tracker.md` and repeat the affected checks.
+- The top-down planner targets static colliders only; route cancellation/replanning, dynamic obstruction, interaction positioning, and stuck recovery remain Phase 5 work.
+- Extraction, loot, inventory, and base progression are not included; they remain Phase 3 work.
+- After the owner accepts Phase 2, start Phase 3 only when they request it.
 
 ## Handoff format for future coding sessions
 
-Keep factual evidence and the next exact task here. For later phases, include changed files/systems, decisions, commands and results, manual/browser checks, performance conditions, known issues, owner feedback, and commits.
+Keep factual evidence and the next exact task here. For later phases, include changed systems, decisions, commands and results, manual/browser checks, performance conditions, known issues, owner feedback, and commits.
