@@ -4,13 +4,13 @@ Updated: 2026-09-25
 
 ## Current position
 
-Phase 1 and Phase 2 are **Accepted**. The owner said Phase 2 had just been playtested and improved, then requested Phase 3; that request is recorded as acceptance and phase start. Phase 3 implementation is committed as `bbfb321` on branch `main` and **Awaiting owner playtest**. Do not begin Phase 4 until the owner accepts Phase 3 and initiates it.
+Phases 1–3 are **Accepted**. On 2026-09-25, the owner reported “All green lights from my site” after playtesting Phase 3 and authorized the next phase. Phase 4 is implemented and **Awaiting owner playtest**. The Phase 4 build is committed as `COMMIT` on `main`.
 
 ## Read first
 
 1. `plan.md` for the vision, technical direction, phase scope, and acceptance criteria.
 2. `tracker.md` for phase status, verification evidence, decisions, and the owner playtest log.
-3. `README.md` for startup commands, controls, and the Phase 3 playtest checklist.
+3. `README.md` for startup commands, controls, and the Phase 4 playtest checklist.
 
 ## Phase 2 decisions and tuning
 
@@ -39,6 +39,9 @@ Phase 1 and Phase 2 are **Accepted**. The owner said Phase 2 had just been playt
 - Added the Phase 3 run loop: animated chopper arrival and disembark, deterministic loot caches and pickups, capacity-limited cargo, timed reinforcement warnings, guarded extraction and takeoff, death loss, and return to camp.
 - Added a quartermaster, starter gear and supplies, a medical-supply action, a cargo harness upgrade, and versioned browser persistence for safe camp stock.
 - Added Phase 3 coverage for save recovery, cargo capacity, outcome banking/loss, deterministic loot, and individually tracked reinforcements.
+- Started Phase 4 with five named, seeded districts; jittered city roads and forest trails; region-based loot zones; and two seed-varied landmarks, including the new radio mast authored asset.
+- Kept building and vegetation placement inside their districts with road, landing-ring, landmark, map-edge, and prop-spacing exclusions. Loot caches are distributed among five zones and reject routes over 145 m from the chopper.
+- Added `validateWorld` for collider overlap, placement/road bounds, landing clearance, and landmark approach checks. Added a 24-seed automated batch for layout, landing/disembark, and landmark routing plus four seeds checking seven-cache distribution and route lengths.
 
 ## Phase 3 decisions and tuning
 
@@ -63,14 +66,27 @@ Phase 1 and Phase 2 are **Accepted**. The owner said Phase 2 had just been playt
 - Phase 3 `npm test` — passed: 5 test files, 16 tests.
 - Phase 3 `npm run build` — passed; bundle is 602.93 kB minified (154.97 kB gzip). Vite reports its existing/default advisory above 500 kB.
 - Phase 3 `npm run format:check` — passed.
-- Embedded-browser Phase 3 smoke — camp stock displayed; the chopper touched down and enabled disembark; scout moved outward while the camera changed to top-down; extraction guide showed 14 m; health stayed at 100 through 7 seconds of the 12-second insertion window; preview showed 60 FPS / 16.7 ms; no browser console errors. Full scavenging, extraction, death, and save reload remain for owner playtest.
+- Embedded-browser Phase 3 smoke — camp stock displayed; the chopper touched down and enabled disembark; scout moved outward while the camera changed to top-down; extraction guide showed 14 m; health stayed at 100 through 7 seconds of the 12-second insertion window; preview showed 60 FPS / 16.7 ms; no browser console errors. At that checkpoint, the full owner playtest remained pending; the owner later reported all green lights and accepted Phase 3.
+- Phase 4 `npm test` — passed: 5 test files, 20 tests, including a 24-seed layout/navigation suite and four loot-distribution seeds.
+- World-data generation measured across 24 seeds at p95 1.93 ms and maximum 2.16 ms, against a 50 ms p95 budget. Measurement excludes Three.js visual construction; the benchmark ran in Vitest on the development host.
+- Phase 4 `npm run build` — passed; bundle is 607.24 kB minified (156.26 kB gzip), with Vite's existing advisory above 500 kB.
+- `npm run format:check` — passed.
+- Embedded-browser smoke on `PHASE4-00` — world generated and rendered, chopper touched down, disembark transitioned to top-down view, extraction guide showed 14 m, frame diagnostics showed 60 FPS / 16.7 ms, and the console had no warnings or errors.
 - Pointer Lock was denied in the embedded browser during Phase 1. Phase 2 retains drag-to-look and click aiming; use a desktop target browser if testing Pointer Lock itself.
 - Build/runtime used Three.js 0.186.1, Vite 8.3.1, TypeScript 7.0.2, Vitest 5.0.2, Node 22.19.0, and npm 11.6.0.
 
+## Phase 4 decisions
+
+- The chopper spawn remains at the central crossing so the Phase 3 run state and extraction point stay in one place. Generated placements must leave an 18 m collider-free radius; the disembark point 14 m east must remain walkable.
+- Five named districts use independent seed streams for position jitter and asset placement. Roads and forest trails vary per seed but remain axis-aligned in the current renderer.
+- Seven cache sites are distributed across five named loot zones. The generator rejects a site if it is blocked, too near another cache or the landing zone, unreachable, or more than 145 m of grid route from the chopper.
+- Each generated map includes a water tower and radio mast landmark, each with an exposed approach point for navigation checks.
+- World-data generation has a 50 ms p95 budget, excluding scene rendering. The current 24-seed sample measured p95 1.93 ms and maximum 2.16 ms on the development host.
+
 ## Known limits and next action
 
-- Phase 3 has only had an arrival/disembark smoke check. Owner playtest the full loop in both views: search and collect at least one cache item, confirm capacity and medical-supply behavior, extract and verify banking, then die on another run and verify only carried cargo is lost. Buy from the quartermaster, reload the page, and confirm camp state persists. Record acceptance or requested revisions in `tracker.md`.
-- Initial pressure and economy values are first-pass tuning and may change after playtest. The interaction and navigation layer still targets static colliders; dynamic obstruction, route recovery, and stuck handling remain Phase 5 work.
+- Owner plays several Phase 4 seeds for route variety, cache access, landmark readability, and landing/disembark safety. Record acceptance or revisions in `tracker.md` before Phase 5.
+- Initial pressure and economy values were accepted for the first playable loop. The interaction and navigation layer still targets static colliders; dynamic obstruction, route recovery, and stuck handling remain Phase 5 work.
 - The reinforcement scene is intentionally small; 10,000-agent scale remains Phase 6.
 
 ## Handoff format for future coding sessions

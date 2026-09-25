@@ -7,6 +7,7 @@ export interface CacheSite {
   id: string;
   x: number;
   z: number;
+  zoneId: string;
 }
 
 export interface LootDrop {
@@ -24,19 +25,57 @@ const lootKinds: ResourceKind[] = ['gear', 'supplies', 'money', 'fuel'];
 export function placeLootCaches(
   world: WorldData,
   navigator: GridNavigator,
-  targetCount = 7,
+  targetCount = world.lootZones.reduce((count, zone) => count + zone.cacheCount, 0),
 ): CacheSite[] {
   const random = createRandom(`${world.seed}:phase-3-loot`);
   const sites: CacheSite[] = [];
-  for (let attempt = 0; attempt < 500 && sites.length < targetCount; attempt += 1) {
-    const angle = random() * Math.PI * 2;
-    const distance = 16 + random() * 58;
-    const x = world.spawn.x + Math.cos(angle) * distance;
-    const z = world.spawn.z + Math.sin(angle) * distance;
-    if (!navigator.isWalkable(x, z)) continue;
-    if (Math.hypot(x - world.spawn.x, z - world.spawn.z) < 14) continue;
-    if (sites.some((site) => Math.hypot(x - site.x, z - site.z) < 18)) continue;
-    sites.push({ id: `cache-${sites.length + 1}`, x, z });
+
+  const routeLength = (x: number, z: number): number => {
+    const path = navigator.findPath(world.spawn.x, world.spawn.z, x, z);
+    if (path.length === 0) return Number.POSITIVE_INFINITY;
+    let length = 0;
+    let previousX = world.spawn.x;
+    let previousZ = world.spawn.z;
+    for (const point of path) {
+      length += Math.hypot(point.x - previousX, point.z - previousZ);
+      previousX = point.x;
+      previousZ = point.z;
+    }
+    return length;
+  };
+
+  const tryZone = (
+    zoneId: string,
+    centerX: number,
+    centerZ: number,
+    radius: number,
+    attemptBudget = 180,
+  ): boolean => {
+    for (let attempt = 0; attempt < attemptBudget; attempt += 1) {
+      const angle = random() * Math.PI * 2;
+      const distance = Math.sqrt(random()) * radius;
+      const x = centerX + Math.cos(angle) * distance;
+      const z = centerZ + Math.sin(angle) * distance;
+      if (!navigator.isWalkable(x, z)) continue;
+      if (Math.hypot(x - world.spawn.x, z - world.spawn.z) < 20) continue;
+      if (sites.some((site) => Math.hypot(x - site.x, z - site.z) < 18)) continue;
+      if (routeLength(x, z) > 145) continue;
+      sites.push({ id: `cache-${sites.length + 1}`, x, z, zoneId });
+      return true;
+    }
+    return false;
+  };
+
+  for (const zone of world.lootZones) {
+    for (let count = 0; count < zone.cacheCount && sites.length < targetCount; count += 1)
+      tryZone(zone.id, zone.centerX, zone.centerZ, zone.radius);
+  }
+
+  // Keep the intended cache count on unusually obstructed variants by searching all zones
+  // in a seeded order. The route cap and shared spacing rules still apply.
+  for (let attempt = 0; attempt < 300 && sites.length < targetCount; attempt += 1) {
+    const zone = world.lootZones[Math.floor(random() * world.lootZones.length)];
+    if (zone) tryZone(zone.id, zone.centerX, zone.centerZ, zone.radius, 1);
   }
   return sites;
 }

@@ -3,6 +3,7 @@ import { getAsset } from '../assets/catalog';
 import { createRandom } from '../core/seededRandom';
 
 export const WORLD_SIZE = 280;
+export const LANDING_CLEARANCE = 18;
 const HALF_WORLD = WORLD_SIZE / 2;
 
 export interface WorldRoad {
@@ -24,25 +25,139 @@ export interface WorldCollider {
   maxZ: number;
 }
 
+export interface WorldDistrict {
+  id: string;
+  name: string;
+  kind: 'urban' | 'forest';
+  centerX: number;
+  centerZ: number;
+  radiusX: number;
+  radiusZ: number;
+  density: number;
+}
+
+export interface WorldLootZone {
+  id: string;
+  name: string;
+  centerX: number;
+  centerZ: number;
+  radius: number;
+  cacheCount: number;
+}
+
+export interface WorldLandmark {
+  id: string;
+  name: string;
+  assetId: string;
+  x: number;
+  z: number;
+  approachX: number;
+  approachZ: number;
+}
+
 export interface WorldData {
   seed: string;
   size: number;
   roads: WorldRoad[];
+  districts: WorldDistrict[];
+  lootZones: WorldLootZone[];
+  landmarks: WorldLandmark[];
   placements: AssetPlacement[];
   colliders: WorldCollider[];
   objectCount: number;
   spawn: Vec3Data;
 }
 
-const roads: WorldRoad[] = [
-  { id: 'crossroad-east-west', centerX: 0, centerZ: 7, sizeX: WORLD_SIZE, sizeZ: 13, kind: 'road' },
-  { id: 'city-avenue', centerX: -28, centerZ: 0, sizeX: 13, sizeZ: WORLD_SIZE, kind: 'road' },
-  { id: 'north-city-street', centerX: -81, centerZ: -55, sizeX: 106, sizeZ: 7, kind: 'road' },
-  { id: 'south-city-street', centerX: -81, centerZ: 55, sizeX: 106, sizeZ: 7, kind: 'road' },
-  { id: 'forest-trail', centerX: 70, centerZ: -12, sizeX: 148, sizeZ: 6, kind: 'trail' },
-];
+const roadsCache = new Map<string, WorldRoad[]>();
 
-function isOnRoad(x: number, z: number, margin = 0): boolean {
+function cleanSeed(seed: string): string {
+  return seed.trim().slice(0, 32) || 'RAVEN-07';
+}
+
+function createRoads(seed: string): WorldRoad[] {
+  const random = createRandom(`${seed}:roads`);
+  const jitter = (amount: number): number => (random() - 0.5) * amount;
+  return [
+    {
+      id: 'crossroad-east-west',
+      centerX: 0,
+      centerZ: 7,
+      sizeX: WORLD_SIZE,
+      sizeZ: 13,
+      kind: 'road',
+    },
+    { id: 'city-avenue', centerX: -28, centerZ: 0, sizeX: 13, sizeZ: WORLD_SIZE, kind: 'road' },
+    {
+      id: 'north-city-street',
+      centerX: -81 + jitter(8),
+      centerZ: -55 + jitter(8),
+      sizeX: 106 + jitter(10),
+      sizeZ: 7,
+      kind: 'road',
+    },
+    {
+      id: 'south-city-street',
+      centerX: -81 + jitter(8),
+      centerZ: 55 + jitter(8),
+      sizeX: 106 + jitter(10),
+      sizeZ: 7,
+      kind: 'road',
+    },
+    {
+      id: 'west-grid-street',
+      centerX: -98 + jitter(8),
+      centerZ: -2 + jitter(12),
+      sizeX: 7,
+      sizeZ: 158 + jitter(12),
+      kind: 'road',
+    },
+    {
+      id: 'east-grid-street',
+      centerX: -62 + jitter(8),
+      centerZ: -1 + jitter(12),
+      sizeX: 7,
+      sizeZ: 158 + jitter(12),
+      kind: 'road',
+    },
+    {
+      id: 'forest-trail-north',
+      centerX: 68 + jitter(12),
+      centerZ: -17 + jitter(12),
+      sizeX: 130,
+      sizeZ: 5.5,
+      kind: 'trail',
+    },
+    {
+      id: 'forest-trail-crossing',
+      centerX: 92 + jitter(12),
+      centerZ: -11 + jitter(10),
+      sizeX: 5.5,
+      sizeZ: 196,
+      kind: 'trail',
+    },
+    {
+      id: 'forest-trail-south',
+      centerX: 74 + jitter(12),
+      centerZ: 72 + jitter(10),
+      sizeX: 118,
+      sizeZ: 5.5,
+      kind: 'trail',
+    },
+  ];
+}
+
+function roadsForSeed(seed: string): WorldRoad[] {
+  const key = cleanSeed(seed);
+  let roads = roadsCache.get(key);
+  if (!roads) {
+    roads = createRoads(key);
+    roadsCache.set(key, roads);
+    if (roadsCache.size > 16) roadsCache.delete(roadsCache.keys().next().value!);
+  }
+  return roads;
+}
+
+function isOnRoad(x: number, z: number, roads: WorldRoad[], margin = 0): boolean {
   return roads.some(
     (road) =>
       Math.abs(x - road.centerX) <= road.sizeX / 2 + margin &&
@@ -50,8 +165,141 @@ function isOnRoad(x: number, z: number, margin = 0): boolean {
   );
 }
 
+function createDistricts(seed: string): WorldDistrict[] {
+  const random = createRandom(`${seed}:districts`);
+  const jitter = (amount: number): number => (random() - 0.5) * amount;
+  return [
+    {
+      id: 'old-quarter',
+      name: 'Old Quarter',
+      kind: 'urban',
+      centerX: -89 + jitter(9),
+      centerZ: -76 + jitter(11),
+      radiusX: 43,
+      radiusZ: 47,
+      density: 0.78,
+    },
+    {
+      id: 'mill-row',
+      name: 'Mill Row',
+      kind: 'urban',
+      centerX: -87 + jitter(11),
+      centerZ: 75 + jitter(11),
+      radiusX: 45,
+      radiusZ: 47,
+      density: 0.75,
+    },
+    {
+      id: 'junction',
+      name: 'Junction Blocks',
+      kind: 'urban',
+      centerX: -48 + jitter(6),
+      centerZ: jitter(12),
+      radiusX: 20,
+      radiusZ: 102,
+      density: 0.44,
+    },
+    {
+      id: 'north-pines',
+      name: 'North Pines',
+      kind: 'forest',
+      centerX: 82 + jitter(16),
+      centerZ: -70 + jitter(14),
+      radiusX: 60,
+      radiusZ: 65,
+      density: 0.82,
+    },
+    {
+      id: 'south-pines',
+      name: 'South Pines',
+      kind: 'forest',
+      centerX: 82 + jitter(16),
+      centerZ: 72 + jitter(14),
+      radiusX: 60,
+      radiusZ: 60,
+      density: 0.78,
+    },
+  ];
+}
+
+function createLootZones(seed: string): WorldLootZone[] {
+  const random = createRandom(`${seed}:loot-zones`);
+  const jitter = (amount: number): number => (random() - 0.5) * amount;
+  return [
+    {
+      id: 'market-block',
+      name: 'Market Block',
+      centerX: -79 + jitter(8),
+      centerZ: -27 + jitter(8),
+      radius: 23,
+      cacheCount: 2,
+    },
+    {
+      id: 'mill-yard',
+      name: 'Mill Yard',
+      centerX: -76 + jitter(8),
+      centerZ: 73 + jitter(8),
+      radius: 22,
+      cacheCount: 1,
+    },
+    {
+      id: 'canal-verge',
+      name: 'Canal Verge',
+      centerX: 38 + jitter(8),
+      centerZ: -43 + jitter(8),
+      radius: 24,
+      cacheCount: 2,
+    },
+    {
+      id: 'north-pine-loop',
+      name: 'North Pine Loop',
+      centerX: 87 + jitter(9),
+      centerZ: -42 + jitter(9),
+      radius: 24,
+      cacheCount: 1,
+    },
+    {
+      id: 'south-pine-road',
+      name: 'South Pine Road',
+      centerX: 82 + jitter(9),
+      centerZ: 61 + jitter(9),
+      radius: 23,
+      cacheCount: 1,
+    },
+  ];
+}
+
+function createLandmarks(seed: string): WorldLandmark[] {
+  const random = createRandom(`${seed}:landmarks`);
+  const towerX = 105 + (random() - 0.5) * 18;
+  const towerZ = -92 + (random() - 0.5) * 18;
+  const mastX = 109 + (random() - 0.5) * 16;
+  const mastZ = 89 + (random() - 0.5) * 16;
+  return [
+    {
+      id: 'water-tower',
+      name: 'North Water Tower',
+      assetId: 'water-tower',
+      x: towerX,
+      z: towerZ,
+      approachX: towerX + 10,
+      approachZ: towerZ,
+    },
+    {
+      id: 'radio-mast',
+      name: 'South Relay Mast',
+      assetId: 'radio-mast',
+      x: mastX,
+      z: mastZ,
+      approachX: mastX - 10,
+      approachZ: mastZ,
+    },
+  ];
+}
+
 export function terrainHeightAt(seed: string, x: number, z: number): number {
-  if (isOnRoad(x, z, 0.4)) return 0;
+  const roads = roadsForSeed(seed);
+  if (isOnRoad(x, z, roads, 0.4)) return 0;
   let phase = 0;
   for (let index = 0; index < seed.length; index += 1)
     phase += seed.charCodeAt(index) * (index + 1);
@@ -103,62 +351,127 @@ function addPlacement(
   });
 }
 
-export function generateWorld(seed: string): WorldData {
-  const cleanSeed = seed.trim().slice(0, 32) || 'RAVEN-07';
-  const random = createRandom(cleanSeed);
-  const placements: AssetPlacement[] = [];
+function isClearOfLanding(x: number, z: number, spawn: Vec3Data): boolean {
+  return Math.hypot(x - spawn.x, z - spawn.z) >= LANDING_CLEARANCE;
+}
 
-  // A regular street grid keeps the city legible and leaves walkable gaps around shells.
-  const cityX = [-111, -78, -48];
-  const cityZ = [-107, -77, -27, 27, 77, 107];
-  cityZ.forEach((z, row) => {
-    cityX.forEach((x, column) => {
-      if (random() < 0.14) return;
-      const offsetX = (random() - 0.5) * 3;
-      const offsetZ = (random() - 0.5) * 3;
-      const scale = 0.88 + random() * 0.18;
+function addDistrictBuildings(
+  placements: AssetPlacement[],
+  seed: string,
+  roads: WorldRoad[],
+  districts: WorldDistrict[],
+  landmarks: WorldLandmark[],
+): void {
+  const random = createRandom(`${seed}:buildings`);
+  const targets = new Map<string, number>([
+    ['old-quarter', 13],
+    ['mill-row', 12],
+    ['junction', 5],
+  ]);
+  const spawn = { x: 0, y: 0, z: -5 };
+  for (const district of districts.filter((entry) => entry.kind === 'urban')) {
+    const target = targets.get(district.id) ?? 0;
+    let placed = 0;
+    for (let attempt = 0; attempt < 2400 && placed < target; attempt += 1) {
+      const x = district.centerX + (random() * 2 - 1) * district.radiusX;
+      const z = district.centerZ + (random() * 2 - 1) * district.radiusZ;
+      if (
+        Math.abs(x) > HALF_WORLD - 13 ||
+        Math.abs(z) > HALF_WORLD - 12 ||
+        isOnRoad(x, z, roads, 12) ||
+        !isClearOfLanding(x, z, spawn) ||
+        landmarks.some((landmark) => Math.hypot(x - landmark.x, z - landmark.z) < 18)
+      )
+        continue;
+      const overlapsBuilding = placements.some(
+        (placement) =>
+          placement.assetId === 'building-shell' &&
+          Math.abs(placement.position.x - x) < 23 &&
+          Math.abs(placement.position.z - z) < 20,
+      );
+      if (overlapsBuilding || random() > district.density) continue;
       addPlacement(
         placements,
         'building-shell',
-        cleanSeed,
-        x + offsetX,
-        z + offsetZ,
-        scale,
+        seed,
+        x,
+        z,
+        0.88 + random() * 0.2,
         random() < 0.5 ? 0 : Math.PI,
-        (row + column + Math.floor(random() * 3)) % 3,
+        Math.floor(random() * 3),
       );
-    });
-  });
-
-  const landmarkX = 94 + (random() - 0.5) * 18;
-  const landmarkZ = -82 + (random() - 0.5) * 18;
-  addPlacement(placements, 'water-tower', cleanSeed, landmarkX, landmarkZ, 1, 0, 0);
-
-  // Reject placements near roads, the landmark, or another forest prop to preserve clear routes.
-  const forestProps: Array<{ x: number; z: number; radius: number }> = [];
-  for (let attempt = 0; attempt < 900 && forestProps.length < 58; attempt += 1) {
-    const x = 37 + random() * 92;
-    const z = -126 + random() * 252;
-    if (x > HALF_WORLD - 8 || Math.abs(z) > HALF_WORLD - 8 || isOnRoad(x, z, 5)) continue;
-    const nearTower = Math.hypot(x - landmarkX, z - landmarkZ) < 14;
-    const overlapsProp = forestProps.some(
-      (prop) => Math.hypot(x - prop.x, z - prop.z) < prop.radius + 4.6,
-    );
-    if (nearTower || overlapsProp) continue;
-    const tree = random() > 0.25;
-    const scale = tree ? 0.74 + random() * 0.42 : 0.72 + random() * 0.5;
-    forestProps.push({ x, z, radius: tree ? 2.3 * scale : 1.8 * scale });
-    addPlacement(
-      placements,
-      tree ? 'pine-tree' : 'boulder',
-      cleanSeed,
-      x,
-      z,
-      scale,
-      random() * Math.PI * 2,
-      Math.floor(random() * 3),
-    );
+      placed += 1;
+    }
   }
+}
+
+function addForestProps(
+  placements: AssetPlacement[],
+  seed: string,
+  roads: WorldRoad[],
+  districts: WorldDistrict[],
+  landmarks: WorldLandmark[],
+): void {
+  const random = createRandom(`${seed}:forest-props`);
+  const spawn = { x: 0, y: 0, z: -5 };
+  const forestProps: Array<{ x: number; z: number; radius: number }> = [];
+  const targetByDistrict = new Map([
+    ['north-pines', 43],
+    ['south-pines', 38],
+  ]);
+  for (const district of districts.filter((entry) => entry.kind === 'forest')) {
+    const target = targetByDistrict.get(district.id) ?? 0;
+    let placed = 0;
+    for (let attempt = 0; attempt < 2800 && placed < target; attempt += 1) {
+      const x = district.centerX + (random() * 2 - 1) * district.radiusX;
+      const z = district.centerZ + (random() * 2 - 1) * district.radiusZ;
+      if (
+        Math.abs(x) > HALF_WORLD - 8 ||
+        Math.abs(z) > HALF_WORLD - 8 ||
+        isOnRoad(x, z, roads, 5) ||
+        !isClearOfLanding(x, z, spawn) ||
+        landmarks.some((landmark) => Math.hypot(x - landmark.x, z - landmark.z) < 15)
+      )
+        continue;
+      const nearExisting = forestProps.some(
+        (prop) => Math.hypot(x - prop.x, z - prop.z) < prop.radius + 4.6,
+      );
+      if (nearExisting || random() > district.density) continue;
+      const tree = random() > 0.24;
+      const scale = tree ? 0.74 + random() * 0.42 : 0.72 + random() * 0.5;
+      forestProps.push({ x, z, radius: tree ? 2.3 * scale : 1.8 * scale });
+      addPlacement(
+        placements,
+        tree ? 'pine-tree' : 'boulder',
+        seed,
+        x,
+        z,
+        scale,
+        random() * Math.PI * 2,
+        Math.floor(random() * 3),
+      );
+      placed += 1;
+    }
+  }
+}
+
+export function generateWorld(seed: string): WorldData {
+  const resolvedSeed = cleanSeed(seed);
+  const roads = createRoads(resolvedSeed);
+  const districts = createDistricts(resolvedSeed);
+  const lootZones = createLootZones(resolvedSeed);
+  const landmarks = createLandmarks(resolvedSeed);
+  const spawn: Vec3Data = {
+    x: 0,
+    y: terrainHeightAt(resolvedSeed, 0, -5),
+    z: -5,
+  };
+  const placements: AssetPlacement[] = [];
+
+  for (const landmark of landmarks)
+    addPlacement(placements, landmark.assetId, resolvedSeed, landmark.x, landmark.z);
+  addDistrictBuildings(placements, resolvedSeed, roads, districts, landmarks);
+  addForestProps(placements, resolvedSeed, roads, districts, landmarks);
 
   const colliders = placements.flatMap((placement) => {
     const collider = colliderFor(placement);
@@ -166,12 +479,83 @@ export function generateWorld(seed: string): WorldData {
   });
 
   return {
-    seed: cleanSeed,
+    seed: resolvedSeed,
     size: WORLD_SIZE,
-    roads: roads.map((road) => ({ ...road })),
+    roads,
+    districts,
+    lootZones,
+    landmarks,
     placements,
     colliders,
     objectCount: placements.length + roads.length + 1,
-    spawn: { x: 0, y: terrainHeightAt(cleanSeed, 0, 0), z: -5 },
+    spawn,
   };
+}
+
+function distanceToCollider(x: number, z: number, collider: WorldCollider): number {
+  const dx = Math.max(collider.minX - x, 0, x - collider.maxX);
+  const dz = Math.max(collider.minZ - z, 0, z - collider.maxZ);
+  return Math.hypot(dx, dz);
+}
+
+function placementInBounds(placement: AssetPlacement, size: number): boolean {
+  const collider = getAsset(placement.assetId).collider;
+  const halfX =
+    ((collider?.size.x ?? getAsset(placement.assetId).dimensions.x) * placement.scale) / 2;
+  const halfZ =
+    ((collider?.size.z ?? getAsset(placement.assetId).dimensions.z) * placement.scale) / 2;
+  return (
+    Math.abs(placement.position.x) + halfX <= size / 2 &&
+    Math.abs(placement.position.z) + halfZ <= size / 2
+  );
+}
+
+/** Reports static generation defects so seed suites can keep precise regression evidence. */
+export function validateWorld(world: WorldData): string[] {
+  const issues: string[] = [];
+  if (
+    Math.abs(world.spawn.x) > world.size / 2 ||
+    Math.abs(world.spawn.z) > world.size / 2 ||
+    world.colliders.some(
+      (collider) => distanceToCollider(world.spawn.x, world.spawn.z, collider) < LANDING_CLEARANCE,
+    )
+  )
+    issues.push('chopper landing area lacks the required clearance');
+
+  for (const placement of world.placements) {
+    if (!placementInBounds(placement, world.size))
+      issues.push(
+        `${placement.assetId} at ${placement.position.x},${placement.position.z} is out of bounds`,
+      );
+  }
+
+  for (let first = 0; first < world.colliders.length; first += 1) {
+    const a = world.colliders[first];
+    for (let second = first + 1; second < world.colliders.length; second += 1) {
+      const b = world.colliders[second];
+      const overlapX = Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX);
+      const overlapZ = Math.min(a.maxZ, b.maxZ) - Math.max(a.minZ, b.minZ);
+      if (overlapX > 0.25 && overlapZ > 0.25) {
+        issues.push(`collider overlap: ${a.id} and ${b.id}`);
+        if (issues.length >= 20) return issues;
+      }
+    }
+  }
+
+  for (const landmark of world.landmarks) {
+    if (
+      !world.colliders.every(
+        (collider) => distanceToCollider(landmark.approachX, landmark.approachZ, collider) > 1,
+      )
+    )
+      issues.push(`${landmark.name} has a blocked approach point`);
+  }
+  for (const road of world.roads) {
+    if (
+      Math.abs(road.centerX) + road.sizeX / 2 > world.size / 2 ||
+      Math.abs(road.centerZ) + road.sizeZ / 2 > world.size / 2
+    )
+      issues.push(`${road.id} extends beyond the map`);
+  }
+  return issues;
 }

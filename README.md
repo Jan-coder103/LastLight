@@ -1,4 +1,4 @@
-# Last Light — phase 3 extraction run
+# Last Light — procedural extraction runs
 
 A desktop browser survival run on the seeded city–forest map. Deploy from camp, search caches, carry what fits, and return to the chopper before the horde grows. A successful extraction banks carried resources; death loses cargo while camp storage stays safe.
 
@@ -51,13 +51,13 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 
 ## Source layout
 
-- `src/world/generateWorld.ts` builds the seeded map data, roads, placements, collision boxes, spawn, and terrain height field without depending on rendering.
+- `src/world/generateWorld.ts` builds seeded districts, roads, loot regions, landmarks, placements, collision boxes, chopper spawn, and terrain height without depending on rendering.
 - `src/world/buildWorld.ts` turns generated data into Three.js terrain and scene objects.
 - `src/assets/` contains authored asset modules and shared versioned metadata.
 - `src/player/PlayerController.ts` owns direct third-person movement, top-down route following, dash movement, and the player visual.
 - `src/navigation/GridNavigator.ts` routes the player and the small phase 2 enemy group around static colliders.
 - `src/game/CombatSimulation.ts` owns health, firing and ability cooldowns, damage, and zombie pursuit/attacks.
-- `src/game/loot.ts` places reproducible cache sites and creates deterministic cache contents.
+- `src/game/loot.ts` places reproducible caches across generated regions and creates deterministic cache contents.
 - `src/game/saveData.ts` validates versioned camp saves, cargo capacity, and banking rules.
 - `src/input/controlMap.ts` defines the view-specific keyboard actions.
 - `src/camera/CameraRig.ts` owns both camera views and their transition.
@@ -75,5 +75,12 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 4. Return to the chopper and press F. Confirm boarding requires the landing ring and nearby hostiles interrupt it. Complete the four-second boarding and takeoff; check that cargo is banked at camp.
 5. Start another run and let a hostile kill the scout. Confirm carried loot is lost, prior camp resources remain, and returning to camp enables another deployment.
 6. Buy supplies and the harness; reload the page and confirm base inventory and upgrade persist. Verify a new seed changes cache layout reproducibly, then check resize, focus loss, and mouse capture/release.
+
+## Phase 4 playtest checklist
+
+1. Start the game with several named seeds, including the regression seeds in `src/world/generateWorld.test.ts`. Reload each seed and confirm its layout repeats.
+2. Compare the routes between seeds: city blocks, local streets, forest trails, tree cover, loot regions, and the water tower/relay mast should shift while remaining readable.
+3. Confirm the chopper can land and disembark into a clear area. Visit the landmark approaches and at least one cache from each visible region; the extraction guide should remain usable from the longest route.
+4. Report any blocked cache, landmark, landing zone, visually crowded street, or seed that repeats another map's route shape.
 
 The encounter is intentionally capped at seven hostiles and is not a horde performance claim. Frame rate and frame time remain live diagnostics. Save data uses schema version 1 under the `last-light-save` browser storage key; invalid or unreadable data loads safe default camp supplies.
