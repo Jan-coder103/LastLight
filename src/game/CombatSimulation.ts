@@ -84,6 +84,34 @@ export class CombatSimulation {
     return this.abilityCooldowns;
   }
 
+  addReinforcements(count: number, center: Vector3): ZombieState[] {
+    const added: ZombieState[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const angle = ((index + this.zombies.length) * 2.399963) % (Math.PI * 2);
+      const distance = 25 + (index % 3) * 3;
+      const point = this.findSpawn(
+        center.x - this.world.spawn.x + Math.cos(angle) * distance,
+        center.z - this.world.spawn.z + Math.sin(angle) * distance,
+      );
+      const zombie: ZombieState = {
+        id: `hostile-${this.zombies.length + 1}`,
+        position: new Vector3(point.x, terrainHeightAt(this.world.seed, point.x, point.z), point.z),
+        health: zombieHealth,
+        maxHealth: zombieHealth,
+        alive: true,
+        stunRemaining: 0,
+        attackCooldown: 0.5,
+        repathRemaining: 0,
+        path: [],
+        facing: 0,
+      };
+      this.zombies.push(zombie);
+      added.push(zombie);
+    }
+    if (added.length > 0) this.lastMessage = `${added.length} more hostile(s) closing in.`;
+    return added;
+  }
+
   damagePlayer(amount: number): boolean {
     if (!this.alive || amount <= 0) return false;
     this.health = Math.max(0, this.health - amount);

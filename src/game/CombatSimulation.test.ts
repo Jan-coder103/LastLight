@@ -60,4 +60,13 @@ describe('CombatSimulation', () => {
     expect(combat.zombies.some((zombie) => zombie.stunRemaining > 0)).toBe(true);
     expect(combat.activateAbility(2, new Vector3(0, 0, -5))).toBe(false);
   });
+
+  it('adds a small, individually tracked reinforcement wave around the current run position', () => {
+    const combat = makeCombat();
+    const added = combat.addReinforcements(2, new Vector3(22, 0, -12));
+    expect(added).toHaveLength(2);
+    expect(added.map((zombie) => zombie.id)).toEqual(['hostile-4', 'hostile-5']);
+    expect(combat.zombies).toHaveLength(5);
+    expect(added.every((zombie) => zombie.alive && zombie.health === zombie.maxHealth)).toBe(true);
+  });
 });

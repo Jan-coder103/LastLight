@@ -6,9 +6,9 @@
     <meta name="theme-color" content="#111510" />
     <meta
       name="description"
-      content="Last Light — a seeded, low-poly survival encounter with two camera and control modes."
+      content="Last Light — a seeded, low-poly survival run with scavenging, extraction, and two camera modes."
     />
-    <title>Last Light // Field Test</title>
+    <title>Last Light // Extraction Run</title>
   </head>
   <body>
     <main id="game" aria-label="Last Light game prototype">
@@ -18,7 +18,7 @@
         <div class="brand-lockup">
           <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
           <div>
-            <p class="eyebrow">FIELD TEST 01 <span>·</span> CITY / FOREST</p>
+            <p class="eyebrow">FIELD TEST 03 <span>·</span> CITY / FOREST</p>
             <h1>LAST LIGHT</h1>
           </div>
         </div>
@@ -49,7 +49,9 @@
           <span class="eyebrow">ZONE 04 / NORTH SECTOR</span><strong>Greywood Outskirts</strong>
         </div>
         <span class="map-separator"></span>
-        <div class="coords"><span class="eyebrow">STATUS</span><strong>ENGAGED</strong></div>
+        <div class="coords">
+          <span class="eyebrow">STATUS</span><strong id="zone-status">BASE</strong>
+        </div>
       </section>
 
       <section class="controls-card" aria-label="Controls">
@@ -59,26 +61,92 @@
         <div id="controls-content" aria-live="polite"></div>
       </section>
 
-      <section class="combat-hud" aria-label="Combat status" aria-live="polite">
+      <section class="combat-hud" aria-label="Run status" aria-live="polite">
         <div class="combat-hud-top">
-          <span>FIELD STATUS</span><strong id="hostile-count">3 HOSTILES</strong>
+          <span>FIELD STATUS</span><strong id="run-clock">00:00</strong>
         </div>
+        <div class="field-line"><span>HOSTILES</span><strong id="hostile-count">3</strong></div>
         <div class="health-label">
           <span>HEALTH</span><strong id="health-value">100 / 100</strong>
         </div>
         <div class="health-track"><span id="health-fill"></span></div>
+        <div class="field-line cargo-line">
+          <span>CARRIED / CAPACITY</span><strong id="cargo-value">0 / 10</strong>
+        </div>
+        <div class="cargo-breakdown" id="cargo-breakdown">GEAR 0 · SUP 0 · CR 0 · FUEL 0</div>
+        <p class="nearby-action" id="nearby-action" hidden></p>
         <p id="combat-message">Three hostiles detected. Stay mobile.</p>
         <div class="ability-status" id="ability-status"></div>
+      </section>
+
+      <section class="extraction-guide" id="extraction-guide" aria-live="polite" hidden>
+        <span class="guide-arrow" id="guide-arrow" aria-hidden="true">↑</span>
+        <div><span class="eyebrow">EXTRACTION</span><strong id="guide-distance">— m</strong></div>
+        <span class="guide-action" id="guide-action">F TO BOARD</span>
       </section>
 
       <div class="aim-reticle" id="aim-reticle" aria-hidden="true"><i></i></div>
 
       <section class="death-overlay" id="death-overlay" role="alert" aria-live="assertive" hidden>
         <div class="death-panel">
-          <span class="eyebrow">FIELD TEST ENDED</span>
-          <h2>SCOUT DOWN</h2>
+          <span class="eyebrow" id="result-eyebrow">RUN ENDED</span>
+          <h2 id="result-title">SCOUT DOWN</h2>
           <p id="death-message">The encounter is over.</p>
-          <button id="restart-button" type="button">RESTART ENCOUNTER</button>
+          <button id="restart-button" type="button">RETURN TO BASE</button>
+        </div>
+      </section>
+
+      <section class="arrival-overlay" id="arrival-overlay" aria-live="polite" hidden>
+        <div class="arrival-panel">
+          <span class="eyebrow">GREYWOOD INSERTION</span>
+          <h2>CHOPPER ON FINAL APPROACH</h2>
+          <p id="arrival-message">Pilot is lining up the drop zone.</p>
+          <button id="disembark-button" type="button" disabled>DISEMBARK</button>
+        </div>
+      </section>
+
+      <section class="base-overlay" id="base-overlay" aria-label="Base camp">
+        <div class="base-panel">
+          <div class="base-heading">
+            <div>
+              <span class="eyebrow">SAFE ZONE / GREYWOOD PERIMETER</span>
+              <h2>WAYFARER CAMP</h2>
+              <p id="base-message">Your stored supplies are safe between runs.</p>
+            </div>
+            <div class="base-run-count">
+              <span>RUNS BANKED</span><strong id="run-count">0</strong>
+            </div>
+          </div>
+          <div class="base-ledger" aria-label="Stored resources">
+            <div><span>GEAR</span><strong id="bank-gear">0</strong></div>
+            <div><span>SUPPLIES</span><strong id="bank-supplies">0</strong></div>
+            <div><span>CREDITS</span><strong id="bank-money">0</strong></div>
+            <div><span>FUEL</span><strong id="bank-fuel">0</strong></div>
+          </div>
+          <div class="base-actions">
+            <div class="camp-shop">
+              <span class="eyebrow">QUARTERMASTER</span>
+              <button id="buy-gear-button" type="button">
+                BUY FIELD GEAR KIT <span>50 CR</span>
+              </button>
+              <button id="buy-supplies-button" type="button">
+                BUY MEDICAL SUPPLIES <span>35 CR</span>
+              </button>
+              <button id="buy-cargo-button" type="button">
+                UPGRADE CARGO HARNESS <span>90 CR</span>
+              </button>
+              <small id="harness-status">Cargo capacity: 10 units</small>
+            </div>
+            <div class="deploy-card">
+              <span class="eyebrow">NEXT DEPLOYMENT</span>
+              <p>City–forest zone · no fuel charge</p>
+              <button id="start-run-button" type="button">DEPLOY TO GREYWOOD <span>↗</span></button>
+            </div>
+          </div>
+          <p class="base-footnote">
+            Loot secured at camp survives a failed run. Everything still carried is lost if you go
+            down.
+          </p>
         </div>
       </section>
 
@@ -98,7 +166,7 @@
           <span class="lock-icon" aria-hidden="true">⌖</span
           ><span id="lock-label">CAPTURE MOUSE</span><span class="button-key">OPTIONAL</span>
         </button>
-        <p class="footer-note">PHASE 02 <span>—</span> COMBAT FIELD TEST</p>
+        <p class="footer-note">PHASE 03 <span>—</span> EXTRACTION RUN</p>
       </footer>
 
       <aside class="diagnostics" aria-label="Development diagnostics">
