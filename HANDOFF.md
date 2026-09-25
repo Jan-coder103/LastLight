@@ -4,7 +4,7 @@ Updated: 2026-09-25
 
 ## Current position
 
-Phase 1 and Phase 2 are **Accepted**. The owner said Phase 2 had just been playtested and improved, then requested Phase 3; that request is recorded as acceptance and phase start. Phase 3 is implemented on branch `main` and **Awaiting owner playtest**. Do not begin Phase 4 until the owner accepts Phase 3 and initiates it.
+Phase 1 and Phase 2 are **Accepted**. The owner said Phase 2 had just been playtested and improved, then requested Phase 3; that request is recorded as acceptance and phase start. Phase 3 implementation is committed as `bbfb321` on branch `main` and **Awaiting owner playtest**. Do not begin Phase 4 until the owner accepts Phase 3 and initiates it.
 
 ## Read first
 
