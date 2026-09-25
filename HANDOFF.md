@@ -4,7 +4,7 @@ Updated: 2026-09-25
 
 ## Current position
 
-Phases 1–4 are **Accepted**. The Phase 4 orientation revision passed the full suite and the owner approved it on 2026-09-25. Phase 5 navigation is implemented, verified, and awaiting owner playtest. The original Phase 4 map-quality implementation is committed as `4ff3475` on `main`; the current Phase 4 revision and Phase 5 work are in the active working tree.
+Phases 1–4 are **Accepted**. The Phase 4 orientation revision passed the full suite and the owner approved it on 2026-09-25. Phase 5 navigation is implemented, verified, and awaiting owner playtest. The original Phase 4 map-quality implementation is committed as `4ff3475`; the orientation revision and Phase 5 implementation are committed together as `e8a443b` on `main`.
 
 ## Read first
 
