@@ -57,6 +57,7 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 - `src/player/PlayerController.ts` owns direct third-person movement, top-down route following, dash movement, and the player visual.
 - `src/navigation/GridNavigator.ts` routes the player around static colliders and refreshed hostile positions; combat pursuers use a separate static navigation map.
 - `src/game/CombatSimulation.ts` owns health, firing and ability cooldowns, damage, and zombie pursuit/attacks.
+- `src/game/HordeSimulation.ts` owns the seeded 10,000-agent stress simulation, spatial queries, obstacle deflection, and near/mid/far update tiers; `src/game/HordeBenchmark.ts` measures fixed simulation steps without rendering.
 - `src/game/loot.ts` places reproducible caches across generated regions and creates deterministic cache contents.
 - `src/game/saveData.ts` validates versioned camp saves, cargo capacity, and banking rules.
 - `src/input/controlMap.ts` defines the view-specific keyboard actions.
@@ -92,4 +93,23 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 5. Let hostiles begin moving while following a route. Check that distant moving hostiles cause a detour when needed, the route recovers after a dash, and combat pursuers keep moving normally.
 6. Read the path timing and route status in the development telemetry. Report any route that stalls, ends outside interaction range, or takes an unexpectedly long time to calculate.
 
-The encounter is intentionally capped at seven hostiles and is not a horde performance claim. Frame rate and frame time remain live diagnostics. Save data uses schema version 1 under the `last-light-save` browser storage key; invalid or unreadable data loads safe default camp supplies.
+## Phase 6 playtest checklist
+
+1. From camp, open **Horde Simulation Lab**. Try 100 agents first, then start 10,000 with a memorable seed and each spawn pattern. Confirm the same seed and pattern restore the same initial layout.
+2. Try both camera modes. In third person, walk with WASD and look around; in top-down mode, right-click to route around buildings. Confirm the agents close in without passing through static obstacles.
+3. Watch the near/mid/far counts shift as agents approach. Check nearest-target distance, simulation step time, and player health/attack count; nearby agents should reach and attack the player. Click a visible agent to damage it and confirm its health/identity persists until defeated.
+4. End the scene and repeat the same seed and pattern. Run the 100/1,000/5,000/10,000 benchmark twice and note mean and p95 simulation-step cost for each count.
+5. Report whether the crowd reads as growing pressure, whether tier changes look continuous, and any visible bunching, blocked groups, or unexpected state changes.
+
+The regular encounter is intentionally capped at seven hostiles. For Phase 6, open **Horde Simulation Lab** from camp or the dev telemetry button. Choose 100, 1,000, 5,000, or 10,000 agents; set a spawn seed, layout, and camera; then start the isolated stress scene. WASD movement and top-down click-to-move let the horde pursue the player. The lab shows near/mid/far tier counts, the nearest-agent query, player attacks received, and simulation time. End the scene to return to camp.
+
+The lab benchmark measures fixed 1/60-second simulation steps after eight warm-up steps, using 36 samples per count. Spawn creation, rendering, world construction, and UI are excluded. Two local runs in the Codex in-app browser at a 640×697 preview viewport, using seed `PHASE6-SMOKE` and the Eight clusters pattern, measured:
+
+| Agents | Run 1 mean / p95 (ms) | Run 2 mean / p95 (ms) |
+| -----: | --------------------: | --------------------: |
+|    100 |         0.011 / 0.100 |         0.008 / 0.100 |
+|  1,000 |         0.108 / 0.700 |         0.078 / 0.500 |
+|  5,000 |         0.792 / 4.800 |         0.586 / 4.300 |
+| 10,000 |        1.547 / 11.300 |        1.517 / 11.900 |
+
+These are simulation-only preview measurements; browser scheduling changes individual samples. Hardware/GPU details are not exposed by the preview, and this is not the Phase 7 frame-rate gate. Repeat with the same seed and pattern to compare measurements on a chosen reference machine. Frame rate and frame time remain live diagnostics for the normal run. Phase 7 will set the rendering performance target on a reference desktop. Save data uses schema version 1 under the `last-light-save` browser storage key; invalid or unreadable data loads safe default camp supplies.

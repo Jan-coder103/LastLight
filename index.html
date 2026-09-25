@@ -18,7 +18,7 @@
         <div class="brand-lockup">
           <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
           <div>
-            <p class="eyebrow">FIELD TEST 05 <span>·</span> PLAYER NAVIGATION</p>
+            <p class="eyebrow">FIELD TEST 06 <span>·</span> HORDE SIMULATION</p>
             <h1>LAST LIGHT</h1>
           </div>
         </div>
@@ -142,6 +142,9 @@
               <span class="eyebrow">NEXT DEPLOYMENT</span>
               <p>City–forest zone · no fuel charge</p>
               <button id="start-run-button" type="button">DEPLOY TO GREYWOOD <span>↗</span></button>
+              <button id="open-horde-lab" class="secondary-action" type="button">
+                OPEN HORDE SIMULATION LAB
+              </button>
             </div>
           </div>
           <p class="base-footnote">
@@ -167,13 +170,14 @@
           <span class="lock-icon" aria-hidden="true">⌖</span
           ><span id="lock-label">CAPTURE MOUSE</span><span class="button-key">OPTIONAL</span>
         </button>
-        <p class="footer-note">PHASE 05 <span>—</span> PLAYER NAVIGATION</p>
+        <p class="footer-note">PHASE 06 <span>—</span> HORDE SIMULATION</p>
       </footer>
 
       <aside class="diagnostics" aria-label="Development diagnostics">
         <div class="diag-heading">
           <span class="diag-pulse"></span><span>DEV TELEMETRY</span
           ><span class="diag-tag">LOCAL</span>
+          <button id="horde-lab-toggle" class="diag-lab-button" type="button">HORDE LAB</button>
         </div>
         <div class="diag-grid">
           <div>
@@ -190,6 +194,56 @@
           <div><span>SEED</span><strong id="diag-seed">RAVEN-07</strong></div>
         </div>
       </aside>
+      <section id="horde-lab" class="horde-lab" aria-label="Horde simulation lab" hidden>
+        <div class="horde-lab-heading">
+          <div>
+            <span class="eyebrow">PHASE 06 / STRESS SCENE</span>
+            <h2>HORDE LAB</h2>
+          </div>
+          <button
+            id="horde-lab-close"
+            class="icon-button"
+            type="button"
+            aria-label="Close horde lab"
+          >
+            ×
+          </button>
+        </div>
+        <label for="horde-count">AGENTS</label>
+        <select id="horde-count">
+          <option value="100">100</option>
+          <option value="1000">1,000</option>
+          <option value="5000">5,000</option>
+          <option value="10000" selected>10,000</option>
+        </select>
+        <label for="horde-seed">SPAWN SEED</label>
+        <input id="horde-seed" maxlength="32" value="HORDE-01" autocomplete="off" />
+        <label for="horde-pattern">SPAWN PATTERN</label>
+        <select id="horde-pattern">
+          <option value="ring">Wide ring</option>
+          <option value="clusters">Eight clusters</option>
+          <option value="grid">Grid formation</option>
+        </select>
+        <label for="horde-camera">CAMERA</label>
+        <select id="horde-camera">
+          <option value="third-person">Third person</option>
+          <option value="top-down">Top-down</option>
+        </select>
+        <div class="horde-lab-actions">
+          <button id="horde-start" type="button">START STRESS SCENE</button>
+          <button id="horde-stop" type="button" hidden>END STRESS SCENE</button>
+          <button id="horde-benchmark" class="secondary-action" type="button">
+            RUN 100–10K BENCHMARK
+          </button>
+        </div>
+        <p id="horde-status" class="horde-status">Start from camp to load a reproducible horde.</p>
+        <div id="horde-live-stats" class="horde-live-stats" hidden></div>
+        <div id="horde-benchmark-results" class="horde-benchmark-results" aria-live="polite"></div>
+      </section>
+      <div id="horde-active-tools" class="horde-active-tools" hidden>
+        <button id="horde-reopen-lab" type="button">HORDE LAB</button>
+        <button id="horde-quick-stop" type="button">END STRESS</button>
+      </div>
       <div class="transition-wash" id="transition-wash" aria-hidden="true"></div>
     </main>
     <script type="module" src="/src/main.ts"></script>

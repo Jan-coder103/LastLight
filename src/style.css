@@ -902,6 +902,19 @@ kbd {
   border-radius: 2px;
   font-size: 8px;
 }
+.diag-lab-button {
+  margin-left: auto;
+  padding: 3px 5px;
+  color: #d4c28d;
+  border: 1px solid rgba(211, 181, 110, 0.28);
+  border-radius: 2px;
+  background: rgba(211, 181, 110, 0.07);
+  font: 8px/1 var(--mono);
+  cursor: pointer;
+}
+.diag-lab-button:hover {
+  background: rgba(211, 181, 110, 0.16);
+}
 .diag-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -922,6 +935,186 @@ kbd {
 .diag-grid strong small {
   color: #91988a;
   font: 8px/1 var(--mono);
+}
+
+.horde-lab {
+  position: absolute;
+  z-index: 8;
+  top: 24px;
+  right: 30px;
+  width: 290px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px 15px;
+  border: 1px solid rgba(211, 181, 110, 0.36);
+  border-radius: 5px;
+  background: rgba(21, 25, 21, 0.95);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(14px);
+}
+.horde-lab[hidden] {
+  display: none;
+}
+.horde-active-tools {
+  position: absolute;
+  z-index: 9;
+  top: 24px;
+  right: 30px;
+  display: flex;
+  gap: 6px;
+}
+.horde-active-tools[hidden] {
+  display: none;
+}
+.horde-active-tools button {
+  min-height: 34px;
+  padding: 5px 9px;
+  color: #eadfc1;
+  border: 1px solid rgba(211, 181, 110, 0.38);
+  border-radius: 3px;
+  background: rgba(21, 25, 21, 0.94);
+  font: 8px/1.25 var(--mono);
+  cursor: pointer;
+}
+.horde-active-tools button:hover {
+  background: rgba(52, 57, 48, 0.96);
+}
+.horde-lab-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.horde-lab-heading h2 {
+  margin: 5px 0 0;
+  color: #f0eddf;
+  font: 700 20px/1 var(--condensed);
+  letter-spacing: 0.09em;
+}
+.horde-lab > label {
+  margin-top: 3px;
+  color: var(--accent);
+  font: 8px/1 var(--mono);
+  letter-spacing: 0.1em;
+}
+.horde-lab select,
+.horde-lab input {
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 8px;
+  color: var(--ink);
+  border: 1px solid rgba(235, 228, 200, 0.17);
+  border-radius: 3px;
+  background: #262b25;
+  font: 11px/1.2 var(--mono);
+}
+.horde-lab select option {
+  background: #262b25;
+}
+.horde-lab-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 5px;
+}
+.horde-lab-actions button,
+.base-panel .secondary-action {
+  min-height: 34px;
+  padding: 5px 7px;
+  color: #eadfc1;
+  border: 1px solid rgba(211, 181, 110, 0.38);
+  border-radius: 3px;
+  background: rgba(211, 181, 110, 0.12);
+  font: 8px/1.25 var(--mono);
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+.horde-lab-actions button:hover:not(:disabled),
+.base-panel .secondary-action:hover:not(:disabled) {
+  background: rgba(211, 181, 110, 0.22);
+}
+.horde-lab-actions button:disabled,
+.base-panel .secondary-action:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+.horde-lab-actions .secondary-action {
+  grid-column: 1 / -1;
+  color: #cfccaf;
+  border-color: rgba(235, 228, 200, 0.2);
+  background: rgba(255, 255, 255, 0.045);
+}
+.horde-status {
+  margin: 2px 0 0;
+  color: #a9ad9e;
+  font-size: 9px;
+  line-height: 1.35;
+}
+.horde-live-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid rgba(235, 228, 200, 0.12);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.025);
+  color: #b9bcad;
+  font: 8px/1.3 var(--mono);
+}
+.horde-live-stats[hidden] {
+  display: none;
+}
+.horde-live-stats strong {
+  display: block;
+  margin-top: 3px;
+  color: #eeeadd;
+  font-size: 11px;
+  font-weight: 400;
+}
+.horde-benchmark-results:empty {
+  display: none;
+}
+.horde-benchmark-results {
+  padding-top: 4px;
+  color: #b9bcad;
+  font: 8px/1.45 var(--mono);
+}
+.horde-benchmark-results table {
+  width: 100%;
+  border-collapse: collapse;
+  font: inherit;
+  text-align: right;
+}
+.horde-benchmark-results th,
+.horde-benchmark-results td {
+  padding: 4px 2px;
+  border-bottom: 1px solid rgba(235, 228, 200, 0.1);
+}
+.horde-benchmark-results th:first-child,
+.horde-benchmark-results td:first-child {
+  text-align: left;
+}
+
+#game.is-horde-test .topbar,
+#game.is-horde-test .map-label,
+#game.is-horde-test .controls-card,
+#game.is-horde-test .combat-hud,
+#game.is-horde-test .bottom-bar,
+#game.is-horde-test .aim-reticle,
+#game.is-horde-test .extraction-guide {
+  display: none;
+}
+#game.is-horde-test .diagnostics {
+  right: auto;
+  bottom: 24px;
+  left: 30px;
+}
+#game.is-horde-test .horde-lab {
+  top: 24px;
+  right: 30px;
 }
 
 .transition-wash {
@@ -971,6 +1164,16 @@ kbd {
   .diagnostics {
     right: 20px;
     width: 260px;
+  }
+  .horde-lab {
+    right: 20px;
+  }
+  .horde-active-tools {
+    right: 20px;
+  }
+  #game.is-horde-test .diagnostics {
+    right: auto;
+    left: 20px;
   }
   .combat-hud {
     right: 20px;
@@ -1093,6 +1296,19 @@ kbd {
     bottom: 100px;
     width: 205px;
     padding: 10px 11px;
+  }
+  .horde-lab {
+    top: 12px;
+    right: 12px;
+    width: min(290px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+  }
+  .horde-active-tools {
+    top: 12px;
+    right: 12px;
+  }
+  #game.is-horde-test .diagnostics {
+    display: none;
   }
   .diag-heading {
     gap: 6px;

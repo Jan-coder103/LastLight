@@ -1,9 +1,9 @@
 # Development tracker
 
 Last updated: 2026-09-25  
-Current gate: Phases 1–4 are accepted. Phase 5 navigation is implemented and awaiting owner playtest.
+Current gate: Phases 1–5 are accepted. Phase 6 large-horde simulation is implemented and awaiting owner playtest.
 
-Next authorized work: Owner playtests Phase 5 navigation in several city/forest layouts. Keep Phase 6 closed until Phase 5 is accepted.
+Next authorized work: Owner playtests the Phase 6 horde scene and decides whether the crowd reads as a threat. Keep Phase 7 closed until Phase 6 is accepted.
 
 ## Phase status
 
@@ -13,8 +13,8 @@ Next authorized work: Owner playtests Phase 5 navigation in several city/forest 
 | 2     | Controls, combat, simple enemies                                  | Accepted                | Accepted       | Phase 2 targeting and camera revisions were playtested; the owner requested Phase 3 on 2026-09-25. |
 | 3     | Complete extraction loop                                          | Accepted                | Accepted       | Owner reported “All green lights from my site” on 2026-09-25 and authorized the next phase.        |
 | 4     | Better procedural maps                                            | Accepted                | Accepted       | Owner approved the seeded city/forest orientation revision and map quality on 2026-09-25.          |
-| 5     | Better player navigation                                          | Awaiting owner playtest | Pending        | Dense-space routing, interactions, dynamic blockers, and recovery.                                 |
-| 6     | 10,000-agent simulation                                           | Not started             | Pending        | Simulation benchmark.                                                                              |
+| 5     | Better player navigation                                          | Accepted                | Accepted       | Owner: “Playtest 5 - all fine! I tested and everything works.” Approved on 2026-09-25.             |
+| 6     | 10,000-agent simulation                                           | Awaiting owner playtest | Pending        | Seeded 10k stress scene and repeatable simulation-only benchmark are ready for playtest.           |
 | 7     | Performance and LOD                                               | Not started             | Pending        | Set final target after measurements.                                                               |
 | 8     | Enterable buildings                                               | Not started             | Pending        | 2–4 room interiors.                                                                                |
 | 9     | Separate asset editor                                             | Not started             | Pending        | Shared asset format.                                                                               |
@@ -178,7 +178,30 @@ Update a checkbox only when the work and its verification are complete. Add the 
 - [x] Cover obstacle detours, interaction-range destinations, dynamic blockers, and route-clearance checks with deterministic tests.
 - [x] Complete the full automated suite, production build, and formatting check.
 - [x] Browser smoke confirms deployment/disembark, top-down controls, click-to-move routing, route telemetry, and arrival status.
-- [ ] Owner playtests navigation in several layouts, including an interaction approach and moving-hostile pressure.
+- [x] Owner playtests navigation in several layouts, including an interaction approach and moving-hostile pressure; owner reports all fine and authorizes Phase 6 on 2026-09-25.
+
+## Phase 6 checklist
+
+### 6.1 Reproducible stress scene
+
+- [x] Add count controls for 100, 1,000, 5,000, and 10,000 tracked agents.
+- [x] Add seed, wide-ring/eight-cluster/grid spawn patterns, and third-person/top-down camera selection.
+- [x] Render horde bodies through an instanced batch and provide a clear end-stress action back to camp.
+
+### 6.2 Scalable behavior and stable tiers
+
+- [x] Keep agent IDs, positions, health, attack counts, and alive state in stable per-agent arrays.
+- [x] Add near/mid/far simulation cadences, local spatial-grid queries, crowd separation, and local obstacle deflection without individual A* paths.
+- [x] Add targeted-agent query, tier counts, nearest-agent display, attack pressure, and per-step simulation timing.
+- [x] Let a click damage a visible agent through the instanced batch; remove defeated agents from queries without reusing their identity.
+- [x] Test deterministic spawns, 10,000 finite tracked agents, state retention across a tier change, pursuit, and nearby attacks.
+
+### 6.3 Benchmark and phase gate
+
+- [x] Measure fixed simulation steps at 100, 1,000, 5,000, and 10,000 agents with a repeatable seed/pattern; exclude scene creation and rendering.
+- [x] Complete automated tests, production build, and formatting check.
+- [x] Browser smoke confirms a 10,000-agent horde loads and updates; nearby agents reach and attack the player; no console warnings/errors.
+- [ ] Owner playtests whether the horde reads as a threat and checks tier continuity, crowding, and reproducibility.
 
 ## Evidence and playtest log
 
@@ -198,6 +221,7 @@ Update a checkbox only when the work and its verification are complete. Add the 
 | 2026-09-25 | 4            | `4ff3475`          | Added five seeded districts, jittered city streets and forest trails, two landmarks including a new relay mast asset, and five region-based cache zones. `npm test` passed (5 files, 20 tests), including a 24-seed layout/navigation batch and four cache-route seeds. World-data generation across 24 seeds measured p95 1.93 ms, max 2.16 ms against a 50 ms p95 budget. `npm run build` passed (607.24 kB minified, 156.26 kB gzip; existing Vite advisory above 500 kB); formatting passed. Browser smoke on `PHASE4-00` confirmed landing, disembark, top-down view, 14 m extraction guide, 60 FPS / 16.7 ms, and no console warnings/errors. | Owner playtested and accepted, then requested biome-side variation by seed.                              |
 | 2026-09-25 | 4 revision   | e8a443b            | Rotated districts, roads, loot zones, landmarks, placements, colliders, and spawn together in four deterministic orientations. Terrain shading follows district data. The complete 23-test suite passed after the final 24-seed assertion adjustment; build and formatting passed. The owner then playtested the revised map and approved Phase 4.                                                                                                                                                                                                                                                                                                  | Phase 4 accepted; proceed with Phase 5.                                                                  |
 | 2026-09-25 | 5            | e8a443b            | Added walkable-cell route smoothing and validation, range-based interaction approaches, refreshed hostile blockers on the player navigation grid, route replacement/cancel, bounded stuck recovery, automatic cache/pickup interaction, and route timing/status telemetry. `npm test` passed (5 files, 23 tests); `npm run build` passed (613.60 kB minified, 158.10 kB gzip; existing Vite advisory above 500 kB); formatting passed. Browser smoke confirmed deploy/disembark, route completion, Escape cancellation, 0.20 ms latest/max route request, and 60 FPS / 16.7 ms.                                                                     | Awaiting owner playtest of dense routes, interaction approach, and moving-hostile pressure.              |
+| 2026-09-25 | 5 acceptance | Phase 5            | Owner reported “Playtest 5 - all fine! I tested and everything works.” Phase 5 accepted with no further revisions; owner authorized Phase 6.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Begin Phase 6.                                                                                           |
 
 ## Open issues and revisions
 
@@ -207,7 +231,8 @@ Update a checkbox only when the work and its verification are complete. Add the 
 | 3.1 | 3     | Owner playtests repeated extraction, death loss, banking, save reload, and camp shopping.                | Medium   | Resolved                | Owner reported all green lights and authorized Phase 4 on 2026-09-25.                                                     |
 | 4.1 | 4     | Verify varied routes, cache accessibility, landmark navigation, and chopper clearance over owner seeds.  | Medium   | Resolved                | Owner confirmed Phase 4 playtest passes on 2026-09-25.                                                                    |
 | 4.2 | 4     | Guarantee both city and forest areas while changing their map-side placement by seed.                    | Medium   | Resolved                | Four deterministic map rotations move districts and map content; full 23-test suite passed and owner approved the retest. |
-| 5.1 | 5     | Verify click-to-move route recovery, dynamic obstruction, and automatic interaction approaches.          | Medium   | Awaiting owner playtest | Unit tests and browser smoke pass; owner visual/play feel review remains.                                                 |
+| 5.1 | 5     | Verify click-to-move route recovery, dynamic obstruction, and automatic interaction approaches.          | Medium   | Resolved                | Owner said “Playtest 5 - all fine! I tested and everything works.” and authorized Phase 6 on 2026-09-25.                  |
+| 6.1 | 6     | Owner assesses horde threat readability, tier transitions, crowd behavior, and repeatability.            | Medium   | Awaiting owner playtest | 10,000-agent scene and two same-seed benchmark runs completed; implementation is ready for playtest.                      |
 
 ## Decisions to record
 
@@ -218,6 +243,7 @@ Update a checkbox only when the work and its verification are complete. Add the 
 | Run pacing, starting gear, inventory/economy values     | Phase 3                                    | First pass: take one gear kit and one medical supply from camp if available; weighted cargo capacity is 10, or 15 with the 90-credit harness. Credits are weightless. City–forest deployment is free. Warnings come at 50/110 seconds and waves at 90/150 seconds. Extract after collecting at least one cache item, inside 6.5 m, with no hostile within 3.5 m, then hold for four seconds. Tune after owner playtest. |
 | Phase 4 procedural route limits                         | Phase 4                                    | Five named districts shape building/vegetation placement; nine seed-jittered road/trail segments remain in bounds. Seven cache sites are spread over five named loot zones; placement rejects routes over 145 m from the chopper. A 24-seed test checks collider overlap, landing clearance, disembark, and landmark routes.                                                                                            |
 | Phase 4 map generation budget                           | Phase 4                                    | The world-data generation budget is 50 ms at p95, measured before Three.js visual construction. The orientation-revision 24-seed sample measured p95 1.86 ms and maximum 2.26 ms on the current development host.                                                                                                                                                                                                       |
+| Phase 6 horde simulation benchmark                      | Phase 6                                    | Two 36-sample runs after eight warm-up steps at seed `PHASE6-SMOKE` / Eight clusters measured 10,000-agent simulation mean 1.547/1.517 ms and p95 11.300/11.900 ms per 1/60-second step. Spawn and rendering are excluded; reference hardware remains undecided for Phase 7.                                                                                                                                            |
 | Exterior simulation behavior while inside a building    | Phase 8                                    | Open.                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Art/audio licenses for public release                   | Before public release                      | Open.                                                                                                                                                                                                                                                                                                                                                                                                                   |
 

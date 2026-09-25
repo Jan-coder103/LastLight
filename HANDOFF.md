@@ -4,13 +4,13 @@ Updated: 2026-09-25
 
 ## Current position
 
-Phases 1–4 are **Accepted**. The Phase 4 orientation revision passed the full suite and the owner approved it on 2026-09-25. Phase 5 navigation is implemented, verified, and awaiting owner playtest. The original Phase 4 map-quality implementation is committed as `4ff3475`; the orientation revision and Phase 5 implementation are committed together as `e8a443b` on `main`.
+Phases 1–5 are **Accepted**. On 2026-09-25 the owner reported, “Playtest 5 - all fine! I tested and everything works,” and authorized Phase 6. Phase 6 large-horde simulation is implemented and verified; it is awaiting the owner’s threat-readability playtest. The current Phase 6 commit is recorded in the tracker.
 
 ## Read first
 
 1. `plan.md` for the vision, technical direction, phase scope, and acceptance criteria.
 2. `tracker.md` for phase status, verification evidence, decisions, and the owner playtest log.
-3. `README.md` for startup commands, controls, and the Phase 5 playtest checklist.
+3. `README.md` for startup commands, controls, benchmark measurements, and the Phase 6 playtest checklist.
 
 ## Phase 2 decisions and tuning
 
@@ -48,6 +48,13 @@ Phases 1–4 are **Accepted**. The Phase 4 orientation revision passed the full 
 - Added Phase 5 route smoothing with walkability checks, range-based cache/pickup approaches, automatic interactions, and a temporary moving-hostile overlay on the player-only route map.
 - Added route replacement and Escape cancellation, camera/dash/obstacle replanning, bounded stuck detection, unreachable-route feedback, and live route timing/state telemetry.
 
+- Recorded the owner’s Phase 5 approval and began Phase 6.
+- Added the camp-accessible Horde Simulation Lab with 100/1,000/5,000/10,000 counts, a spawn seed, wide-ring/eight-cluster/grid layouts, and camera selection. Its stress scene returns to camp without changing saved run inventory.
+- Added stable numeric agent IDs and typed state arrays; near/mid/far update tiers, a local spatial grid for separation and nearest-target queries, local deflection around static obstacles, and simple near-field pursuit/attacks. Horde bodies use one instanced render batch without shadows.
+- Added visible-agent click damage through the instanced batch. Damaged agents retain health and ID across tiers; defeated agents disappear from spatial queries without reusing their ID.
+- Added a local fixed-step benchmark with eight warm-up steps and 36 samples at each target count. It reports mean and p95 simulation time and excludes scenario construction and rendering.
+- Added deterministic-spawn, 10,000-agent integrity, tier-transition state-retention, pursuit, and attack tests; added Phase 6 setup, benchmark evidence, and owner playtest instructions.
+
 ## Phase 3 decisions and tuning
 
 - Each run begins in third person while the chopper approaches and lands. Disembarking moves the player 14 m from the landing zone and automatically transitions to top-down view.
@@ -82,6 +89,12 @@ Phases 1–4 are **Accepted**. The Phase 4 orientation revision passed the full 
 - Phase 5 `npm run build` — passed; bundle is 613.60 kB minified (158.10 kB gzip), with Vite's existing advisory above 500 kB.
 - Phase 5 `npm run format:check` — passed.
 - Embedded-browser Phase 5 smoke — deploy/touchdown and top-down disembark worked; a right-click route showed `ROUTING` then `ARRIVED`; a second active route cancelled with Escape and showed `CANCELLED`; path calculation read 0.20 ms (1 request); preview showed 60 FPS / 16.7 ms at 640×700.
+- Phase 6 `npm test` — passed: 6 files, 29 tests, including 10,000-agent updates, stable state across tier changes, and defeated-agent removal.
+- Phase 6 `npm run build` — passed; bundle is 630.26 kB minified (163.03 kB gzip). Vite reports its existing advisory above 500 kB.
+- Phase 6 `npm run format:check` — passed.
+- Embedded-browser smoke on the local preview — 10,000 agents loaded with stable IDs and all 10,000 living; near/mid/far counters changed as the horde converged. The player took 57 recorded attacks and reached zero health while all agents remained alive. The scene ended cleanly and returned to camp; a separate 100-agent run verified live third-person to top-down camera switching. Browser console had no warnings or errors.
+- Hit-test smoke — a visible instanced agent took a left-click hit and showed 50 health remaining. On the narrow preview, closing the lab exposed persistent reopen/end controls while diagnostics were hidden; ending the scene returned to camp and hid stress telemetry. Browser console had no warnings or errors.
+- Two 36-sample benchmark runs (eight warm-ups each) used `PHASE6-SMOKE`, Eight clusters, fixed 1/60-second updates, Codex in-app browser preview at 640×697. Mean/p95 milliseconds: 100 agents 0.011/0.100 and 0.008/0.100; 1,000 0.108/0.700 and 0.078/0.500; 5,000 0.792/4.800 and 0.586/4.300; 10,000 1.547/11.300 and 1.517/11.900. These measure simulation only, excluding scene creation, rendering, and UI; host GPU/model is not exposed.
 - Pointer Lock was denied in the embedded browser during Phase 1. Phase 2 retains drag-to-look and click aiming; use a desktop target browser if testing Pointer Lock itself.
 - Build/runtime used Three.js 0.186.1, Vite 8.3.1, TypeScript 7.0.2, Vitest 5.0.2, Node 22.19.0, and npm 11.6.0.
 
@@ -103,12 +116,21 @@ Phases 1–4 are **Accepted**. The Phase 4 orientation revision passed the full 
 - Lack of route progress for 0.55 seconds triggers replanning. Two stuck retries are allowed before cancellation and feedback. Escape cancels a route; a new right-click replaces it.
 - Diagnostics show the latest and maximum route-request time in milliseconds and the number of requests.
 
+## Phase 6 decisions
+
+- Agent identity is the stable numeric ID `index + 1`; health, alive state, position, facing, attack count, and tier cadence remain in fixed typed arrays for the scenario lifetime.
+- Tier ranges are near at 34 m, mid at 92 m, and far beyond 92 m. Tiers refresh every 0.25 seconds; near/mid/far movement updates run at about 30 Hz, 6.25 Hz, and 2 Hz.
+- A 4 m local grid serves neighbor separation and nearest-agent queries. Steering checks the 2 m static walkability grid and deflects left/right when the direct step is blocked; zombies do not run individual A* routes.
+- Near attackers deal 8 damage every 1.3 seconds within 1.7 m. Crowd separation considers nearby agents and caps work at 12 neighbors per update.
+- Benchmark cost is the simulation step only. It uses eight warm-ups and 36 samples per count; browser scheduling can shift p95, so compare repeated runs on the eventual Phase 7 reference machine.
+
 ## Known limits and next action
 
-- Owner playtests Phase 5 in multiple city/forest layouts: replace/cancel routes; test dense blocks and narrow approaches; click or press F on a cache/pickup from outside range; switch camera and dash during a route; and observe recovery while hostiles move. Record feedback before Phase 6.
-- The 2 m grid may reject passages narrower than its collision clearance. Dynamic blockers refresh every 0.3 seconds, and hostiles within 3.2 m are left to immediate combat movement.
-- The Phase 4 generation timing measures world data only, excluding Three.js scene construction. Phase 5 route timing is a local preview sample, not a hardware performance claim.
-- The reinforcement scene is intentionally small; 10,000-agent scale remains Phase 6.
+- Owner playtests the Phase 6 checklist in `README.md`: try all spawn patterns, compare repeated seeds, check both camera modes, observe pursuit/attacks, and run the four-count benchmark twice. Record whether the crowd reads as a threat and any tier/crowd issues before Phase 7.
+- Stress visuals are intentionally simplified low-poly instances; this phase proves tracked simulation and horde behavior, while Phase 7 owns draw-call, memory, frame-time, and reference-hardware targets.
+- Local obstacle steering is a short deflection check rather than full route planning. The owner should flag groups that stall at blocked cells or bunch in narrow spaces.
+- The regular run still caps at seven hostiles and remains separate from the Horde Simulation Lab.
+- Phase 4 generation timing excludes scene construction. Phase 5 route timing and the Phase 6 simulation benchmark are local preview measurements, not hardware performance claims.
 
 ## Handoff format for future coding sessions
 

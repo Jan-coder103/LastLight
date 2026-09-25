@@ -8,8 +8,10 @@ import {
   Color,
   CylinderGeometry,
   DirectionalLight,
+  DynamicDrawUsage,
   Fog,
   Group,
+  InstancedMesh,
   Line,
   LineBasicMaterial,
   Mesh,
@@ -24,12 +26,14 @@ import {
   Vector2,
   Vector3,
   WebGLRenderer,
+  Object3D,
   type Material,
-  type Object3D,
 } from 'three';
 import type { AbilitySlot } from './input/controlMap';
 import { CameraRig } from './camera/CameraRig';
 import { CombatSimulation, type ZombieState } from './game/CombatSimulation';
+import { benchmarkCountsForHorde, benchmarkHorde } from './game/HordeBenchmark';
+import { HordeSimulation, type HordeSpawnPattern } from './game/HordeSimulation';
 import { openCache, placeLootCaches, type CacheSite, type LootDrop } from './game/loot';
 import {
   addCargo,
@@ -136,6 +140,23 @@ const elements = {
   arrivalMessage: document.querySelector<HTMLElement>('#arrival-message'),
   disembarkButton: document.querySelector<HTMLButtonElement>('#disembark-button'),
   zoneStatus: document.querySelector<HTMLElement>('#zone-status'),
+  openHordeLab: document.querySelector<HTMLButtonElement>('#open-horde-lab'),
+  hordeLabToggle: document.querySelector<HTMLButtonElement>('#horde-lab-toggle'),
+  hordeLab: document.querySelector<HTMLElement>('#horde-lab'),
+  hordeLabClose: document.querySelector<HTMLButtonElement>('#horde-lab-close'),
+  hordeCount: document.querySelector<HTMLSelectElement>('#horde-count'),
+  hordeSeed: document.querySelector<HTMLInputElement>('#horde-seed'),
+  hordePattern: document.querySelector<HTMLSelectElement>('#horde-pattern'),
+  hordeCamera: document.querySelector<HTMLSelectElement>('#horde-camera'),
+  hordeStart: document.querySelector<HTMLButtonElement>('#horde-start'),
+  hordeStop: document.querySelector<HTMLButtonElement>('#horde-stop'),
+  hordeBenchmark: document.querySelector<HTMLButtonElement>('#horde-benchmark'),
+  hordeStatus: document.querySelector<HTMLElement>('#horde-status'),
+  hordeLiveStats: document.querySelector<HTMLElement>('#horde-live-stats'),
+  hordeBenchmarkResults: document.querySelector<HTMLElement>('#horde-benchmark-results'),
+  hordeActiveTools: document.querySelector<HTMLElement>('#horde-active-tools'),
+  hordeReopenLab: document.querySelector<HTMLButtonElement>('#horde-reopen-lab'),
+  hordeQuickStop: document.querySelector<HTMLButtonElement>('#horde-quick-stop'),
 };
 
 for (const [key, element] of Object.entries(elements)) {
@@ -178,6 +199,11 @@ interface NavigationTask {
 }
 
 let gamePhase: GamePhase = 'base';
+let stressActive = false;
+let hordeSimulation: HordeSimulation | undefined;
+let hordeVisual: InstancedMesh | undefined;
+let hordeInstance = new Object3D();
+let hordeRenderTier = new Uint8Array();
 let saveData: SaveData = loadSave();
 let cargo = emptyInventory();
 let runElapsed = 0;
@@ -243,8 +269,9 @@ function updateModeUi(): void {
 }
 
 function switchView(): void {
-  if (gamePhase !== 'active') return;
+  if (gamePhase !== 'active' && !stressActive) return;
   cameraRig.switchMode(player.position);
+  elements.hordeCamera!.value = cameraRig.mode;
   autoAttackTargetId = undefined;
   player.clearKeyboardMovement();
   if (cameraRig.mode !== 'third-person') releaseLookDrag();
@@ -323,6 +350,14 @@ function renderControls(): void {
 }
 
 function updateCombatUi(): void {
+  if (stressActive && hordeSimulation) {
+    const health = Math.ceil(hordeSimulation.playerHealth);
+    elements.hostileCount!.textContent = `${hordeSimulation.livingCount} / ${hordeSimulation.count}`;
+    elements.healthValue!.textContent = `${health} / 100`;
+    elements.healthFill!.style.width = `${health}%`;
+    elements.combatMessage!.textContent = 'Horde stress scene running.';
+    return;
+  }
   const healthPercent = Math.max(0, Math.min(100, (combat.health / combat.maxHealth) * 100));
   elements.hostileCount!.textContent = String(combat.livingZombieCount);
   elements.healthValue!.textContent = `${Math.ceil(combat.health)} / ${combat.maxHealth}`;
@@ -436,7 +471,7 @@ function updateRouteLine(force = false): void {
 }
 
 function setSeed(seed: string): void {
-  if (gamePhase !== 'base') {
+  if (gamePhase !== 'base' || stressActive) {
     elements.seedHint!.textContent = 'Return to camp before changing the world seed.';
     return;
   }
@@ -507,6 +542,176 @@ function createZombieViews(): void {
     zombieGroup.add(visual);
   }
   scene.add(zombieGroup);
+}
+
+function updateHordeUi(): void {
+  const horde = hordeSimulation;
+  if (!horde || !stressActive) return;
+  const nearest = horde.findNearestAgent(player.position.x, player.position.z, 120);
+  const targetLabel =
+    nearest === undefined
+      ? 'None in range'
+      : `#${horde.ids[nearest]} · ${Math.hypot(horde.x[nearest]! - player.position.x, horde.z[nearest]! - player.position.z).toFixed(1)} m`;
+  const tiers = horde.tiers;
+  elements.hordeLiveStats!.innerHTML = `
+    <div>TRACKED<strong>${horde.count.toLocaleString()}</strong></div>
+    <div>LIVING<strong>${horde.livingCount.toLocaleString()}</strong></div>
+    <div>NEAR / MID / FAR<strong>${tiers.near} / ${tiers.mid} / ${tiers.far}</strong></div>
+    <div>NEAREST TARGET<strong>${targetLabel}</strong></div>
+    <div>PLAYER HEALTH<strong>${Math.ceil(horde.playerHealth)} / 100 · ${horde.totalPlayerHits} hits</strong></div>
+    <div>SIM STEP<strong>${horde.lastStepMs.toFixed(3)} ms</strong></div>`;
+  elements.hordeStatus!.textContent = `${elements.hordePattern!.selectedOptions[0]?.textContent ?? 'Horde'} · seed ${elements.hordeSeed!.value.trim() || 'HORDE-01'} · WASD move, LMB shoot visible agents, RMB routes in top-down. No per-agent route search.`;
+}
+
+function updateHordeVisual(): void {
+  const horde = hordeSimulation;
+  const mesh = hordeVisual;
+  if (!horde || !mesh || !stressActive) return;
+  let colorChanged = false;
+  const tierColors = [0xb98155, 0x9b9a65, 0x71806a];
+  for (let index = 0; index < horde.count; index += 1) {
+    const tier = horde.tier[index]!;
+    if (hordeRenderTier[index] !== tier) {
+      hordeRenderTier[index] = tier;
+      mesh.setColorAt(index, hordeInstance.userData.color.setHex(tierColors[tier]!));
+      colorChanged = true;
+    }
+    if (horde.alive[index] === 0) {
+      hordeInstance.position.set(0, -10_000, 0);
+      hordeInstance.scale.setScalar(0);
+    } else {
+      hordeInstance.position.set(horde.x[index]!, horde.y[index]! + 0.84, horde.z[index]!);
+      hordeInstance.rotation.set(0, horde.facing[index]!, 0);
+      const healthScale = 0.86 + (horde.health[index]! / 100) * 0.14;
+      hordeInstance.scale.set(healthScale, healthScale, healthScale);
+    }
+    hordeInstance.updateMatrix();
+    mesh.setMatrixAt(index, hordeInstance.matrix);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (colorChanged && mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+}
+
+function openHordeLab(): void {
+  elements.hordeLab!.removeAttribute('hidden');
+  elements.hordeActiveTools!.setAttribute('hidden', '');
+}
+
+function closeHordeLab(): void {
+  elements.hordeLab!.setAttribute('hidden', '');
+  if (stressActive) elements.hordeActiveTools!.removeAttribute('hidden');
+}
+
+function startHordeTest(): void {
+  if (gamePhase !== 'base' || stressActive) {
+    elements.hordeStatus!.textContent = 'Return to camp before starting a stress scene.';
+    return;
+  }
+  const count = Number(elements.hordeCount!.value);
+  const seed = elements.hordeSeed!.value.trim().slice(0, 32) || 'HORDE-01';
+  const pattern = elements.hordePattern!.value as HordeSpawnPattern;
+  hordeSimulation = new HordeSimulation(count, seed, pattern, world, new GridNavigator(world));
+  hordeRenderTier = new Uint8Array(count);
+  hordeRenderTier.fill(255);
+  const body = new CylinderGeometry(0.34, 0.48, 1.65, 6, 1);
+  const material = new MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true });
+  hordeVisual = new InstancedMesh(body, material, count);
+  hordeVisual.name = 'Instanced horde stress visuals';
+  hordeVisual.instanceMatrix.setUsage(DynamicDrawUsage);
+  hordeVisual.frustumCulled = false;
+  hordeVisual.castShadow = false;
+  hordeVisual.receiveShadow = false;
+  hordeInstance = new Object3D();
+  hordeInstance.userData.color = new Color();
+  scene.add(hordeVisual);
+
+  navigationTask = undefined;
+  player.cancelNavigation();
+  navigator.setDynamicObstacles([]);
+  player.setPosition(world.spawn.x, world.spawn.z);
+  player.setEnabled(true);
+  cameraRig.reset(player.position);
+  if (elements.hordeCamera!.value !== 'third-person') cameraRig.switchMode(player.position);
+  stressActive = true;
+  document.querySelector('#game')?.classList.add('is-horde-test');
+  elements.baseOverlay!.setAttribute('hidden', '');
+  elements.hordeLiveStats!.removeAttribute('hidden');
+  elements.hordeActiveTools!.setAttribute('hidden', '');
+  elements.hordeStart!.setAttribute('hidden', '');
+  elements.hordeStop!.removeAttribute('hidden');
+  elements.hordeBenchmark!.disabled = true;
+  elements.hordeStatus!.textContent = `Loading ${count.toLocaleString()} agents from ${seed}…`;
+  elements.zoneStatus!.textContent = 'HORDE LAB';
+  updateModeUi();
+  updateHordeUi();
+  releaseMouseCapture();
+  releaseLookDrag();
+  canvas?.focus({ preventScroll: true });
+}
+
+function stopHordeTest(): void {
+  if (!stressActive) return;
+  stressActive = false;
+  if (hordeVisual) {
+    scene.remove(hordeVisual);
+    hordeVisual.geometry.dispose();
+    const materials = Array.isArray(hordeVisual.material)
+      ? hordeVisual.material
+      : [hordeVisual.material];
+    materials.forEach((material) => material.dispose());
+  }
+  hordeVisual = undefined;
+  hordeSimulation = undefined;
+  hordeRenderTier = new Uint8Array();
+  player.setEnabled(false);
+  player.setPosition(world.spawn.x, world.spawn.z);
+  cameraRig.reset(player.position);
+  document.querySelector('#game')?.classList.remove('is-horde-test');
+  elements.baseOverlay!.removeAttribute('hidden');
+  elements.hordeLiveStats!.setAttribute('hidden', '');
+  elements.hordeActiveTools!.setAttribute('hidden', '');
+  elements.hordeStart!.removeAttribute('hidden');
+  elements.hordeStop!.setAttribute('hidden', '');
+  elements.hordeBenchmark!.disabled = false;
+  elements.hordeStatus!.textContent =
+    'Stress scene ended. Start another reproducible horde from camp.';
+  elements.zoneStatus!.textContent = 'BASE';
+  updateModeUi();
+  updateBaseUi();
+}
+
+async function runHordeBenchmark(): Promise<void> {
+  if (gamePhase !== 'base' || stressActive) {
+    elements.hordeStatus!.textContent =
+      'End the stress scene and return to camp before benchmarking.';
+    return;
+  }
+  elements.hordeBenchmark!.disabled = true;
+  elements.hordeStart!.disabled = true;
+  elements.hordeBenchmarkResults!.innerHTML = '<p>Measuring simulation steps…</p>';
+  elements.hordeStatus!.textContent =
+    'Benchmark excludes scene creation, rendering, and browser frame time.';
+  const seed = elements.hordeSeed!.value.trim().slice(0, 32) || 'HORDE-01';
+  const pattern = elements.hordePattern!.value as HordeSpawnPattern;
+  const benchmarkNavigator = new GridNavigator(world);
+  const rows: string[] = [];
+  try {
+    for (const count of benchmarkCountsForHorde()) {
+      const result = benchmarkHorde(count, seed, pattern, world, benchmarkNavigator);
+      rows.push(
+        `<tr><td>${result.count.toLocaleString()}</td><td>${result.meanMs.toFixed(3)}</td><td>${result.p95Ms.toFixed(3)}</td><td>${result.living.toLocaleString()}</td></tr>`,
+      );
+      elements.hordeBenchmarkResults!.innerHTML = `<table><thead><tr><th>AGENTS</th><th>MEAN MS</th><th>P95 MS</th><th>ALIVE</th></tr></thead><tbody>${rows.join('')}</tbody></table><p>Simulation only · fixed 1/60 s steps · seed ${seed} · ${elements.hordePattern!.selectedOptions[0]?.textContent}</p>`;
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    }
+    elements.hordeStatus!.textContent =
+      'Benchmark complete. Repeat with the same seed and pattern to compare host measurements.';
+  } catch (error) {
+    elements.hordeStatus!.textContent = `Benchmark failed: ${error instanceof Error ? error.message : String(error)}`;
+  } finally {
+    elements.hordeBenchmark!.disabled = false;
+    elements.hordeStart!.disabled = false;
+  }
 }
 
 function createChopper(): Group {
@@ -909,7 +1114,7 @@ function useCarriedSupply(): void {
 }
 
 function moveToLocation(x: number, z: number): void {
-  if (cameraRig.mode !== 'top-down' || gamePhase !== 'active') return;
+  if (cameraRig.mode !== 'top-down' || (gamePhase !== 'active' && !stressActive)) return;
   autoAttackTargetId = undefined;
   const path = requestNavigationPath(x, z);
   if (path.length === 0) {
@@ -1020,7 +1225,7 @@ function finishNavigationTask(task: NavigationTask): void {
 
 function replanNavigationTask(): void {
   const task = navigationTask;
-  if (!task || cameraRig.mode !== 'top-down' || gamePhase !== 'active') return;
+  if (!task || cameraRig.mode !== 'top-down' || (gamePhase !== 'active' && !stressActive)) return;
   const path = requestNavigationPath(task.x, task.z, task.range);
   if (path.length > 0) {
     player.setNavigationPath(path);
@@ -1105,7 +1310,7 @@ function clearRunScene(): void {
 }
 
 function startRun(): void {
-  if (gamePhase !== 'base') return;
+  if (gamePhase !== 'base' || stressActive) return;
   clearRunScene();
   navigator.setDynamicObstacles([]);
   dynamicNavigationRefresh = 0;
@@ -1355,6 +1560,22 @@ elements.seedForm!.addEventListener('submit', (event) => {
   setSeed(elements.seedInput!.value);
 });
 elements.viewButton!.addEventListener('click', switchView);
+elements.openHordeLab!.addEventListener('click', openHordeLab);
+elements.hordeLabToggle!.addEventListener('click', () => {
+  if (elements.hordeLab!.hasAttribute('hidden')) openHordeLab();
+  else closeHordeLab();
+});
+elements.hordeLabClose!.addEventListener('click', closeHordeLab);
+elements.hordeReopenLab!.addEventListener('click', openHordeLab);
+elements.hordeQuickStop!.addEventListener('click', stopHordeTest);
+elements.hordeStart!.addEventListener('click', startHordeTest);
+elements.hordeStop!.addEventListener('click', stopHordeTest);
+elements.hordeBenchmark!.addEventListener('click', () => void runHordeBenchmark());
+elements.hordeCamera!.addEventListener('change', () => {
+  if (!stressActive) return;
+  const selected = elements.hordeCamera!.value === 'top-down' ? 'top-down' : 'third-person';
+  if (selected !== cameraRig.mode) switchView();
+});
 elements.restartButton!.addEventListener('click', returnToBase);
 elements.startRunButton!.addEventListener('click', startRun);
 elements.disembarkButton!.addEventListener('click', disembark);
@@ -1564,6 +1785,24 @@ function fireAtZombie(zombie: ZombieState): boolean {
 }
 
 function fireAt(event: PointerEvent): void {
+  if (stressActive && hordeSimulation) {
+    camera.updateMatrixWorld(true);
+    const stressRay = new Raycaster();
+    stressRay.setFromCamera(pointToNdc(event), camera);
+    const stressHit = hordeVisual
+      ? stressRay.intersectObjects([worldGroup, hordeVisual], true)[0]
+      : undefined;
+    if (
+      stressHit &&
+      stressHit.object === hordeVisual &&
+      stressHit.instanceId !== undefined &&
+      hordeSimulation.damageAgent(stressHit.instanceId, 50)
+    ) {
+      updateHordeUi();
+      elements.hordeStatus!.textContent = `Agent #${hordeSimulation.ids[stressHit.instanceId]} hit · ${hordeSimulation.health[stressHit.instanceId]} health remaining.`;
+    }
+    return;
+  }
   if (!combat.alive || gamePhase !== 'active') return;
   const ndc = pointToNdc(event);
   const viewRay = new Raycaster();
@@ -1605,7 +1844,8 @@ function updateAutoAttack(): void {
 }
 
 function moveToPointer(event: MouseEvent): void {
-  if (cameraRig.mode !== 'top-down' || !combat.alive || gamePhase !== 'active') return;
+  if (cameraRig.mode !== 'top-down' || !combat.alive || (gamePhase !== 'active' && !stressActive))
+    return;
   autoAttackTargetId = undefined;
   pointerX = event.clientX;
   pointerY = event.clientY;
@@ -1774,7 +2014,11 @@ function animate(now: number): void {
   }
   simulationAccumulator = Math.min(simulationAccumulator + delta, fixedStep * 8);
   while (simulationAccumulator >= fixedStep) {
-    if (gamePhase === 'active' || gamePhase === 'extracting') {
+    if (stressActive && hordeSimulation) {
+      hordeSimulation.tick(fixedStep, player.position.x, player.position.z);
+      player.update(fixedStep, cameraRig.mode, cameraRig.yaw, 1);
+      updateNavigationProgress();
+    } else if (gamePhase === 'active' || gamePhase === 'extracting') {
       if (gamePhase === 'active') {
         runElapsed += fixedStep;
         const warningTimes = [50, 110];
@@ -1848,6 +2092,7 @@ function animate(now: number): void {
     const visual = zombieViews.get(zombie.id);
     if (visual) syncZombieVisual(visual, zombie);
   }
+  updateHordeVisual();
   cameraRig.update(delta, player.position);
   if (cameraRig.mode === 'third-person') {
     player.setFacingDirection(
@@ -1903,8 +2148,12 @@ function animate(now: number): void {
     updateCombatUi();
     if (cameraRig.mode === 'third-person') renderControls();
     elements.entityValue!.textContent = String(
-      world.objectCount + combat.zombies.length + lootGroup.children.length + 1,
+      world.objectCount +
+        (stressActive ? (hordeSimulation?.count ?? 0) : combat.zombies.length) +
+        lootGroup.children.length +
+        1,
     );
+    if (stressActive) updateHordeUi();
     updateNavigationTelemetry();
     lastUiTime = now;
   }
