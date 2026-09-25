@@ -4,7 +4,7 @@ Updated: 2026-09-25
 
 ## Current position
 
-Phase 1 is **Accepted**. The owner said “Playtest was good” and explicitly requested Phase 2. Phase 2 implementation is committed as `66a254c` (`Implement phase 2 combat field test`) on branch `main` and is **Awaiting owner playtest**. Do not begin Phase 3 until the owner accepts Phase 2 and initiates it.
+Phase 1 is **Accepted**. Phase 2 implementation is committed as `66a254c`; owner feedback revisions are committed as `fad74b5` (`Address phase 2 playtest feedback`) on branch `main`. Phase 2 is **Awaiting owner playtest** again. Do not begin Phase 3 until the owner accepts Phase 2 and initiates it.
 
 ## Read first
 
@@ -16,6 +16,9 @@ Phase 1 is **Accepted**. The owner said “Playtest was good” and explicitly r
 
 - Third-person abilities use `1/2/3`. Top-down abilities use `W/E/R`; the active map is shown in the field controls and HUD. `Tab` switches views.
 - `Q` dashes for 0.22 seconds at 20 m/s (about 4.4 m) with a 2.5-second cooldown and no resource cost. Switching views preserves the dash direction; switching clears held movement keys.
+- In top-down view, Q takes its direction from the current cursor position and briefly displays a ring-and-arrow cue. When the dash ends, the click-to-move route is recalculated from the landing point to its saved destination to avoid backtracking.
+- A top-down shot turns the player toward its aim point and briefly preserves that facing while moving. Hovering a live hostile changes the cursor/reticle to a square target mark.
+- Third-person pitch now permits aiming above the horizon. The follow camera sits slightly over the player's right shoulder and leads the aim target forward.
 - Field dressing restores 35 health and has a 12-second cooldown. Shock pulse deals 40 damage and stuns hostiles within 9 m for 1.8 seconds; cooldown is 9 seconds. Adrenaline raises movement speed by 50% for 5 seconds; cooldown is 14 seconds.
 - The rifle deals 50 damage with a 0.24-second firing cooldown. Hostiles have 100 health. The three-hostile encounter is intentionally small and uses A* repaths around static colliders every 0.7 seconds.
 - Player health is 100. Each hostile attack deals 8 damage every 1.3 seconds while in melee range. Death shows a restart overlay. These are first-pass feel values for the owner's playtest.
@@ -30,6 +33,7 @@ Phase 1 is **Accepted**. The owner said “Playtest was good” and explicitly r
 - Added three low-poly zombies, obstacle-aware pursuit, and combat feedback HUD/effects.
 - Added unit tests for damage/death, rifle and ability/dash cooldowns, input maps, and routes around generated obstacles.
 - Updated the roadmap decision, README controls, and Phase 2 playtest instructions.
+- Addressed the owner's Phase 2 playtest feedback with cursor-directed top-down dash, dash direction cue and route recovery, top-down shot-facing, enemy-hover targeting cursor, upward third-person aim, and right-shoulder camera framing.
 
 ## Verification
 
@@ -37,12 +41,13 @@ Phase 1 is **Accepted**. The owner said “Playtest was good” and explicitly r
 - `npm run build` — passed TypeScript checking and Vite production build. Minified bundle is 576.81 kB (147.21 kB gzip); Vite reports its existing/default advisory above 500 kB.
 - `npm run format:check` — passed.
 - Embedded-browser smoke — 59–60 FPS / 16.7 ms in the 1280×720 in-app preview; control panel and status HUD rendered; top-down mode and right-click route displayed; a cursor shot registered “Hostile hit”; zombie damage and the death/restart overlay appeared. The observed FPS is a preview reading, not a reference-hardware performance claim.
+- After the playtest revisions, `npm run build` passed; current minified bundle is 581.77 kB (148.61 kB gzip), with the same Vite advisory above 500 kB. Formatting was applied to the changed source files. Automated tests and browser smoke were not rerun for this revision.
 - Pointer Lock was denied in the embedded browser during Phase 1. Phase 2 retains drag-to-look and click aiming; use a desktop target browser if testing Pointer Lock itself.
 - Build/runtime used Three.js 0.186.1, Vite 8.3.1, TypeScript 7.0.2, Vitest 5.0.2, Node 22.19.0, and npm 11.6.0.
 
 ## Known limits and next action
 
-- Phase 2 is waiting for the owner to test responsiveness and combat feel in both views, especially dash, ability cooldowns, enemy spacing, and pressure. Record feedback and any revisions in `tracker.md` and repeat the affected checks.
+- Phase 2 is waiting for a repeat owner playtest of the requested revisions: top-down Q direction cue and post-dash route, top-down shot-facing, enemy hover cursor, upward third-person aim, and right-shoulder framing. The complete targeted checklist is in `README.md`; record acceptance or further revisions in `tracker.md`.
 - The top-down planner targets static colliders only; route cancellation/replanning, dynamic obstruction, interaction positioning, and stuck recovery remain Phase 5 work.
 - Extraction, loot, inventory, and base progression are not included; they remain Phase 3 work.
 - After the owner accepts Phase 2, start Phase 3 only when they request it.
