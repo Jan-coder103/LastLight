@@ -1,6 +1,6 @@
-# Last Light — phase 1 prototype
+# Last Light — phase 2 combat field test
 
-A desktop browser prototype for the first exploration scene in the survival game plan. This phase establishes the seeded city–forest map, a controllable scout, two camera rigs, reusable authored assets, and development telemetry. Combat and extraction are later phases.
+A desktop browser survival encounter on the seeded city–forest map. Phase 2 adds view-specific controls, a rifle, dash and three abilities, health and death feedback, and a small group of pursuing zombies. Extraction and inventory are later phases.
 
 ## Run locally
 
@@ -11,21 +11,24 @@ npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite, usually `http://localhost:5173`. The target is a desktop Chromium browser (Chrome or Edge) or Firefox with WebGL2 and Pointer Lock support. Keyboard movement works without pointer capture; pointer capture is optional and can be released with Escape.
+Open the local URL printed by Vite, usually `http://localhost:5173`. The target is a desktop Chromium browser (Chrome or Edge) or Firefox with WebGL2. Pointer Lock is optional; third-person drag-to-look works without it.
 
 ## Controls
 
-| Input                             | Action                                                         |
-| --------------------------------- | -------------------------------------------------------------- |
-| W / A / S / D or arrow keys       | Walk                                                           |
-| Tab or **Change View**            | Smoothly switch between third-person and angled top-down views |
-| Drag on an open part of the scene | Orbit the third-person camera                                  |
-| Capture Mouse button              | Capture mouse for continuous third-person look when permitted  |
-| Mouse movement while captured     | Orbit the third-person camera                                  |
-| Escape                            | Release mouse capture                                          |
-| World Seed field + reload icon    | Rebuild the map from the entered seed                          |
+| Input                          | Third person                        | Top-down                            |
+| ------------------------------ | ----------------------------------- | ----------------------------------- |
+| W / A / S / D or arrow keys    | Move relative to the camera         | —                                   |
+| Right-click                    | —                                   | Move around static obstacles        |
+| Left-click                     | Fire at the cursor                  | Fire at the cursor                  |
+| Drag on the scene              | Orbit camera and aim                | —                                   |
+| Optional **Capture Mouse**     | Continuous look; Escape releases it | Not available                       |
+| Q                              | Dash; 2.5-second cooldown, no cost  | Dash; 2.5-second cooldown, no cost  |
+| 1 / 2 / 3                      | Heal / shock pulse / adrenaline     | —                                   |
+| W / E / R                      | —                                   | Heal / shock pulse / adrenaline     |
+| Tab or **Change View**         | Switch camera without moving player | Switch camera without moving player |
+| World Seed field + reload icon | Rebuild the map and encounter       | Rebuild the map and encounter       |
 
-The same player position and movement controller are used in both camera modes. Top-down movement is relative to the map; third-person movement is relative to the orbit camera. Phase 1 uses keyboard movement in both modes while the phase 2 input map is pending.
+The same player and combat state continue through camera changes. A dash continues along its current world direction. Switching views clears held movement keys. The shock pulse damages and briefly stuns nearby hostiles; adrenaline increases movement speed for five seconds; field dressing restores health when injured. Dead players can restart the encounter from the overlay.
 
 ## Project commands
 
@@ -45,7 +48,10 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 - `src/world/generateWorld.ts` builds the seeded map data, roads, placements, collision boxes, spawn, and terrain height field without depending on rendering.
 - `src/world/buildWorld.ts` turns generated data into Three.js terrain and scene objects.
 - `src/assets/` contains authored asset modules and shared versioned metadata.
-- `src/player/PlayerController.ts` owns the player transform and collision-aware movement.
+- `src/player/PlayerController.ts` owns direct third-person movement, top-down route following, dash movement, and the player visual.
+- `src/navigation/GridNavigator.ts` routes the player and the small phase 2 enemy group around static colliders.
+- `src/game/CombatSimulation.ts` owns health, firing and ability cooldowns, damage, and zombie pursuit/attacks.
+- `src/input/controlMap.ts` defines the view-specific keyboard actions.
 - `src/camera/CameraRig.ts` owns both camera views and their transition.
 - `src/main.ts` assembles the scene, UI, renderer, and diagnostics.
 
@@ -53,13 +59,13 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 
 Create a small module in `src/assets/` that exports an `AuthoredAsset` with a stable ID, schema version, dimensions, optional collider, interaction points, and a visual factory. The definition data stays explicit and separate from generated placements so a future editor can consume the same metadata. Register the module in `src/assets/catalog.ts`, then place its ID from `src/world/generateWorld.ts`; keep generated position/rotation/scale/variant values in `AssetPlacement`, not in the asset definition. Add a deterministic test if the placement changes generation behavior.
 
-## Phase 1 smoke checklist
+## Phase 2 playtest checklist
 
-1. Run `npm run dev` and confirm the scene, player, map labels, and diagnostics appear.
-2. Walk north, south, east, and west in both views; confirm the scout stays inside the map and slides along building/tree/rock collisions.
-3. Move while switching with Tab several times; the scout should not jump when the camera changes.
-4. In third-person, drag on the open scene to orbit. If allowed, use **Capture Mouse**, orbit, press Escape, and switch views. Change browser focus while moving and confirm movement and any active capture releases.
-5. Enter the same seed again and confirm the building, road, tree, and water-tower layout repeats. Try another seed and confirm the layout and terrain change.
-6. Resize the browser and confirm the scene and overlays remain usable.
+1. Run `npm run dev`; confirm the health bar, three hostiles, controls, and scene appear.
+2. In third-person, move with WASD, aim at a zombie with the cursor, fire twice to eliminate it, dash with Q, and try abilities 1/2/3.
+3. Switch to top-down. Right-click around a building and confirm the scout follows the route; W/E/R activate abilities and do not move the player.
+4. Fire and dash in both camera modes. Switch views during movement or a dash and confirm the player keeps position and the dash completes.
+5. Let zombies reach the scout and confirm health loss and the restart overlay. Restart and defeat the group.
+6. Test seed reload, resize, focus loss, and mouse capture/release.
 
-The initial scene is a visual and control baseline only. Frame rate and frame time in the overlay are live development diagnostics, not a performance acceptance claim.
+The three-hostile encounter is a small gameplay baseline, not a horde performance claim. Frame rate and frame time remain live diagnostics.

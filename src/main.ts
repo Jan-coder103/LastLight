@@ -1,15 +1,32 @@
 import {
   AmbientLight,
   ACESFilmicToneMapping,
+  BufferGeometry,
+  CircleGeometry,
   Color,
   DirectionalLight,
   Fog,
+  Group,
+  Line,
+  LineBasicMaterial,
+  Mesh,
+  MeshBasicMaterial,
   PCFShadowMap,
   PerspectiveCamera,
+  Raycaster,
   Scene,
+  SphereGeometry,
+  Vector2,
+  Vector3,
   WebGLRenderer,
+  type Material,
+  type Object3D,
 } from 'three';
+import type { AbilitySlot } from './input/controlMap';
 import { CameraRig } from './camera/CameraRig';
+import { CombatSimulation } from './game/CombatSimulation';
+import { createZombieVisual, syncZombieVisual } from './game/zombieVisual';
+import { GridNavigator } from './navigation/GridNavigator';
 import { PlayerController } from './player/PlayerController';
 import { buildWorld } from './world/buildWorld';
 import { generateWorld, type WorldData } from './world/generateWorld';
@@ -64,6 +81,16 @@ const elements = {
   frameValue: document.querySelector<HTMLElement>('#frame-value'),
   entityValue: document.querySelector<HTMLElement>('#entity-value'),
   diagSeed: document.querySelector<HTMLElement>('#diag-seed'),
+  controlsContent: document.querySelector<HTMLElement>('#controls-content'),
+  hostileCount: document.querySelector<HTMLElement>('#hostile-count'),
+  healthValue: document.querySelector<HTMLElement>('#health-value'),
+  healthFill: document.querySelector<HTMLElement>('#health-fill'),
+  combatMessage: document.querySelector<HTMLElement>('#combat-message'),
+  abilityStatus: document.querySelector<HTMLElement>('#ability-status'),
+  reticle: document.querySelector<HTMLElement>('#aim-reticle'),
+  deathOverlay: document.querySelector<HTMLElement>('#death-overlay'),
+  deathMessage: document.querySelector<HTMLElement>('#death-message'),
+  restartButton: document.querySelector<HTMLButtonElement>('#restart-button'),
 };
 
 for (const [key, element] of Object.entries(elements)) {
@@ -73,34 +100,52 @@ for (const [key, element] of Object.entries(elements)) {
 let world: WorldData = generateWorld(elements.seedInput!.value);
 let worldGroup = buildWorld(world);
 scene.add(worldGroup);
+let navigator = new GridNavigator(world);
+let combat = new CombatSimulation(world, navigator);
+let zombieGroup = new Group();
+zombieGroup.name = 'Hostiles';
+scene.add(zombieGroup);
+const zombieViews = new Map<string, Group>();
+let cameraRig = new CameraRig(camera, canvas, world);
+let player!: PlayerController;
 
-let cameraRig: CameraRig;
-const player = new PlayerController(world, () => switchView());
-scene.add(player.visual);
-cameraRig = new CameraRig(camera, canvas, world);
-cameraRig.reset(player.position);
+interface TimedEffect {
+  object: Object3D;
+  remaining: number;
+}
+const timedEffects: TimedEffect[] = [];
+let routeLine: Line | undefined;
+let dragPointerId: number | undefined;
+let pointerStart: { id: number; x: number; y: number } | undefined;
+let wasAlive = combat.alive;
+let lastUiTime = 0;
+let routeRefresh = 0;
 
 function updateModeUi(): void {
   const label = cameraRig.mode === 'third-person' ? 'THIRD PERSON' : 'TOP-DOWN';
   elements.modeName!.textContent = label;
   elements.viewButton!.setAttribute('aria-label', `Change camera from ${label.toLowerCase()} view`);
+  document.querySelector('#game')?.classList.toggle('is-top-down', cameraRig.mode === 'top-down');
+  renderControls();
 }
 
 function switchView(): void {
   cameraRig.switchMode(player.position);
+  player.clearKeyboardMovement();
   if (cameraRig.mode !== 'third-person') releaseLookDrag();
   canvas?.focus({ preventScroll: true });
   updateModeUi();
+  updateRouteLine(true);
 }
 
 function releaseMouseCapture(): void {
   if (document.pointerLockElement === canvas) document.exitPointerLock();
 }
 
-let dragPointerId: number | undefined;
 function releaseLookDrag(): void {
-  if (dragPointerId === undefined) return;
-  if (canvas!.hasPointerCapture(dragPointerId)) canvas!.releasePointerCapture(dragPointerId);
+  const capturedPointer = dragPointerId ?? pointerStart?.id;
+  if (capturedPointer === undefined) return;
+  if (canvas!.hasPointerCapture(capturedPointer)) canvas!.releasePointerCapture(capturedPointer);
   dragPointerId = undefined;
   document.querySelector('#game')?.classList.remove('is-look-dragging');
 }
@@ -110,6 +155,106 @@ function updatePointerUi(): void {
   elements.lockLabel!.textContent = captured ? 'MOUSE CAPTURED' : 'CAPTURE MOUSE';
   elements.lockButton!.classList.toggle('captured', captured);
   elements.lockButton!.setAttribute('aria-pressed', String(captured));
+  if (captured) {
+    elements.reticle!.style.left = '50%';
+    elements.reticle!.style.top = '50%';
+  }
+}
+
+function row(keys: string, action: string): string {
+  const keycaps = keys
+    .split('|')
+    .map((key) => `<kbd class="wide-key">${key}</kbd>`)
+    .join('');
+  return `<div class="control-row"><span class="key-group">${keycaps}</span><span>${action}</span></div>`;
+}
+
+function renderControls(): void {
+  const rows =
+    cameraRig.mode === 'third-person'
+      ? [
+          row('W A S D', 'Move · camera-relative'),
+          row('DRAG', 'Look / aim'),
+          row('LMB', 'Fire rifle'),
+          row(
+            'Q',
+            `Dash${combat.dashCooldownRemaining > 0 ? ` · ${combat.dashCooldownRemaining.toFixed(1)}s` : ''}`,
+          ),
+          row('1', 'Field dressing'),
+          row('2', 'Shock pulse'),
+          row('3', 'Adrenaline'),
+          row('TAB', 'Switch camera'),
+        ]
+      : [
+          row('RMB', 'Click to move'),
+          row('LMB', 'Fire at cursor'),
+          row(
+            'Q',
+            `Dash${combat.dashCooldownRemaining > 0 ? ` · ${combat.dashCooldownRemaining.toFixed(1)}s` : ''}`,
+          ),
+          row('W', 'Field dressing'),
+          row('E', 'Shock pulse'),
+          row('R', 'Adrenaline'),
+          row('TAB', 'Switch camera'),
+        ];
+  elements.controlsContent!.innerHTML = rows.join('');
+}
+
+function updateCombatUi(): void {
+  const healthPercent = Math.max(0, Math.min(100, (combat.health / combat.maxHealth) * 100));
+  elements.hostileCount!.textContent = `${combat.livingZombieCount} HOSTILE${combat.livingZombieCount === 1 ? '' : 'S'}`;
+  elements.healthValue!.textContent = `${Math.ceil(combat.health)} / ${combat.maxHealth}`;
+  elements.healthFill!.style.width = `${healthPercent}%`;
+  elements.healthFill!.style.background =
+    healthPercent < 30
+      ? 'linear-gradient(90deg, #a45443, #d07754)'
+      : 'linear-gradient(90deg, #85945e, #c2bb76)';
+  elements.combatMessage!.textContent = combat.lastMessage;
+  elements.abilityStatus!.innerHTML = ([1, 2, 3] as const)
+    .map((slot) => {
+      const remaining = combat.abilityCooldownsRemaining[slot];
+      const key = cameraRig.mode === 'top-down' ? ['W', 'E', 'R'][slot - 1] : String(slot);
+      const title = ['MED', 'PULSE', 'ADREN'][slot - 1];
+      return `<span class="${remaining > 0 ? 'cooling' : ''}">${key} ${title}${remaining > 0 ? ` ${remaining.toFixed(0)}s` : ''}</span>`;
+    })
+    .join('');
+  if (!combat.alive) elements.deathMessage!.textContent = combat.lastMessage;
+}
+
+function clearRoute(): void {
+  if (!routeLine) return;
+  scene.remove(routeLine);
+  disposeTree(routeLine);
+  routeLine = undefined;
+}
+
+function updateRouteLine(force = false): void {
+  if (cameraRig.mode !== 'top-down' || player.navigationPath.length === 0) {
+    clearRoute();
+    return;
+  }
+  if (!force && routeRefresh < 0.12) return;
+  routeRefresh = 0;
+  const points = [player.position, ...player.navigationPath].map(
+    (point) => new Vector3(point.x, player.terrainHeight(point.x, point.z) + 0.16, point.z),
+  );
+  if (points.length < 2) {
+    clearRoute();
+    return;
+  }
+  const geometry = new BufferGeometry().setFromPoints(points);
+  if (routeLine) {
+    routeLine.geometry.dispose();
+    routeLine.geometry = geometry;
+    return;
+  }
+  routeLine = new Line(
+    geometry,
+    new LineBasicMaterial({ color: '#e5c77d', transparent: true, opacity: 0.75 }),
+  );
+  routeLine.name = 'Player destination route';
+  routeLine.frustumCulled = false;
+  scene.add(routeLine);
 }
 
 function setSeed(seed: string): void {
@@ -118,30 +263,37 @@ function setSeed(seed: string): void {
   const previous = worldGroup;
   scene.remove(previous);
   disposeTree(previous);
+  clearRoute();
 
   world = generateWorld(trimmed);
   worldGroup = buildWorld(world);
   scene.add(worldGroup);
+  navigator = new GridNavigator(world);
+  combat = new CombatSimulation(world, navigator);
+  wasAlive = true;
   player.setWorld(world);
+  player.setEnabled(true);
   cameraRig.setWorld(world);
   cameraRig.reset(player.position);
+  createZombieViews();
+  elements.deathOverlay!.setAttribute('hidden', '');
   elements.seedHint!.textContent = 'Map regenerated from this seed.';
   elements.diagSeed!.textContent = world.seed;
-  elements.entityValue!.textContent = String(world.objectCount + 1);
+  elements.entityValue!.textContent = String(world.objectCount + combat.livingZombieCount + 1);
   updateModeUi();
   releaseLookDrag();
   releaseMouseCapture();
   canvas?.focus({ preventScroll: true });
+  updateCombatUi();
 }
 
-function disposeTree(root: import('three').Object3D): void {
-  const geometries = new Set<import('three').BufferGeometry>();
-  const materials = new Set<import('three').Material>();
+function disposeTree(root: Object3D): void {
+  const geometries = new Set<BufferGeometry>();
+  const materials = new Set<Material>();
   root.traverse((object) => {
-    if ('geometry' in object && object.geometry)
-      geometries.add(object.geometry as import('three').BufferGeometry);
+    if ('geometry' in object && object.geometry) geometries.add(object.geometry as BufferGeometry);
     if ('material' in object && object.material) {
-      const assigned = object.material as import('three').Material | import('three').Material[];
+      const assigned = object.material as Material | Material[];
       for (const material of Array.isArray(assigned) ? assigned : [assigned])
         materials.add(material);
     }
@@ -150,11 +302,92 @@ function disposeTree(root: import('three').Object3D): void {
   materials.forEach((material) => material.dispose());
 }
 
+function createZombieViews(): void {
+  scene.remove(zombieGroup);
+  disposeTree(zombieGroup);
+  zombieViews.clear();
+  zombieGroup = new Group();
+  zombieGroup.name = 'Hostiles';
+  for (const zombie of combat.zombies) {
+    const visual = createZombieVisual(zombie);
+    zombieViews.set(zombie.id, visual);
+    zombieGroup.add(visual);
+  }
+  scene.add(zombieGroup);
+}
+
+function addShotEffect(start: Vector3, end: Vector3): void {
+  const line = new Line(
+    new BufferGeometry().setFromPoints([start, end]),
+    new LineBasicMaterial({ color: '#f3d982', transparent: true, opacity: 0.95 }),
+  );
+  line.frustumCulled = false;
+  scene.add(line);
+  timedEffects.push({ object: line, remaining: 0.075 });
+
+  const flash = new Mesh(
+    new SphereGeometry(0.075, 6, 4),
+    new MeshBasicMaterial({ color: '#ffe9a1', transparent: true, opacity: 0.92 }),
+  );
+  flash.position.copy(start);
+  scene.add(flash);
+  timedEffects.push({ object: flash, remaining: 0.055 });
+}
+
+function addShockEffect(): void {
+  const pulse = new Mesh(
+    new CircleGeometry(9, 48),
+    new MeshBasicMaterial({ color: '#d6c477', transparent: true, opacity: 0.2, depthWrite: false }),
+  );
+  pulse.rotation.x = -Math.PI / 2;
+  pulse.position.set(player.position.x, player.position.y + 0.11, player.position.z);
+  scene.add(pulse);
+  timedEffects.push({ object: pulse, remaining: 0.22 });
+}
+
+function animateEffects(delta: number): void {
+  for (let index = timedEffects.length - 1; index >= 0; index -= 1) {
+    const effect = timedEffects[index];
+    effect.remaining -= delta;
+    if (effect.remaining > 0) continue;
+    scene.remove(effect.object);
+    disposeTree(effect.object);
+    timedEffects.splice(index, 1);
+  }
+}
+
+player = new PlayerController(
+  world,
+  () => switchView(),
+  (slot: AbilitySlot) => {
+    if (!combat.activateAbility(slot, player.position)) return;
+    if (slot === 2) addShockEffect();
+  },
+  () => combat.tryDash(),
+);
+scene.add(player.visual);
+cameraRig.reset(player.position);
+createZombieViews();
+
 elements.seedForm!.addEventListener('submit', (event) => {
   event.preventDefault();
   setSeed(elements.seedInput!.value);
 });
 elements.viewButton!.addEventListener('click', switchView);
+elements.restartButton!.addEventListener('click', () => {
+  combat.reset();
+  player.setPosition(world.spawn.x, world.spawn.z);
+  player.setEnabled(true);
+  cameraRig.reset(player.position);
+  wasAlive = true;
+  elements.deathOverlay!.setAttribute('hidden', '');
+  createZombieViews();
+  updateCombatUi();
+  updateModeUi();
+  clearRoute();
+  releaseMouseCapture();
+  canvas?.focus({ preventScroll: true });
+});
 elements.lockButton!.addEventListener('click', () => {
   canvas?.focus({ preventScroll: true });
   if (document.pointerLockElement === canvas) {
@@ -175,43 +408,141 @@ elements.lockButton!.addEventListener('click', () => {
   }
 });
 
-canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+function pointerNdc(clientX: number, clientY: number): Vector2 {
+  return new Vector2(
+    (clientX / window.innerWidth) * 2 - 1,
+    -(clientY / window.innerHeight) * 2 + 1,
+  );
+}
+
+function pointToNdc(event: PointerEvent | MouseEvent): Vector2 {
+  return document.pointerLockElement === canvas
+    ? new Vector2(0, 0)
+    : pointerNdc(event.clientX, event.clientY);
+}
+
+function findZombieId(object: Object3D | undefined): string | undefined {
+  let current = object;
+  while (current) {
+    if (typeof current.userData.zombieId === 'string') return current.userData.zombieId;
+    current = current.parent ?? undefined;
+  }
+  return undefined;
+}
+
+function fireAt(event: PointerEvent): void {
+  if (!combat.alive) return;
+  const ndc = pointToNdc(event);
+  const viewRay = new Raycaster();
+  viewRay.setFromCamera(ndc, camera);
+  const aimHit = viewRay.intersectObjects([worldGroup, zombieGroup], true)[0];
+  const aimPoint = aimHit?.point ?? viewRay.ray.at(70, new Vector3());
+  const muzzle = player.muzzlePosition();
+  const shotDirection = aimPoint.clone().sub(muzzle);
+  const shotLength = Math.min(90, shotDirection.length());
+  if (shotLength < 0.001) return;
+  shotDirection.normalize();
+  const weaponRay = new Raycaster(muzzle, shotDirection, 0, shotLength + 0.05);
+  const weaponHit = weaponRay.intersectObjects([worldGroup, zombieGroup], true)[0];
+  const hitPoint = weaponHit?.point ?? aimPoint;
+  const targetId = findZombieId(weaponHit?.object);
+  if (!combat.tryFire(targetId)) return;
+  addShotEffect(muzzle, hitPoint);
+  for (const zombie of combat.zombies) {
+    const visual = zombieViews.get(zombie.id);
+    if (visual) syncZombieVisual(visual, zombie);
+  }
+  updateCombatUi();
+}
+
+function moveToPointer(event: MouseEvent): void {
+  if (cameraRig.mode !== 'top-down' || !combat.alive) return;
+  const terrain = worldGroup.getObjectByName('Seeded terrain');
+  if (!(terrain instanceof Mesh)) return;
+  const raycaster = new Raycaster();
+  raycaster.setFromCamera(pointerNdc(event.clientX, event.clientY), camera);
+  const destination = raycaster.intersectObject(terrain, false)[0]?.point;
+  if (!destination) return;
+  const path = navigator.findPath(
+    player.position.x,
+    player.position.z,
+    destination.x,
+    destination.z,
+  );
+  player.setNavigationPath(path);
+  routeRefresh = 1;
+  updateRouteLine(true);
+  if (path.length === 0) elements.seedHint!.textContent = 'No nearby clear route to that point.';
+}
+
+canvas.addEventListener('contextmenu', (event) => {
+  event.preventDefault();
+  moveToPointer(event);
+});
 document.addEventListener('pointerlockchange', updatePointerUi);
 document.addEventListener('pointerlockerror', () => {
   elements.seedHint!.textContent =
     'Mouse capture was blocked. Drag on the open scene to look around instead.';
 });
 document.addEventListener('mousemove', (event) => {
-  if (document.pointerLockElement === canvas) cameraRig.lookBy(event.movementX, event.movementY);
+  if (document.pointerLockElement === canvas) {
+    cameraRig.lookBy(event.movementX, event.movementY);
+    return;
+  }
+  if (cameraRig.mode === 'third-person') {
+    elements.reticle!.style.left = `${event.clientX}px`;
+    elements.reticle!.style.top = `${event.clientY}px`;
+  }
 });
 canvas.addEventListener('pointerdown', (event) => {
-  if (
-    cameraRig.mode !== 'third-person' ||
-    event.button !== 0 ||
-    document.pointerLockElement === canvas
-  )
-    return;
-  dragPointerId = event.pointerId;
+  if (event.button !== 0) return;
+  pointerStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
+  if (cameraRig.mode !== 'third-person' || document.pointerLockElement === canvas) return;
   canvas?.focus({ preventScroll: true });
   canvas.setPointerCapture(event.pointerId);
-  document.querySelector('#game')?.classList.add('is-look-dragging');
 });
 canvas.addEventListener('pointermove', (event) => {
-  if (dragPointerId === event.pointerId) cameraRig.lookBy(event.movementX, event.movementY);
+  if (pointerStart?.id === event.pointerId && dragPointerId === undefined) {
+    const distance = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
+    if (distance >= 7) {
+      dragPointerId = event.pointerId;
+      document.querySelector('#game')?.classList.add('is-look-dragging');
+      cameraRig.lookBy(event.movementX, event.movementY);
+    }
+  } else if (dragPointerId === event.pointerId) {
+    cameraRig.lookBy(event.movementX, event.movementY);
+  }
+  if (document.pointerLockElement !== canvas && cameraRig.mode === 'third-person') {
+    elements.reticle!.style.left = `${event.clientX}px`;
+    elements.reticle!.style.top = `${event.clientY}px`;
+  }
 });
 canvas.addEventListener('pointerup', (event) => {
+  if (pointerStart?.id === event.pointerId) {
+    const distance = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
+    if (distance < 7) fireAt(event);
+    pointerStart = undefined;
+  }
   if (dragPointerId === event.pointerId) releaseLookDrag();
 });
-canvas.addEventListener('pointercancel', releaseLookDrag);
-canvas.addEventListener('lostpointercapture', releaseLookDrag);
+canvas.addEventListener('pointercancel', () => {
+  pointerStart = undefined;
+  releaseLookDrag();
+});
+canvas.addEventListener('lostpointercapture', () => {
+  pointerStart = undefined;
+  releaseLookDrag();
+});
 window.addEventListener('blur', () => {
   releaseMouseCapture();
   releaseLookDrag();
+  pointerStart = undefined;
 });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') {
     releaseMouseCapture();
     releaseLookDrag();
+    pointerStart = undefined;
   }
 });
 
@@ -230,12 +561,38 @@ let frameCount = 0;
 let sampleTime = 0;
 let sampleFrames = 0;
 let fpsAverage = 0;
+let simulationAccumulator = 0;
+const fixedStep = 1 / 60;
 function animate(now: number): void {
   const delta = Math.min((now - previousTime) / 1000, 0.1);
   previousTime = now;
   frameCount += 1;
-  player.update(delta, cameraRig.mode, cameraRig.yaw);
+  simulationAccumulator = Math.min(simulationAccumulator + delta, fixedStep * 8);
+  while (simulationAccumulator >= fixedStep) {
+    combat.tick(fixedStep, player.position);
+    player.update(
+      fixedStep,
+      cameraRig.mode,
+      cameraRig.yaw,
+      combat.adrenalineRemaining > 0 ? 1.5 : 1,
+    );
+    simulationAccumulator -= fixedStep;
+  }
+  if (wasAlive && !combat.alive) {
+    player.setEnabled(false);
+    elements.deathOverlay!.removeAttribute('hidden');
+    releaseMouseCapture();
+    releaseLookDrag();
+  }
+  wasAlive = combat.alive;
+  for (const zombie of combat.zombies) {
+    const visual = zombieViews.get(zombie.id);
+    if (visual) syncZombieVisual(visual, zombie);
+  }
   cameraRig.update(delta, player.position);
+  animateEffects(delta);
+  routeRefresh += delta;
+  updateRouteLine();
   renderer.render(scene, camera);
 
   sampleTime += delta;
@@ -250,11 +607,18 @@ function animate(now: number): void {
   }
   if (frameCount === 1) {
     elements.diagSeed!.textContent = world.seed;
-    elements.entityValue!.textContent = String(world.objectCount + 1);
     updateModeUi();
     updatePointerUi();
+  }
+  if (now - lastUiTime > 120) {
+    updateCombatUi();
+    if (cameraRig.mode === 'third-person') renderControls();
+    elements.entityValue!.textContent = String(world.objectCount + combat.livingZombieCount + 1);
+    lastUiTime = now;
   }
   requestAnimationFrame(animate);
 }
 
+updateModeUi();
+updateCombatUi();
 requestAnimationFrame(animate);

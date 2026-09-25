@@ -11,7 +11,7 @@ The game should feel responsive before it becomes large. Each phase below ends i
 - **Initial platform:** desktop browser with keyboard and mouse. Mobile, multiplayer, and networked accounts are outside the initial scope.
 - **Initial vehicle:** chopper. It handles arrival and extraction in the first complete loop. A plane can be added later as a vehicle variant.
 - **Camera during a run:** arrival begins in third person; disembarking moves smoothly to the angled top-down camera. The player can switch views while on foot. The transition must preserve the player's position, heading, and current action as far as possible. Interior spaces have their own camera constraints.
-- **Controls:** third person uses WASD and mouse aim/look; top-down uses right-click to move and context-sensitive left-click to attack or interact. Q is always a short, free dash. W/E/R are abilities in top-down mode, so pressing W there does not move the character. Ability bindings in third person need an accessible mapping decided and shown in the control settings before combat is considered complete.
+- **Controls:** third person uses WASD and mouse aim/look; top-down uses right-click to move and context-sensitive left-click to attack or interact. Q is always a short, free dash. W/E/R are abilities in top-down mode, so pressing W there does not move the character. Phase 2 resolves third-person ability bindings as 1/2/3 and shows each view's bindings in the field controls.
 - **Persistence:** carried loot and equipment are lost on death. Items and fuel deposited at base are safe. A successful extraction transfers carried loot to base. Exact starting gear, recoverability, and economic balance are tuning decisions, not blockers for the first loop.
 - **Time and weather:** each run chooses one time of day and one weather preset at creation. They remain stable during that run. Atmospheric effects may animate without changing the preset.
 - **Horde target:** 10,000 means 10,000 individually tracked agents in a benchmark scene. Nearby agents need believable movement and combat; distant agents can update less often and use simplified rendering. The target is not a promise that 10,000 full-detail animated models are simultaneously visible. Phase 6 proves simulation scale; phase 7 proves an acceptable playable frame rate.
@@ -181,7 +181,7 @@ Prioritize by playtest value and measured cost: military-base and large-city des
 ## Open choices to settle during implementation
 
 - Reference desktop/browser and final FPS/frame-time/memory targets, after baseline measurements.
-- Exact third-person bindings for W/E/R abilities and whether the camera switch key is rebindable.
+- Whether the camera switch key should be rebindable; it is Tab in the phase 2 field test.
 - Run duration, extraction countdown, inventory capacity, starter kit, and fuel/economy values, after phase 3 playtests.
 - Final art/audio sources and licenses, before shipping public builds.
 - Whether exterior simulation pauses, slows, or continues during interiors, before phase 8 implementation.

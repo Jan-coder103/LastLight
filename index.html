@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#111510" />
     <meta
       name="description"
-      content="Last Light — a seeded, low-poly survival map and camera-control prototype."
+      content="Last Light — a seeded, low-poly survival encounter with two camera and control modes."
     />
     <title>Last Light // Field Test</title>
   </head>
@@ -49,26 +49,37 @@
           <span class="eyebrow">ZONE 04 / NORTH SECTOR</span><strong>Greywood Outskirts</strong>
         </div>
         <span class="map-separator"></span>
-        <div class="coords"><span class="eyebrow">STATUS</span><strong>SCOUTING</strong></div>
+        <div class="coords"><span class="eyebrow">STATUS</span><strong>ENGAGED</strong></div>
       </section>
 
       <section class="controls-card" aria-label="Controls">
         <div class="card-heading">
           <span>FIELD CONTROLS</span><span class="live-dot">LIVE</span>
         </div>
-        <div class="control-row">
-          <span class="key-group"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span
-          ><span>Move</span>
+        <div id="controls-content" aria-live="polite"></div>
+      </section>
+
+      <section class="combat-hud" aria-label="Combat status" aria-live="polite">
+        <div class="combat-hud-top">
+          <span>FIELD STATUS</span><strong id="hostile-count">3 HOSTILES</strong>
         </div>
-        <div class="control-row">
-          <span class="key-group"><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span
-          ><span>Move</span>
+        <div class="health-label">
+          <span>HEALTH</span><strong id="health-value">100 / 100</strong>
         </div>
-        <div class="control-row"><kbd class="wide-key">TAB</kbd><span>Switch camera</span></div>
-        <div class="control-row">
-          <kbd class="wide-key">DRAG</kbd><span>Look around (3rd person)</span>
+        <div class="health-track"><span id="health-fill"></span></div>
+        <p id="combat-message">Three hostiles detected. Stay mobile.</p>
+        <div class="ability-status" id="ability-status"></div>
+      </section>
+
+      <div class="aim-reticle" id="aim-reticle" aria-hidden="true"><i></i></div>
+
+      <section class="death-overlay" id="death-overlay" role="alert" aria-live="assertive" hidden>
+        <div class="death-panel">
+          <span class="eyebrow">FIELD TEST ENDED</span>
+          <h2>SCOUT DOWN</h2>
+          <p id="death-message">The encounter is over.</p>
+          <button id="restart-button" type="button">RESTART ENCOUNTER</button>
         </div>
-        <div class="control-row"><kbd class="wide-key">ESC</kbd><span>Release mouse</span></div>
       </section>
 
       <footer class="bottom-bar">
@@ -87,7 +98,7 @@
           <span class="lock-icon" aria-hidden="true">⌖</span
           ><span id="lock-label">CAPTURE MOUSE</span><span class="button-key">OPTIONAL</span>
         </button>
-        <p class="footer-note">PHASE 01 <span>—</span> MOVEMENT / CAMERA STUDY</p>
+        <p class="footer-note">PHASE 02 <span>—</span> COMBAT FIELD TEST</p>
       </footer>
 
       <aside class="diagnostics" aria-label="Development diagnostics">
