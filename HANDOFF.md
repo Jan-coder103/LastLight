@@ -4,7 +4,7 @@ Updated: 2026-09-25
 
 ## Current position
 
-Phases 1–5 are **Accepted**. On 2026-09-25 the owner reported, “Playtest 5 - all fine! I tested and everything works,” and authorized Phase 6. Phase 6 large-horde simulation is implemented and verified in commit `13093c8`; it is awaiting the owner’s threat-readability playtest.
+Phases 1–6 are **Accepted**. On 2026-09-25 the owner reported a good Phase 6 playtest and stable 60 FPS (17 ms or less per frame) with 10,000 enemies. The browser and hardware were not specified. Phase 6 large-horde simulation is implemented and verified in commit `13093c8`. Phase 7 rendering and performance pass is not started; the plan requires the owner to initiate each next phase.
 
 ## Read first
 
@@ -126,7 +126,8 @@ Phases 1–5 are **Accepted**. On 2026-09-25 the owner reported, “Playtest 5 -
 
 ## Known limits and next action
 
-- Owner playtests the Phase 6 checklist in `README.md`: try all spawn patterns, compare repeated seeds, check both camera modes, observe pursuit/attacks, and run the four-count benchmark twice. Record whether the crowd reads as a threat and any tier/crowd issues before Phase 7.
+- Phase 6 owner playtest passed with no issues reported. The owner observed stable 60 FPS and 17 ms or less per frame at 10,000 enemies. This is owner-reported playtest evidence; the browser and hardware are unspecified, and the earlier fixed-step measurements below exclude rendering.
+- Await the owner's explicit instruction to start Phase 7. Its first work is to profile CPU, GPU, memory, draw calls, pathfinding, particles, and camera-specific visibility, then agree the reference machine and final targets. Record normal and stress results in both camera modes.
 - Stress visuals are intentionally simplified low-poly instances; this phase proves tracked simulation and horde behavior, while Phase 7 owns draw-call, memory, frame-time, and reference-hardware targets.
 - Local obstacle steering is a short deflection check rather than full route planning. The owner should flag groups that stall at blocked cells or bunch in narrow spaces.
 - The regular run still caps at seven hostiles and remains separate from the Horde Simulation Lab.
