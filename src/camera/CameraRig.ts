@@ -120,21 +120,29 @@ export class CameraRig {
       return;
     }
     const distance = 9.3;
-    const shoulderOffset = 0.95;
-    const aimLead = 1.6;
-    const horizontalDistance = distance + aimLead;
+    const pivotHeight = 1.75;
+    const minimumCameraHeight = 0.65;
+    const shoulderAngle = Math.atan2(0.95, distance);
     const sine = Math.sin(this.yaw);
     const cosine = Math.cos(this.yaw);
-    const targetY = terrainY + 3.2 - Math.tan(this.pitch) * horizontalDistance;
-    this.idealTarget.set(
-      playerPosition.x - sine * aimLead,
-      targetY,
-      playerPosition.z - cosine * aimLead,
+    const pivotY = terrainY + pivotHeight;
+    const verticalOffset = Math.max(
+      distance * Math.sin(this.pitch),
+      minimumCameraHeight - pivotHeight,
     );
+    const horizontalRadius = Math.sqrt(distance * distance - verticalOffset * verticalOffset);
+    const backOffset = horizontalRadius * Math.cos(shoulderAngle);
+    const rightOffset = horizontalRadius * Math.sin(shoulderAngle);
     this.idealPosition.set(
-      playerPosition.x - sine * distance + cosine * shoulderOffset,
-      terrainY + 3.2,
-      playerPosition.z + cosine * distance + sine * shoulderOffset,
+      playerPosition.x - sine * backOffset + cosine * rightOffset,
+      pivotY + verticalOffset,
+      playerPosition.z + cosine * backOffset + sine * rightOffset,
+    );
+    const focusDistance = distance + 1.6;
+    this.idealTarget.set(
+      this.idealPosition.x + sine * Math.cos(this.pitch) * focusDistance,
+      this.idealPosition.y - Math.sin(this.pitch) * focusDistance,
+      this.idealPosition.z - cosine * Math.cos(this.pitch) * focusDistance,
     );
     this.constrainToWorld(this.idealTarget, this.idealPosition);
   }
