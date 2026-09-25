@@ -98,6 +98,8 @@ export class PlayerController {
   private aimFacingRemaining = 0;
   private hasMoved = false;
   private enabled = true;
+  private blockedRouteTime = 0;
+  private navigationStuck = false;
   private onViewToggle: () => void;
   private onAbility: (slot: AbilitySlot) => void;
   private onDashRequest: () => boolean;
@@ -123,6 +125,8 @@ export class PlayerController {
     this.world = world;
     this.clearInput();
     this.path.length = 0;
+    this.blockedRouteTime = 0;
+    this.navigationStuck = false;
     this.dashRemaining = 0;
     this.lastMoveDirection.set(0, 0, 0);
     this.aimFacingRemaining = 0;
@@ -135,12 +139,26 @@ export class PlayerController {
     this.enabled = enabled;
     if (!enabled) {
       this.clearInput();
-      this.path.length = 0;
+      this.cancelNavigation();
     }
   }
 
   setNavigationPath(path: readonly NavPoint[]): void {
     this.path.splice(0, this.path.length, ...path);
+    this.blockedRouteTime = 0;
+    this.navigationStuck = false;
+  }
+
+  cancelNavigation(): void {
+    this.path.length = 0;
+    this.blockedRouteTime = 0;
+    this.navigationStuck = false;
+  }
+
+  consumeNavigationStuck(): boolean {
+    const stuck = this.navigationStuck;
+    this.navigationStuck = false;
+    return stuck;
   }
 
   clearKeyboardMovement(): void {
@@ -185,6 +203,8 @@ export class PlayerController {
     const keepAimFacing = mode === 'top-down' && this.aimFacingRemaining > 0;
     this.aimFacingRemaining = Math.max(0, this.aimFacingRemaining - delta);
     this.velocity.set(0, 0, 0);
+    let routeWaypoint: NavPoint | undefined;
+    let routeDistanceBefore = 0;
 
     if (this.enabled && this.dashRemaining > 0) {
       this.dashRemaining = Math.max(0, this.dashRemaining - delta);
@@ -194,6 +214,13 @@ export class PlayerController {
       const direction =
         mode === 'third-person' ? this.keyboardDirection(cameraYaw) : this.pathDirection();
       if (direction.lengthSq() > 0) {
+        if (mode === 'top-down' && this.path.length > 0) {
+          routeWaypoint = this.path[0];
+          routeDistanceBefore = Math.hypot(
+            routeWaypoint.x - this.position.x,
+            routeWaypoint.z - this.position.z,
+          );
+        }
         direction.normalize();
         this.velocity.copy(direction).multiplyScalar(walkSpeed * speedMultiplier);
         this.moveBy(this.velocity.x * delta, this.velocity.z * delta);
@@ -204,6 +231,25 @@ export class PlayerController {
           this.facing = angleTowards(this.facing, facing, 1 - Math.exp(-12 * delta));
         }
       }
+    }
+
+    if (routeWaypoint && mode === 'top-down' && this.enabled && this.dashRemaining <= 0) {
+      const routeDistanceAfter = Math.hypot(
+        routeWaypoint.x - this.position.x,
+        routeWaypoint.z - this.position.z,
+      );
+      if (routeDistanceBefore - routeDistanceAfter < 0.012) {
+        this.blockedRouteTime += delta;
+        if (this.blockedRouteTime >= 0.55) {
+          this.navigationStuck = true;
+          this.path.length = 0;
+          this.blockedRouteTime = 0;
+        }
+      } else {
+        this.blockedRouteTime = 0;
+      }
+    } else if (this.dashRemaining <= 0) {
+      this.blockedRouteTime = 0;
     }
 
     this.visual.position.set(this.position.x, this.position.y, this.position.z);

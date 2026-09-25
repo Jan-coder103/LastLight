@@ -55,7 +55,7 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 - `src/world/buildWorld.ts` turns generated data into Three.js terrain and scene objects.
 - `src/assets/` contains authored asset modules and shared versioned metadata.
 - `src/player/PlayerController.ts` owns direct third-person movement, top-down route following, dash movement, and the player visual.
-- `src/navigation/GridNavigator.ts` routes the player and the small phase 2 enemy group around static colliders.
+- `src/navigation/GridNavigator.ts` routes the player around static colliders and refreshed hostile positions; combat pursuers use a separate static navigation map.
 - `src/game/CombatSimulation.ts` owns health, firing and ability cooldowns, damage, and zombie pursuit/attacks.
 - `src/game/loot.ts` places reproducible caches across generated regions and creates deterministic cache contents.
 - `src/game/saveData.ts` validates versioned camp saves, cargo capacity, and banking rules.
@@ -78,9 +78,18 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 
 ## Phase 4 playtest checklist
 
-1. Start the game with several named seeds, including the regression seeds in `src/world/generateWorld.test.ts`. Reload each seed and confirm its layout repeats.
-2. Compare the routes between seeds: city blocks, local streets, forest trails, tree cover, loot regions, and the water tower/relay mast should shift while remaining readable.
+1. Start the game with `PHASE4-00` through `PHASE4-03`; these four regression seeds cover every city/forest orientation. Reload each seed and confirm its layout repeats.
+2. Compare the map directions: city blocks and forest must both remain present, their sides should rotate by seed, and terrain color should follow the generated districts. Local streets, trails, tree cover, loot regions, and landmarks should remain readable.
 3. Confirm the chopper can land and disembark into a clear area. Visit the landmark approaches and at least one cache from each visible region; the extraction guide should remain usable from the longest route.
 4. Report any blocked cache, landmark, landing zone, visually crowded street, or seed that repeats another map's route shape.
+
+## Phase 5 playtest checklist
+
+1. Start a run, disembark, and switch to top-down view. Right-click open ground and confirm the route follows walkable ground; a new right-click should replace it.
+2. Press Escape during an active route and confirm the route clears. Switch to third person and back, then confirm an unfinished route resumes from the player's current position.
+3. Click a cache or pickup from beyond interaction range. The scout should approach a clear position and search or collect without requiring a second click. Use F nearby and confirm the same approach behavior.
+4. Try destinations in a dense city block and around narrow passages. The scout should not cut through buildings or repeatedly oscillate; an unreachable destination should report that clearly.
+5. Let hostiles begin moving while following a route. Check that distant moving hostiles cause a detour when needed, the route recovers after a dash, and combat pursuers keep moving normally.
+6. Read the path timing and route status in the development telemetry. Report any route that stalls, ends outside interaction range, or takes an unexpectedly long time to calculate.
 
 The encounter is intentionally capped at seven hostiles and is not a horde performance claim. Frame rate and frame time remain live diagnostics. Save data uses schema version 1 under the `last-light-save` browser storage key; invalid or unreadable data loads safe default camp supplies.

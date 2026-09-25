@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { generateWorld, LANDING_CLEARANCE, validateWorld, WORLD_SIZE } from './generateWorld';
+import {
+  generateWorld,
+  LANDING_CLEARANCE,
+  terrainBiomeBlendAt,
+  validateWorld,
+  WORLD_SIZE,
+} from './generateWorld';
 import { GridNavigator } from '../navigation/GridNavigator';
 import { placeLootCaches } from '../game/loot';
 
@@ -62,11 +68,72 @@ describe('generateWorld', () => {
     expect(beta.landmarks).not.toEqual(alpha.landmarks);
   });
 
+  it('moves the guaranteed city and forest regions to every map side by seed', () => {
+    const worlds = Array.from({ length: 4 }, (_, index) => generateWorld(`PHASE4-0${index}`));
+    expect(new Set(worlds.map((world) => world.rotationQuarterTurns)).size).toBe(4);
+
+    for (const world of worlds) {
+      const urbanDistricts = world.districts.filter((district) => district.kind === 'urban');
+      const forestDistricts = world.districts.filter((district) => district.kind === 'forest');
+      expect(urbanDistricts).toHaveLength(3);
+      expect(forestDistricts).toHaveLength(2);
+      const averageCenter = (districts: typeof urbanDistricts) => ({
+        x: districts.reduce((sum, district) => sum + district.centerX, 0) / districts.length,
+        z: districts.reduce((sum, district) => sum + district.centerZ, 0) / districts.length,
+      });
+      const urban = averageCenter(urbanDistricts);
+      const forest = averageCenter(forestDistricts);
+      const rotation = world.rotationQuarterTurns;
+      if (rotation === 0) expect(forest.x).toBeGreaterThan(urban.x);
+      if (rotation === 1) expect(forest.z).toBeGreaterThan(urban.z);
+      if (rotation === 2) expect(forest.x).toBeLessThan(urban.x);
+      if (rotation === 3) expect(forest.z).toBeLessThan(urban.z);
+
+      for (const district of urbanDistricts)
+        expect(
+          terrainBiomeBlendAt(world.districts, district.centerX, district.centerZ),
+        ).toBeGreaterThan(0.8);
+      for (const district of forestDistricts)
+        expect(
+          terrainBiomeBlendAt(world.districts, district.centerX, district.centerZ),
+        ).toBeLessThan(0.2);
+      expect(validateWorld(world)).toEqual([]);
+      for (const district of urbanDistricts)
+        expect(
+          world.placements.some(
+            (placement) =>
+              placement.assetId === 'building-shell' &&
+              Math.abs(placement.position.x - district.centerX) <= district.radiusX &&
+              Math.abs(placement.position.z - district.centerZ) <= district.radiusZ,
+          ),
+        ).toBe(true);
+      for (const district of forestDistricts)
+        expect(
+          world.placements.some(
+            (placement) =>
+              (placement.assetId === 'pine-tree' || placement.assetId === 'boulder') &&
+              Math.abs(placement.position.x - district.centerX) <= district.radiusX &&
+              Math.abs(placement.position.z - district.centerZ) <= district.radiusZ,
+          ),
+        ).toBe(true);
+    }
+  });
+
   it('keeps a broad seed batch valid, navigable, and suitable for chopper insertion', () => {
     for (let index = 0; index < 24; index += 1) {
       const seed = `PHASE4-${String(index).padStart(2, '0')}`;
       const world = generateWorld(seed);
       expect(validateWorld(world), `${seed} layout defects`).toEqual([]);
+      expect(
+        world.placements.some((placement) => placement.assetId === 'building-shell'),
+        `${seed} contains city buildings`,
+      ).toBe(true);
+      expect(
+        world.placements.some(
+          (placement) => placement.assetId === 'pine-tree' || placement.assetId === 'boulder',
+        ),
+        `${seed} contains forest props`,
+      ).toBe(true);
       expect(
         world.colliders.every((collider) => {
           const dx = Math.max(collider.minX - world.spawn.x, 0, world.spawn.x - collider.maxX);

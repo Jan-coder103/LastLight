@@ -43,7 +43,7 @@ import {
   type SaveData,
 } from './game/saveData';
 import { createZombieVisual, syncZombieVisual } from './game/zombieVisual';
-import { GridNavigator } from './navigation/GridNavigator';
+import { GridNavigator, type NavPoint } from './navigation/GridNavigator';
 import { PlayerController } from './player/PlayerController';
 import { buildWorld } from './world/buildWorld';
 import { generateWorld, terrainHeightAt, type WorldData } from './world/generateWorld';
@@ -97,6 +97,8 @@ const elements = {
   fpsValue: document.querySelector<HTMLElement>('#fps-value'),
   frameValue: document.querySelector<HTMLElement>('#frame-value'),
   entityValue: document.querySelector<HTMLElement>('#entity-value'),
+  navigationValue: document.querySelector<HTMLElement>('#navigation-value'),
+  routeValue: document.querySelector<HTMLElement>('#route-value'),
   diagSeed: document.querySelector<HTMLElement>('#diag-seed'),
   controlsContent: document.querySelector<HTMLElement>('#controls-content'),
   hostileCount: document.querySelector<HTMLElement>('#hostile-count'),
@@ -144,7 +146,8 @@ let world: WorldData = generateWorld(elements.seedInput!.value);
 let worldGroup = buildWorld(world);
 scene.add(worldGroup);
 let navigator = new GridNavigator(world);
-let combat = new CombatSimulation(world, navigator);
+let combatNavigator = new GridNavigator(world);
+let combat = new CombatSimulation(world, combatNavigator);
 let zombieGroup = new Group();
 zombieGroup.name = 'Hostiles';
 scene.add(zombieGroup);
@@ -164,6 +167,14 @@ interface InteractiveView {
   object: Group;
   cache?: CacheSite;
   drop?: LootDrop;
+}
+
+interface NavigationTask {
+  x: number;
+  z: number;
+  range: number;
+  interactionId?: string;
+  stuckReplans: number;
 }
 
 let gamePhase: GamePhase = 'base';
@@ -211,7 +222,12 @@ let wasAlive = combat.alive;
 let lastUiTime = 0;
 let routeRefresh = 0;
 let hoverRefresh = 0;
-let navigationGoal: { x: number; z: number } | undefined;
+let navigationTask: NavigationTask | undefined;
+let navigationStatus = 'IDLE';
+let navigationRequestMs = 0;
+let navigationRequestMaxMs = 0;
+let navigationRequestCount = 0;
+let dynamicNavigationRefresh = 0;
 let pointerX = window.innerWidth / 2;
 let pointerY = window.innerHeight / 2;
 let observedDash = false;
@@ -234,7 +250,7 @@ function switchView(): void {
   if (cameraRig.mode !== 'third-person') releaseLookDrag();
   canvas?.focus({ preventScroll: true });
   updateModeUi();
-  if (cameraRig.mode === 'top-down' && navigationGoal) replanNavigationGoal();
+  if (cameraRig.mode === 'top-down' && navigationTask) replanNavigationTask();
   else updateRouteLine(true);
   if (cameraRig.mode === 'top-down') updateTopDownDashAim(pointerX, pointerY);
 }
@@ -290,6 +306,7 @@ function renderControls(): void {
         ]
       : [
           row('RMB', 'Click to move'),
+          row('ESC', 'Cancel route'),
           row('LMB', 'Fire at cursor'),
           row(
             'Q',
@@ -435,8 +452,10 @@ function setSeed(seed: string): void {
   worldGroup = buildWorld(world);
   scene.add(worldGroup);
   navigator = new GridNavigator(world);
-  combat = new CombatSimulation(world, navigator);
-  navigationGoal = undefined;
+  combatNavigator = new GridNavigator(world);
+  combat = new CombatSimulation(world, combatNavigator);
+  navigationTask = undefined;
+  setNavigationStatus('IDLE');
   observedDash = false;
   autoAttackTargetId = undefined;
   wasAlive = true;
@@ -749,7 +768,10 @@ function collectLoot(view: InteractiveView): void {
 function interactWith(view: InteractiveView, allowApproach = true): void {
   if (view.kind === 'extraction') {
     if (Math.hypot(view.x - player.position.x, view.z - player.position.z) > 6.5) {
-      if (allowApproach && cameraRig.mode === 'top-down') moveToLocation(view.x, view.z);
+      if (allowApproach && cameraRig.mode === 'top-down') {
+        moveToInteractive(view);
+        return;
+      }
       combat.lastMessage = 'Return to the landing zone to board.';
       updateCombatUi();
       return;
@@ -758,7 +780,10 @@ function interactWith(view: InteractiveView, allowApproach = true): void {
     return;
   }
   if (Math.hypot(view.x - player.position.x, view.z - player.position.z) > 3.6) {
-    if (allowApproach && cameraRig.mode === 'top-down') moveToLocation(view.x, view.z);
+    if (allowApproach && cameraRig.mode === 'top-down') {
+      moveToInteractive(view);
+      return;
+    }
     combat.lastMessage = `Move closer to ${view.kind === 'cache' ? 'search this cache' : 'collect the pickup'}.`;
     updateCombatUi();
     return;
@@ -799,7 +824,7 @@ function interactNearest(): void {
     interactWith(extraction, false);
     return;
   }
-  if (nearby) interactWith(nearby, false);
+  if (nearby) interactWith(nearby);
   else {
     combat.lastMessage = 'No cache, pickup, or chopper close enough to use.';
     updateCombatUi();
@@ -824,10 +849,10 @@ function updateNearbyAction(): void {
         : nearby.kind === 'cache'
           ? distance <= 3.6
             ? 'F  SEARCH CACHE'
-            : 'CLICK CACHE OR MOVE CLOSER'
+            : 'CLICK TO APPROACH CACHE'
           : distance <= 3.6
             ? 'F  COLLECT PICKUP'
-            : 'CLICK PICKUP OR MOVE CLOSER';
+            : 'CLICK TO APPROACH PICKUP';
     elements.nearbyAction!.textContent = text;
     elements.nearbyAction!.removeAttribute('hidden');
     return;
@@ -886,11 +911,169 @@ function useCarriedSupply(): void {
 function moveToLocation(x: number, z: number): void {
   if (cameraRig.mode !== 'top-down' || gamePhase !== 'active') return;
   autoAttackTargetId = undefined;
-  const path = navigator.findPath(player.position.x, player.position.z, x, z);
+  const path = requestNavigationPath(x, z);
+  if (path.length === 0) {
+    if (Math.hypot(x - player.position.x, z - player.position.z) <= 1.8) {
+      clearNavigation('ARRIVED');
+      return;
+    }
+    failNavigation('No reachable route to that point. Try a closer destination.');
+    return;
+  }
+  const endpoint = path[path.length - 1];
+  navigationTask = { x: endpoint.x, z: endpoint.z, range: 0, stuckReplans: 0 };
   player.setNavigationPath(path);
-  navigationGoal = path.length > 0 ? { x, z } : undefined;
+  setNavigationStatus('ROUTING');
+  updateRouteLine(true);
+}
+
+function moveToInteractive(view: InteractiveView): void {
+  if (cameraRig.mode !== 'top-down' || gamePhase !== 'active') return;
+  autoAttackTargetId = undefined;
+  const interactionRange = view.kind === 'extraction' ? 6.5 : 3.6;
+  const distance = Math.hypot(view.x - player.position.x, view.z - player.position.z);
+  if (distance <= interactionRange) {
+    clearNavigation('ARRIVED');
+    interactWith(view, false);
+    return;
+  }
+  let stoppingRange = Math.max(0.5, interactionRange - 1.5);
+  let path = requestNavigationPath(view.x, view.z, stoppingRange);
+  if (path.length === 0 && distance > interactionRange) {
+    stoppingRange = Math.max(0.25, stoppingRange - 1.5);
+    path = requestNavigationPath(view.x, view.z, stoppingRange);
+  }
+  if (path.length === 0) {
+    failNavigation(
+      `No clear approach to ${view.kind === 'cache' ? 'this cache' : view.kind === 'drop' ? 'this pickup' : 'the chopper'}.`,
+    );
+    return;
+  }
+  navigationTask = {
+    x: view.x,
+    z: view.z,
+    range: stoppingRange,
+    interactionId: view.id,
+    stuckReplans: 0,
+  };
+  player.setNavigationPath(path);
+  setNavigationStatus('APPROACH');
   routeRefresh = 1;
   updateRouteLine(true);
+  combat.lastMessage = `Moving into reach of ${view.kind === 'cache' ? 'the cache' : view.kind === 'drop' ? 'the pickup' : 'the chopper'}.`;
+  updateCombatUi();
+}
+
+function requestNavigationPath(x: number, z: number, range = 0): NavPoint[] {
+  const started = performance.now();
+  const path =
+    range > 0
+      ? navigator.findPathToRange(player.position.x, player.position.z, x, z, range)
+      : navigator.findPath(player.position.x, player.position.z, x, z);
+  navigationRequestMs = performance.now() - started;
+  navigationRequestMaxMs = Math.max(navigationRequestMaxMs, navigationRequestMs);
+  navigationRequestCount += 1;
+  updateNavigationTelemetry();
+  return path;
+}
+
+function setNavigationStatus(status: string): void {
+  navigationStatus = status;
+  elements.routeValue!.textContent = status;
+}
+
+function updateNavigationTelemetry(): void {
+  elements.navigationValue!.innerHTML = `${navigationRequestMs.toFixed(2)} / ${navigationRequestMaxMs.toFixed(2)} <small>MS · ${navigationRequestCount}</small>`;
+  elements.routeValue!.textContent = navigationStatus;
+}
+
+function clearNavigation(status = 'CANCELLED'): void {
+  navigationTask = undefined;
+  player.cancelNavigation();
+  setNavigationStatus(status);
+  routeRefresh = 1;
+  updateRouteLine(true);
+}
+
+function failNavigation(message: string): void {
+  clearNavigation('NO ROUTE');
+  combat.lastMessage = message;
+  updateCombatUi();
+}
+
+function taskIsReached(task: NavigationTask): boolean {
+  const distance = Math.hypot(task.x - player.position.x, task.z - player.position.z);
+  return task.interactionId ? distance <= task.range + 0.65 : distance <= navigator.cellSize * 0.7;
+}
+
+function finishNavigationTask(task: NavigationTask): void {
+  if (navigationTask !== task) return;
+  navigationTask = undefined;
+  player.cancelNavigation();
+  setNavigationStatus('ARRIVED');
+  updateRouteLine(true);
+  if (task.interactionId) {
+    const view = interactiveViews.get(task.interactionId);
+    if (view) interactWith(view, false);
+  }
+}
+
+function replanNavigationTask(): void {
+  const task = navigationTask;
+  if (!task || cameraRig.mode !== 'top-down' || gamePhase !== 'active') return;
+  const path = requestNavigationPath(task.x, task.z, task.range);
+  if (path.length > 0) {
+    player.setNavigationPath(path);
+    setNavigationStatus(task.interactionId ? 'APPROACH' : 'ROUTING');
+    routeRefresh = 1;
+    updateRouteLine(true);
+    return;
+  }
+  if (taskIsReached(task)) {
+    finishNavigationTask(task);
+    return;
+  }
+  if (task.interactionId) {
+    const view = interactiveViews.get(task.interactionId);
+    const useRange = view?.kind === 'extraction' ? 6.5 : 3.6;
+    if (view && Math.hypot(view.x - player.position.x, view.z - player.position.z) <= useRange) {
+      finishNavigationTask(task);
+      return;
+    }
+  }
+  failNavigation('The route is blocked. Choose another approach.');
+}
+
+function updateDynamicNavigation(): void {
+  const obstacles = combat.zombies
+    .filter((zombie) => zombie.alive && zombie.position.distanceTo(player.position) > 3.2)
+    .map((zombie) => ({ x: zombie.position.x, z: zombie.position.z, radius: 0.8 }));
+  navigator.setDynamicObstacles(obstacles);
+  if (
+    navigationTask &&
+    player.navigationPath.length > 0 &&
+    !navigator.isPathWalkable({ x: player.position.x, z: player.position.z }, player.navigationPath)
+  ) {
+    replanNavigationTask();
+  }
+}
+
+function updateNavigationProgress(): void {
+  const task = navigationTask;
+  if (!task || cameraRig.mode !== 'top-down') return;
+  if (player.consumeNavigationStuck()) {
+    task.stuckReplans += 1;
+    if (task.stuckReplans > 2) {
+      failNavigation('Movement is blocked. Choose another destination.');
+      return;
+    }
+    replanNavigationTask();
+    return;
+  }
+  if (player.navigationPath.length === 0) {
+    if (taskIsReached(task)) finishNavigationTask(task);
+    else replanNavigationTask();
+  }
 }
 
 function clearRunScene(): void {
@@ -924,6 +1107,8 @@ function clearRunScene(): void {
 function startRun(): void {
   if (gamePhase !== 'base') return;
   clearRunScene();
+  navigator.setDynamicObstacles([]);
+  dynamicNavigationRefresh = 0;
   cargo = emptyInventory();
   if (saveData.base.gear > 0) {
     saveData.base.gear -= 1;
@@ -947,7 +1132,7 @@ function startRun(): void {
   zombieGroup.visible = false;
   player.setPosition(world.spawn.x, world.spawn.z);
   player.setEnabled(false);
-  player.setNavigationPath([]);
+  player.cancelNavigation();
   cameraRig.reset(player.position);
   createRunLoot();
   chopper = createChopper();
@@ -964,7 +1149,7 @@ function startRun(): void {
   scene.add(extractionGuideArrow);
   gamePhase = 'arrival';
   document.querySelector('#game')?.classList.remove('is-base');
-  navigationGoal = undefined;
+  clearNavigation('IDLE');
   observedDash = false;
   autoAttackTargetId = undefined;
   wasAlive = true;
@@ -1060,9 +1245,10 @@ function returnToBase(): void {
   zombieGroup.visible = false;
   player.setEnabled(false);
   player.setPosition(world.spawn.x, world.spawn.z);
-  player.setNavigationPath([]);
+  player.cancelNavigation();
   cameraRig.reset(player.position);
-  navigationGoal = undefined;
+  navigationTask = undefined;
+  setNavigationStatus('IDLE');
   observedDash = false;
   autoAttackTargetId = undefined;
   wasAlive = true;
@@ -1393,8 +1579,7 @@ function fireAt(event: PointerEvent): void {
     const target = findAssistedZombie(event.clientX, event.clientY, aimHit?.object);
     if (target) {
       autoAttackTargetId = target.id;
-      player.setNavigationPath([]);
-      navigationGoal = undefined;
+      clearNavigation('CANCELLED');
       updateRouteLine(true);
       fireAtZombie(target);
       return;
@@ -1427,32 +1612,16 @@ function moveToPointer(event: MouseEvent): void {
   updateTopDownDashAim(pointerX, pointerY);
   const destination = terrainPointAt(event.clientX, event.clientY);
   if (!destination) return;
-  const path = navigator.findPath(
-    player.position.x,
-    player.position.z,
-    destination.x,
-    destination.z,
-  );
-  player.setNavigationPath(path);
-  navigationGoal = path.length > 0 ? { x: destination.x, z: destination.z } : undefined;
-  routeRefresh = 1;
-  updateRouteLine(true);
-  if (path.length === 0) elements.seedHint!.textContent = 'No nearby clear route to that point.';
+  moveToLocation(destination.x, destination.z);
 }
 
-function replanNavigationGoal(): void {
-  if (!navigationGoal) return;
-  const path = navigator.findPath(
-    player.position.x,
-    player.position.z,
-    navigationGoal.x,
-    navigationGoal.z,
-  );
-  player.setNavigationPath(path);
-  if (path.length === 0) navigationGoal = undefined;
-  routeRefresh = 1;
-  updateRouteLine(true);
-}
+window.addEventListener('keydown', (event) => {
+  if (event.code !== 'Escape' || cameraRig.mode !== 'top-down' || !navigationTask) return;
+  event.preventDefault();
+  clearNavigation('CANCELLED');
+  combat.lastMessage = 'Click-to-move route cancelled.';
+  updateCombatUi();
+});
 
 canvas.addEventListener('contextmenu', (event) => {
   event.preventDefault();
@@ -1637,6 +1806,13 @@ function animate(now: number): void {
         break;
       }
       if (gamePhase === 'active') {
+        if (cameraRig.mode === 'top-down') {
+          dynamicNavigationRefresh -= fixedStep;
+          if (dynamicNavigationRefresh <= 0) {
+            dynamicNavigationRefresh = 0.3;
+            updateDynamicNavigation();
+          }
+        }
         player.update(
           fixedStep,
           cameraRig.mode,
@@ -1644,15 +1820,9 @@ function animate(now: number): void {
           combat.adrenalineRemaining > 0 ? 1.5 : 1,
         );
         updateAutoAttack();
-        if (wasDashing && !player.isDashing) replanNavigationGoal();
+        if (wasDashing && !player.isDashing) replanNavigationTask();
+        updateNavigationProgress();
         observedDash = player.isDashing;
-        if (
-          cameraRig.mode === 'top-down' &&
-          !player.isDashing &&
-          player.navigationPath.length === 0
-        ) {
-          navigationGoal = undefined;
-        }
       } else if (gamePhase === 'extracting') {
         extractingRemaining -= fixedStep;
         const danger = combat.zombies.some(
@@ -1735,6 +1905,7 @@ function animate(now: number): void {
     elements.entityValue!.textContent = String(
       world.objectCount + combat.zombies.length + lootGroup.children.length + 1,
     );
+    updateNavigationTelemetry();
     lastUiTime = now;
   }
   requestAnimationFrame(animate);

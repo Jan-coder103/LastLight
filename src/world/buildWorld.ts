@@ -11,7 +11,7 @@ import {
 } from 'three';
 import { getAsset } from '../assets/catalog';
 import type { WorldRoad } from './generateWorld';
-import { terrainHeightAt, type WorldData } from './generateWorld';
+import { terrainBiomeBlendAt, terrainHeightAt, type WorldData } from './generateWorld';
 
 const grassMaterial = new MeshStandardMaterial({
   vertexColors: true,
@@ -47,7 +47,7 @@ function makeTerrain(world: WorldData): Mesh {
     const y = terrainHeightAt(world.seed, x, z);
     positions.setY(index, y);
 
-    const blend = Math.max(0, Math.min(1, (x + 32) / 65));
+    const blend = terrainBiomeBlendAt(world.districts, x, z);
     color.copy(urban).lerp(forest, blend);
     const variation = Math.sin(x * 0.21 + z * 0.08) * 0.035 + Math.cos(z * 0.19) * 0.025;
     color.offsetHSL(0, 0, variation);

@@ -1,6 +1,6 @@
 import type { AssetPlacement, Vec3Data } from '../assets/assetTypes';
 import { getAsset } from '../assets/catalog';
-import { createRandom } from '../core/seededRandom';
+import { createRandom, hashSeed } from '../core/seededRandom';
 
 export const WORLD_SIZE = 280;
 export const LANDING_CLEARANCE = 18;
@@ -57,6 +57,7 @@ export interface WorldLandmark {
 
 export interface WorldData {
   seed: string;
+  rotationQuarterTurns: number;
   size: number;
   roads: WorldRoad[];
   districts: WorldDistrict[];
@@ -74,21 +75,38 @@ function cleanSeed(seed: string): string {
   return seed.trim().slice(0, 32) || 'RAVEN-07';
 }
 
+function rotationForSeed(seed: string): number {
+  return hashSeed(seed) % 4;
+}
+
+function rotateXZ(x: number, z: number, quarterTurns: number): { x: number; z: number } {
+  switch (quarterTurns) {
+    case 1:
+      return { x: -z, z: x };
+    case 2:
+      return { x: -x, z: -z };
+    case 3:
+      return { x: z, z: -x };
+    default:
+      return { x, z };
+  }
+}
+
 function createRoads(seed: string): WorldRoad[] {
   const random = createRandom(`${seed}:roads`);
   const jitter = (amount: number): number => (random() - 0.5) * amount;
   return [
     {
-      id: 'crossroad-east-west',
+      id: 'main-crossroad',
       centerX: 0,
       centerZ: 7,
       sizeX: WORLD_SIZE,
       sizeZ: 13,
       kind: 'road',
     },
-    { id: 'city-avenue', centerX: -28, centerZ: 0, sizeX: 13, sizeZ: WORLD_SIZE, kind: 'road' },
+    { id: 'city-arterial', centerX: -28, centerZ: 0, sizeX: 13, sizeZ: WORLD_SIZE, kind: 'road' },
     {
-      id: 'north-city-street',
+      id: 'city-grid-street-a',
       centerX: -81 + jitter(8),
       centerZ: -55 + jitter(8),
       sizeX: 106 + jitter(10),
@@ -96,7 +114,7 @@ function createRoads(seed: string): WorldRoad[] {
       kind: 'road',
     },
     {
-      id: 'south-city-street',
+      id: 'city-grid-street-b',
       centerX: -81 + jitter(8),
       centerZ: 55 + jitter(8),
       sizeX: 106 + jitter(10),
@@ -104,7 +122,7 @@ function createRoads(seed: string): WorldRoad[] {
       kind: 'road',
     },
     {
-      id: 'west-grid-street',
+      id: 'city-grid-cross-street-a',
       centerX: -98 + jitter(8),
       centerZ: -2 + jitter(12),
       sizeX: 7,
@@ -112,7 +130,7 @@ function createRoads(seed: string): WorldRoad[] {
       kind: 'road',
     },
     {
-      id: 'east-grid-street',
+      id: 'city-grid-cross-street-b',
       centerX: -62 + jitter(8),
       centerZ: -1 + jitter(12),
       sizeX: 7,
@@ -120,7 +138,7 @@ function createRoads(seed: string): WorldRoad[] {
       kind: 'road',
     },
     {
-      id: 'forest-trail-north',
+      id: 'forest-trail-a',
       centerX: 68 + jitter(12),
       centerZ: -17 + jitter(12),
       sizeX: 130,
@@ -128,7 +146,7 @@ function createRoads(seed: string): WorldRoad[] {
       kind: 'trail',
     },
     {
-      id: 'forest-trail-crossing',
+      id: 'forest-trail-spine',
       centerX: 92 + jitter(12),
       centerZ: -11 + jitter(10),
       sizeX: 5.5,
@@ -136,7 +154,7 @@ function createRoads(seed: string): WorldRoad[] {
       kind: 'trail',
     },
     {
-      id: 'forest-trail-south',
+      id: 'forest-trail-b',
       centerX: 74 + jitter(12),
       centerZ: 72 + jitter(10),
       sizeX: 118,
@@ -150,7 +168,18 @@ function roadsForSeed(seed: string): WorldRoad[] {
   const key = cleanSeed(seed);
   let roads = roadsCache.get(key);
   if (!roads) {
-    roads = createRoads(key);
+    const rotation = rotationForSeed(key);
+    roads = createRoads(key).map((road) => {
+      const center = rotateXZ(road.centerX, road.centerZ, rotation);
+      const swap = rotation % 2 === 1;
+      return {
+        ...road,
+        centerX: center.x,
+        centerZ: center.z,
+        sizeX: swap ? road.sizeZ : road.sizeX,
+        sizeZ: swap ? road.sizeX : road.sizeZ,
+      };
+    });
     roadsCache.set(key, roads);
     if (roadsCache.size > 16) roadsCache.delete(roadsCache.keys().next().value!);
   }
@@ -201,7 +230,7 @@ function createDistricts(seed: string): WorldDistrict[] {
     },
     {
       id: 'north-pines',
-      name: 'North Pines',
+      name: 'Pine District A',
       kind: 'forest',
       centerX: 82 + jitter(16),
       centerZ: -70 + jitter(14),
@@ -211,7 +240,7 @@ function createDistricts(seed: string): WorldDistrict[] {
     },
     {
       id: 'south-pines',
-      name: 'South Pines',
+      name: 'Pine District B',
       kind: 'forest',
       centerX: 82 + jitter(16),
       centerZ: 72 + jitter(14),
@@ -252,7 +281,7 @@ function createLootZones(seed: string): WorldLootZone[] {
     },
     {
       id: 'north-pine-loop',
-      name: 'North Pine Loop',
+      name: 'Pine Loop A',
       centerX: 87 + jitter(9),
       centerZ: -42 + jitter(9),
       radius: 24,
@@ -260,7 +289,7 @@ function createLootZones(seed: string): WorldLootZone[] {
     },
     {
       id: 'south-pine-road',
-      name: 'South Pine Road',
+      name: 'Pine Loop B',
       centerX: 82 + jitter(9),
       centerZ: 61 + jitter(9),
       radius: 23,
@@ -278,7 +307,7 @@ function createLandmarks(seed: string): WorldLandmark[] {
   return [
     {
       id: 'water-tower',
-      name: 'North Water Tower',
+      name: 'Water Tower',
       assetId: 'water-tower',
       x: towerX,
       z: towerZ,
@@ -287,7 +316,7 @@ function createLandmarks(seed: string): WorldLandmark[] {
     },
     {
       id: 'radio-mast',
-      name: 'South Relay Mast',
+      name: 'Relay Mast',
       assetId: 'radio-mast',
       x: mastX,
       z: mastZ,
@@ -295,6 +324,76 @@ function createLandmarks(seed: string): WorldLandmark[] {
       approachZ: mastZ,
     },
   ];
+}
+
+function rotateDistricts(districts: WorldDistrict[], quarterTurns: number): WorldDistrict[] {
+  return districts.map((district) => {
+    const center = rotateXZ(district.centerX, district.centerZ, quarterTurns);
+    const swap = quarterTurns % 2 === 1;
+    return {
+      ...district,
+      centerX: center.x,
+      centerZ: center.z,
+      radiusX: swap ? district.radiusZ : district.radiusX,
+      radiusZ: swap ? district.radiusX : district.radiusZ,
+    };
+  });
+}
+
+function rotateLootZones(zones: WorldLootZone[], quarterTurns: number): WorldLootZone[] {
+  return zones.map((zone) => {
+    const center = rotateXZ(zone.centerX, zone.centerZ, quarterTurns);
+    return { ...zone, centerX: center.x, centerZ: center.z };
+  });
+}
+
+function rotateLandmarks(landmarks: WorldLandmark[], quarterTurns: number): WorldLandmark[] {
+  return landmarks.map((landmark) => {
+    const position = rotateXZ(landmark.x, landmark.z, quarterTurns);
+    const approach = rotateXZ(landmark.approachX, landmark.approachZ, quarterTurns);
+    return {
+      ...landmark,
+      x: position.x,
+      z: position.z,
+      approachX: approach.x,
+      approachZ: approach.z,
+    };
+  });
+}
+
+function rotatePlacements(
+  placements: AssetPlacement[],
+  seed: string,
+  quarterTurns: number,
+): AssetPlacement[] {
+  const yawOffset = quarterTurns * (Math.PI / 2);
+  return placements.map((placement) => {
+    const position = rotateXZ(placement.position.x, placement.position.z, quarterTurns);
+    return {
+      ...placement,
+      position: { x: position.x, y: terrainHeightAt(seed, position.x, position.z), z: position.z },
+      rotationY: placement.rotationY - yawOffset,
+    };
+  });
+}
+
+/** Returns 1 for fully urban ground and 0 for fully forest ground, blending near district edges. */
+export function terrainBiomeBlendAt(districts: WorldDistrict[], x: number, z: number): number {
+  const score = (district: WorldDistrict): number =>
+    Math.hypot(
+      (x - district.centerX) / district.radiusX,
+      (z - district.centerZ) / district.radiusZ,
+    );
+  const urbanDistance = Math.min(
+    ...districts.filter((district) => district.kind === 'urban').map(score),
+  );
+  const forestDistance = Math.min(
+    ...districts.filter((district) => district.kind === 'forest').map(score),
+  );
+  if (!Number.isFinite(urbanDistance)) return 0;
+  if (!Number.isFinite(forestDistance)) return 1;
+  const totalDistance = urbanDistance + forestDistance;
+  return totalDistance < 0.0001 ? 0.5 : forestDistance / totalDistance;
 }
 
 export function terrainHeightAt(seed: string, x: number, z: number): number {
@@ -315,12 +414,18 @@ export function terrainHeightAt(seed: string, x: number, z: number): number {
 function colliderFor(placement: AssetPlacement): WorldCollider | undefined {
   const collider = getAsset(placement.assetId).collider;
   if (!collider) return undefined;
-  const centerX = placement.position.x + collider.center.x * placement.scale;
+  const cosine = Math.cos(placement.rotationY);
+  const sine = Math.sin(placement.rotationY);
+  const centerOffsetX = (collider.center.x * cosine + collider.center.z * sine) * placement.scale;
+  const centerOffsetZ = (-collider.center.x * sine + collider.center.z * cosine) * placement.scale;
+  const centerX = placement.position.x + centerOffsetX;
   const centerY = placement.position.y + collider.center.y * placement.scale;
-  const centerZ = placement.position.z + collider.center.z * placement.scale;
-  const halfX = (collider.size.x * placement.scale) / 2;
+  const centerZ = placement.position.z + centerOffsetZ;
+  const halfX =
+    ((Math.abs(cosine) * collider.size.x + Math.abs(sine) * collider.size.z) * placement.scale) / 2;
   const halfY = (collider.size.y * placement.scale) / 2;
-  const halfZ = (collider.size.z * placement.scale) / 2;
+  const halfZ =
+    ((Math.abs(sine) * collider.size.x + Math.abs(cosine) * collider.size.z) * placement.scale) / 2;
   return {
     id: `${placement.assetId}-${placement.position.x.toFixed(1)}-${placement.position.z.toFixed(1)}`,
     minX: centerX - halfX,
@@ -457,15 +562,12 @@ function addForestProps(
 
 export function generateWorld(seed: string): WorldData {
   const resolvedSeed = cleanSeed(seed);
+  const rotationQuarterTurns = rotationForSeed(resolvedSeed);
   const roads = createRoads(resolvedSeed);
   const districts = createDistricts(resolvedSeed);
   const lootZones = createLootZones(resolvedSeed);
   const landmarks = createLandmarks(resolvedSeed);
-  const spawn: Vec3Data = {
-    x: 0,
-    y: terrainHeightAt(resolvedSeed, 0, -5),
-    z: -5,
-  };
+  const canonicalSpawn = { x: 0, z: -5 };
   const placements: AssetPlacement[] = [];
 
   for (const landmark of landmarks)
@@ -473,19 +575,26 @@ export function generateWorld(seed: string): WorldData {
   addDistrictBuildings(placements, resolvedSeed, roads, districts, landmarks);
   addForestProps(placements, resolvedSeed, roads, districts, landmarks);
 
-  const colliders = placements.flatMap((placement) => {
+  const spawnPosition = rotateXZ(canonicalSpawn.x, canonicalSpawn.z, rotationQuarterTurns);
+  const spawn: Vec3Data = {
+    ...spawnPosition,
+    y: terrainHeightAt(resolvedSeed, spawnPosition.x, spawnPosition.z),
+  };
+  const rotatedPlacements = rotatePlacements(placements, resolvedSeed, rotationQuarterTurns);
+  const colliders = rotatedPlacements.flatMap((placement) => {
     const collider = colliderFor(placement);
     return collider ? [collider] : [];
   });
 
   return {
     seed: resolvedSeed,
+    rotationQuarterTurns,
     size: WORLD_SIZE,
-    roads,
-    districts,
-    lootZones,
-    landmarks,
-    placements,
+    roads: roadsForSeed(resolvedSeed),
+    districts: rotateDistricts(districts, rotationQuarterTurns),
+    lootZones: rotateLootZones(lootZones, rotationQuarterTurns),
+    landmarks: rotateLandmarks(landmarks, rotationQuarterTurns),
+    placements: rotatedPlacements,
     colliders,
     objectCount: placements.length + roads.length + 1,
     spawn,
@@ -499,11 +608,12 @@ function distanceToCollider(x: number, z: number, collider: WorldCollider): numb
 }
 
 function placementInBounds(placement: AssetPlacement, size: number): boolean {
-  const collider = getAsset(placement.assetId).collider;
-  const halfX =
-    ((collider?.size.x ?? getAsset(placement.assetId).dimensions.x) * placement.scale) / 2;
-  const halfZ =
-    ((collider?.size.z ?? getAsset(placement.assetId).dimensions.z) * placement.scale) / 2;
+  const asset = getAsset(placement.assetId);
+  const dimensions = asset.collider?.size ?? asset.dimensions;
+  const cosine = Math.abs(Math.cos(placement.rotationY));
+  const sine = Math.abs(Math.sin(placement.rotationY));
+  const halfX = (cosine * dimensions.x + sine * dimensions.z) * placement.scale * 0.5;
+  const halfZ = (sine * dimensions.x + cosine * dimensions.z) * placement.scale * 0.5;
   return (
     Math.abs(placement.position.x) + halfX <= size / 2 &&
     Math.abs(placement.position.z) + halfZ <= size / 2
