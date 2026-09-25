@@ -37,6 +37,25 @@ describe('HordeSimulation', () => {
     expect(horde.tiers.near + horde.tiers.mid + horde.tiers.far).toBe(10_000);
   });
 
+  it('reports only visual transforms and colors that need an upload', () => {
+    const horde = new HordeSimulation(2, 'STRESS-DIRTY', 'ring', world, navigator);
+    const initial: number[] = [];
+    horde.consumeVisualChanges((index) => initial.push(index));
+    expect(initial).toEqual([0, 1]);
+
+    horde.tick(0, world.spawn.x, world.spawn.z);
+    const unchanged: number[] = [];
+    horde.consumeVisualChanges((index) => unchanged.push(index));
+    expect(unchanged).toEqual([]);
+
+    horde.damageAgent(1, 50);
+    const changed: Array<[number, boolean, boolean]> = [];
+    horde.consumeVisualChanges((index, transform, color) =>
+      changed.push([index, transform, color]),
+    );
+    expect(changed).toEqual([[1, true, false]]);
+  });
+
   it('queries nearby agents and preserves identity and health as an agent changes tiers', () => {
     const horde = new HordeSimulation(100, 'STRESS-TIER', 'ring', world, navigator);
     const before = horde.snapshot(0);

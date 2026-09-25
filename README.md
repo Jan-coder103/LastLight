@@ -112,4 +112,16 @@ The lab benchmark measures fixed 1/60-second simulation steps after eight warm-u
 |  5,000 |         0.792 / 4.800 |         0.586 / 4.300 |
 | 10,000 |        1.547 / 11.300 |        1.517 / 11.900 |
 
-These are simulation-only preview measurements; browser scheduling changes individual samples. Hardware/GPU details are not exposed by the preview, and this is not the Phase 7 frame-rate gate. Repeat with the same seed and pattern to compare measurements on a chosen reference machine. Frame rate and frame time remain live diagnostics for the normal run. Phase 7 will set the rendering performance target on a reference desktop. Save data uses schema version 1 under the `last-light-save` browser storage key; invalid or unreadable data loads safe default camp supplies.
+These are simulation-only preview measurements; browser scheduling changes individual samples. The owner later reported a successful 10,000-enemy playtest at stable 60 FPS and 17 ms or less per frame. That owner-observed result is not a hardware profile; browser and hardware were unspecified.
+
+## Phase 7 performance profile
+
+The development telemetry reports the rolling FPS, p95 request-animation-frame interval, p95 JavaScript frame work, fixed simulation work per frame, current camera and canvas size, draw calls and triangles, active effects, navigation timing, and scene seed. GPU p95 uses `EXT_disjoint_timer_query_webgl2` when the browser exposes it; otherwise it reads `N/A`. Heap size uses Chromium's optional JavaScript heap API. Geometry and texture values are renderer object counts, not GPU memory in bytes. `INSTANCE SYNC` in the Horde Lab measures CPU time and changed-agent count for preparing the instanced transforms.
+
+For a profile, record the browser/OS and hardware, canvas dimensions and pixel ratio, seed/pattern, agent count, camera, and whether a regular run or the stress scene is active. Check a regular field run and the 10,000-agent scene in both camera modes, repeat each measurement, and end/restart the stress scene several times to check that heap and renderer object counts settle. The rendering counters are camera-specific, so read them after each view is selected. Compare the p95 interval with the frame-rate target; JavaScript and GPU timings describe work inside their respective clocks and do not include browser compositing.
+
+The first steady-state local preview baseline was recorded in the Codex in-app browser while at camp, third-person, with a 1280×720 canvas at 1.00× pixel ratio: 60 FPS, 16.7 ms p95 frame interval, 4.40 ms p95 JavaScript work, 0.00 ms mean fixed-update work per frame (rounded to two decimals), 4.66 ms p95 GPU time, 468 draw calls, 17,490 triangles, 23 MB JavaScript heap, 111 geometries, and 3 textures. This is an idle camp baseline, not a normal active run or stress-scene profile. The browser host and GPU are not exposed, so final targets remain open until measurements are repeated on the agreed reference machine.
+
+Phase 7 updates the horde instance buffers only when an agent's transform, health scale, life state, or tier color changes. Sparse changes use merged instance-buffer update ranges; dense changes fall back to a full buffer update. This avoids rebuilding and uploading all 10,000 transforms on every display frame. Use the live `INSTANCE SYNC` and frame/GPU telemetry to check the effect on the owner machine.
+
+Save data uses schema version 1 under the `last-light-save` browser storage key; invalid or unreadable data loads safe default camp supplies.

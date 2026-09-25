@@ -4,13 +4,13 @@ Updated: 2026-09-25
 
 ## Current position
 
-Phases 1–6 are **Accepted**. On 2026-09-25 the owner reported a good Phase 6 playtest and stable 60 FPS (17 ms or less per frame) with 10,000 enemies. The browser and hardware were not specified. Phase 6 large-horde simulation is implemented and verified in commit `13093c8`. Phase 7 rendering and performance pass is not started; the plan requires the owner to initiate each next phase.
+Phases 1–6 are **Accepted**. Phase 7 rendering and performance work is in progress. The owner reported stable 60 FPS (17 ms or less per frame) with 10,000 enemies during the Phase 6 playtest; browser and hardware were not specified. Phase 7 adds runtime profiling and updates only changed horde instance buffers. The first local profile covers idle camp in third-person only; active-run and 10,000-agent profiles in both camera modes remain to be collected on the reference setup.
 
 ## Read first
 
 1. `plan.md` for the vision, technical direction, phase scope, and acceptance criteria.
 2. `tracker.md` for phase status, verification evidence, decisions, and the owner playtest log.
-3. `README.md` for startup commands, controls, benchmark measurements, and the Phase 6 playtest checklist.
+3. `README.md` for startup commands, controls, simulation benchmark measurements, and Phase 7 profiling instructions.
 
 ## Phase 2 decisions and tuning
 
@@ -54,6 +54,9 @@ Phases 1–6 are **Accepted**. On 2026-09-25 the owner reported a good Phase 6 p
 - Added visible-agent click damage through the instanced batch. Damaged agents retain health and ID across tiers; defeated agents disappear from spatial queries without reusing their ID.
 - Added a local fixed-step benchmark with eight warm-up steps and 36 samples at each target count. It reports mean and p95 simulation time and excludes scenario construction and rendering.
 - Added deterministic-spawn, 10,000-agent integrity, tier-transition state-retention, pursuit, and attack tests; added Phase 6 setup, benchmark evidence, and owner playtest instructions.
+- Added rolling frame-interval p95, JavaScript frame p95, fixed-update CPU timing, optional asynchronous WebGL2 GPU timer queries, draw-call/triangle counts, heap and renderer object counts, camera/canvas information, effect counts, and navigation timing to the development telemetry.
+- Changed horde visuals to queue only transform or tier-color changes; sparse updates upload coalesced instance-buffer ranges, with a full-buffer fallback for dense updates or more than 64 ranges.
+- Added Phase 7 profiling instructions and logged a local idle-camp profile. The stress scene reports per-frame instance-sync time and changed-agent count while its lab panel is open.
 
 ## Phase 3 decisions and tuning
 
@@ -124,14 +127,23 @@ Phases 1–6 are **Accepted**. On 2026-09-25 the owner reported a good Phase 6 p
 - Near attackers deal 8 damage every 1.3 seconds within 1.7 m. Crowd separation considers nearby agents and caps work at 12 neighbors per update.
 - Benchmark cost is the simulation step only. It uses eight warm-ups and 36 samples per count; browser scheduling can shift p95, so compare repeated runs on the eventual Phase 7 reference machine.
 
+## Phase 7 decisions and current evidence
+
+- Frame-time p95 is a rolling nearest-rank p95 of the last 120 `requestAnimationFrame` intervals. JavaScript frame p95 includes the animation callback's JavaScript work; simulation time measures the fixed-update block per display frame.
+- GPU p95 uses `EXT_disjoint_timer_query_webgl2` without waiting for the GPU. It reports unavailable on browsers without that extension; disjoint samples are discarded.
+- `renderer.info` draw calls and triangles are for the currently selected camera. Geometry and texture figures are renderer object counts, not byte estimates. JavaScript heap is reported only where the browser exposes its optional heap API.
+- Sparse horde transform/color changes are coalesced in sorted index order. When fewer than 30% of instances change and there are at most 64 ranges, Three.js receives partial buffer update ranges; otherwise the attribute falls back to a full upload.
+- Initial steady-state local preview profile: Codex in-app browser, idle camp, third-person, 1280×720 canvas at 1.00×: 60 FPS, 16.7 ms frame-interval p95, 4.40 ms JS-frame p95, 0.00 ms mean fixed-update time per frame (rounded to two decimals), 4.66 ms GPU p95, 468 draw calls, 17,490 triangles, 23 MB JavaScript heap, 111 geometries, 3 textures. This is not an active run or stress profile, and host hardware is not exposed.
+- The final reference machine and final targets remain open. The plan's provisional targets are 60 FPS for normal play and at least 30 FPS in the stress scene; the owner previously observed 60 FPS at 10,000 enemies on an unspecified setup.
+
 ## Known limits and next action
 
 - Phase 6 owner playtest passed with no issues reported. The owner observed stable 60 FPS and 17 ms or less per frame at 10,000 enemies. This is owner-reported playtest evidence; the browser and hardware are unspecified, and the earlier fixed-step measurements below exclude rendering.
-- Await the owner's explicit instruction to start Phase 7. Its first work is to profile CPU, GPU, memory, draw calls, pathfinding, particles, and camera-specific visibility, then agree the reference machine and final targets. Record normal and stress results in both camera modes.
+- Record a regular active run and 10,000-agent stress scene in both camera modes on the agreed reference setup. Repeat each measurement and stress start/stop cycle; track heap/object counts until they settle. Tune a bottleneck only if the metrics show one, then ask the owner to playtest responsiveness and readability.
 - Stress visuals are intentionally simplified low-poly instances; this phase proves tracked simulation and horde behavior, while Phase 7 owns draw-call, memory, frame-time, and reference-hardware targets.
 - Local obstacle steering is a short deflection check rather than full route planning. The owner should flag groups that stall at blocked cells or bunch in narrow spaces.
 - The regular run still caps at seven hostiles and remains separate from the Horde Simulation Lab.
-- Phase 4 generation timing excludes scene construction. Phase 5 route timing and the Phase 6 simulation benchmark are local preview measurements, not hardware performance claims.
+- Phase 4 generation timing excludes scene construction. Phase 5 route timing, the Phase 6 simulation benchmark, and the Phase 7 idle-camp sample are local preview measurements, not reference-hardware performance claims.
 
 ## Handoff format for future coding sessions
 

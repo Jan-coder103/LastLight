@@ -2,6 +2,7 @@ import {
   AmbientLight,
   ACESFilmicToneMapping,
   ArrowHelper,
+  BufferAttribute,
   BufferGeometry,
   BoxGeometry,
   CircleGeometry,
@@ -34,6 +35,7 @@ import { CameraRig } from './camera/CameraRig';
 import { CombatSimulation, type ZombieState } from './game/CombatSimulation';
 import { benchmarkCountsForHorde, benchmarkHorde } from './game/HordeBenchmark';
 import { HordeSimulation, type HordeSpawnPattern } from './game/HordeSimulation';
+import { PerformanceWindow } from './game/PerformanceWindow';
 import { openCache, placeLootCaches, type CacheSite, type LootDrop } from './game/loot';
 import {
   addCargo,
@@ -66,6 +68,16 @@ const renderer = new WebGLRenderer({
   antialias: true,
   powerPreference: 'high-performance',
 });
+const gl = renderer.getContext() as WebGL2RenderingContext;
+const gpuTimer = gl.getExtension('EXT_disjoint_timer_query_webgl2') as {
+  TIME_ELAPSED_EXT: number;
+  GPU_DISJOINT_EXT: number;
+} | null;
+const pendingGpuQueries: WebGLQuery[] = [];
+const gpuFrameTimes = new PerformanceWindow();
+const frameIntervals = new PerformanceWindow();
+const jsFrameTimes = new PerformanceWindow();
+const simulationFrameTimes = new PerformanceWindow();
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setSize(window.innerWidth, window.innerHeight, false);
 renderer.outputColorSpace = 'srgb';
@@ -100,6 +112,13 @@ const elements = {
   viewButton: document.querySelector<HTMLButtonElement>('#view-button'),
   fpsValue: document.querySelector<HTMLElement>('#fps-value'),
   frameValue: document.querySelector<HTMLElement>('#frame-value'),
+  cpuFrameValue: document.querySelector<HTMLElement>('#cpu-frame-value'),
+  simulationValue: document.querySelector<HTMLElement>('#simulation-value'),
+  renderValue: document.querySelector<HTMLElement>('#render-value'),
+  gpuValue: document.querySelector<HTMLElement>('#gpu-value'),
+  memoryValue: document.querySelector<HTMLElement>('#memory-value'),
+  resolutionValue: document.querySelector<HTMLElement>('#resolution-value'),
+  effectsValue: document.querySelector<HTMLElement>('#effects-value'),
   entityValue: document.querySelector<HTMLElement>('#entity-value'),
   navigationValue: document.querySelector<HTMLElement>('#navigation-value'),
   routeValue: document.querySelector<HTMLElement>('#route-value'),
@@ -204,6 +223,11 @@ let hordeSimulation: HordeSimulation | undefined;
 let hordeVisual: InstancedMesh | undefined;
 let hordeInstance = new Object3D();
 let hordeRenderTier = new Uint8Array();
+const changedMatrixIndices: number[] = [];
+const changedColorIndices: number[] = [];
+const hordeTierColors = [0xb98155, 0x9b9a65, 0x71806a];
+let hordeSyncMs = 0;
+let hordeSyncCount = 0;
 let saveData: SaveData = loadSave();
 let cargo = emptyInventory();
 let runElapsed = 0;
@@ -544,6 +568,53 @@ function createZombieViews(): void {
   scene.add(zombieGroup);
 }
 
+function beginGpuFrameQuery(): WebGLQuery | undefined {
+  if (!gpuTimer || pendingGpuQueries.length >= 4) return undefined;
+  const query = gl.createQuery();
+  if (!query) return undefined;
+  gl.beginQuery(gpuTimer.TIME_ELAPSED_EXT, query);
+  return query;
+}
+
+function finishGpuFrameQuery(query: WebGLQuery | undefined): void {
+  if (!query || !gpuTimer) return;
+  gl.endQuery(gpuTimer.TIME_ELAPSED_EXT);
+  pendingGpuQueries.push(query);
+}
+
+function pollGpuFrameQueries(): void {
+  if (!gpuTimer) return;
+  const disjoint = Boolean(gl.getParameter(gpuTimer.GPU_DISJOINT_EXT));
+  for (let index = pendingGpuQueries.length - 1; index >= 0; index -= 1) {
+    const query = pendingGpuQueries[index]!;
+    if (!gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE)) continue;
+    if (!disjoint) {
+      const nanoseconds = Number(gl.getQueryParameter(query, gl.QUERY_RESULT));
+      if (Number.isFinite(nanoseconds)) gpuFrameTimes.add(nanoseconds / 1_000_000);
+    }
+    gl.deleteQuery(query);
+    pendingGpuQueries.splice(index, 1);
+  }
+}
+
+function updateRenderDiagnosticsUi(): void {
+  const info = renderer.info;
+  const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+  const heap = memory ? `${(memory.usedJSHeapSize / 1_048_576).toFixed(0)} MB` : 'N/A';
+  const gpu = !gpuTimer
+    ? 'N/A'
+    : gpuFrameTimes.count === 0
+      ? 'warming'
+      : `${gpuFrameTimes.percentile95().toFixed(2)} ms`;
+  elements.cpuFrameValue!.innerHTML = `${jsFrameTimes.percentile95().toFixed(2)} <small>MS</small>`;
+  elements.simulationValue!.innerHTML = `${simulationFrameTimes.average().toFixed(2)} <small>MS</small>`;
+  elements.renderValue!.textContent = `${info.render.calls} / ${info.render.triangles.toLocaleString()}`;
+  elements.gpuValue!.textContent = gpu;
+  elements.memoryValue!.textContent = `${heap} · ${info.memory.geometries}g / ${info.memory.textures}t`;
+  elements.resolutionValue!.textContent = `${cameraRig.mode} · ${renderer.domElement.width}×${renderer.domElement.height} @${renderer.getPixelRatio().toFixed(2)}x`;
+  elements.effectsValue!.textContent = String(timedEffects.length);
+}
+
 function updateHordeUi(): void {
   const horde = hordeSimulation;
   if (!horde || !stressActive) return;
@@ -559,7 +630,16 @@ function updateHordeUi(): void {
     <div>NEAR / MID / FAR<strong>${tiers.near} / ${tiers.mid} / ${tiers.far}</strong></div>
     <div>NEAREST TARGET<strong>${targetLabel}</strong></div>
     <div>PLAYER HEALTH<strong>${Math.ceil(horde.playerHealth)} / 100 · ${horde.totalPlayerHits} hits</strong></div>
-    <div>SIM STEP<strong>${horde.lastStepMs.toFixed(3)} ms</strong></div>`;
+    <div>SIM STEP<strong>${horde.lastStepMs.toFixed(3)} ms</strong></div>
+    <div>FRAME / P95<strong>${elements.fpsValue!.textContent} · ${elements.frameValue!.textContent}</strong></div>
+    <div>JS FRAME P95<strong>${elements.cpuFrameValue!.textContent}</strong></div>
+    <div>SIM / FRAME<strong>${elements.simulationValue!.textContent}</strong></div>
+    <div>DRAW CALLS / TRIANGLES<strong>${elements.renderValue!.textContent}</strong></div>
+    <div>GPU TIME P95<strong>${elements.gpuValue!.textContent}</strong></div>
+    <div>HEAP / GEOMETRIES / TEXTURES<strong>${elements.memoryValue!.textContent}</strong></div>
+    <div>CAMERA / CANVAS<strong>${elements.resolutionValue!.textContent}</strong></div>
+    <div>ACTIVE EFFECTS<strong>${elements.effectsValue!.textContent}</strong></div>
+    <div>INSTANCE SYNC<strong>${hordeSyncMs.toFixed(2)} ms · ${hordeSyncCount.toLocaleString()} agents</strong></div>`;
   elements.hordeStatus!.textContent = `${elements.hordePattern!.selectedOptions[0]?.textContent ?? 'Horde'} · seed ${elements.hordeSeed!.value.trim() || 'HORDE-01'} · WASD move, LMB shoot visible agents, RMB routes in top-down. No per-agent route search.`;
 }
 
@@ -567,15 +647,21 @@ function updateHordeVisual(): void {
   const horde = hordeSimulation;
   const mesh = hordeVisual;
   if (!horde || !mesh || !stressActive) return;
+  const started = performance.now();
+  let transformChanged = false;
   let colorChanged = false;
-  const tierColors = [0xb98155, 0x9b9a65, 0x71806a];
-  for (let index = 0; index < horde.count; index += 1) {
+  hordeSyncCount = 0;
+  changedMatrixIndices.length = 0;
+  changedColorIndices.length = 0;
+  horde.consumeVisualChanges((index, transform, color) => {
     const tier = horde.tier[index]!;
-    if (hordeRenderTier[index] !== tier) {
+    if (color || hordeRenderTier[index] !== tier) {
       hordeRenderTier[index] = tier;
-      mesh.setColorAt(index, hordeInstance.userData.color.setHex(tierColors[tier]!));
+      mesh.setColorAt(index, hordeInstance.userData.color.setHex(hordeTierColors[tier]!));
+      changedColorIndices.push(index);
       colorChanged = true;
     }
+    if (!transform) return;
     if (horde.alive[index] === 0) {
       hordeInstance.position.set(0, -10_000, 0);
       hordeInstance.scale.setScalar(0);
@@ -587,14 +673,58 @@ function updateHordeVisual(): void {
     }
     hordeInstance.updateMatrix();
     mesh.setMatrixAt(index, hordeInstance.matrix);
+    changedMatrixIndices.push(index);
+    transformChanged = true;
+    hordeSyncCount += 1;
+  });
+  if (transformChanged) {
+    setInstanceUpdateRanges(mesh.instanceMatrix, changedMatrixIndices, 16, horde.count);
+    mesh.instanceMatrix.needsUpdate = true;
   }
-  mesh.instanceMatrix.needsUpdate = true;
-  if (colorChanged && mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  if (colorChanged && mesh.instanceColor) {
+    setInstanceUpdateRanges(mesh.instanceColor, changedColorIndices, 3, horde.count);
+    mesh.instanceColor.needsUpdate = true;
+  }
+  hordeSyncMs = performance.now() - started;
+}
+
+function setInstanceUpdateRanges(
+  attribute: BufferAttribute,
+  indices: number[],
+  stride: number,
+  instanceCount: number,
+): void {
+  attribute.clearUpdateRanges();
+  if (indices.length === 0 || indices.length >= instanceCount * 0.3) return;
+  indices.sort((a, b) => a - b);
+
+  // Use one full upload when sparse ranges would create too many WebGL submissions.
+  let start = indices[0]!;
+  let previous = start;
+  let rangeCount = 0;
+  for (let offset = 1; offset < indices.length; offset += 1) {
+    const index = indices[offset]!;
+    if (index === previous) continue;
+    if (index <= previous + 1) {
+      previous = index;
+      continue;
+    }
+    attribute.addUpdateRange(start * stride, (previous - start + 1) * stride);
+    rangeCount += 1;
+    if (rangeCount >= 64) {
+      attribute.clearUpdateRanges();
+      return;
+    }
+    start = index;
+    previous = index;
+  }
+  attribute.addUpdateRange(start * stride, (previous - start + 1) * stride);
 }
 
 function openHordeLab(): void {
   elements.hordeLab!.removeAttribute('hidden');
   elements.hordeActiveTools!.setAttribute('hidden', '');
+  updateHordeUi();
 }
 
 function closeHordeLab(): void {
@@ -613,6 +743,8 @@ function startHordeTest(): void {
   hordeSimulation = new HordeSimulation(count, seed, pattern, world, new GridNavigator(world));
   hordeRenderTier = new Uint8Array(count);
   hordeRenderTier.fill(255);
+  hordeSyncMs = 0;
+  hordeSyncCount = 0;
   const body = new CylinderGeometry(0.34, 0.48, 1.65, 6, 1);
   const material = new MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true });
   hordeVisual = new InstancedMesh(body, material, count);
@@ -1962,7 +2094,10 @@ let fpsAverage = 0;
 let simulationAccumulator = 0;
 const fixedStep = 1 / 60;
 function animate(now: number): void {
-  const delta = Math.min((now - previousTime) / 1000, 0.1);
+  const frameStartedAt = performance.now();
+  const frameIntervalMs = now - previousTime;
+  const delta = Math.min(frameIntervalMs / 1000, 0.1);
+  frameIntervals.add(frameIntervalMs);
   previousTime = now;
   frameCount += 1;
   if (chopperRotor) chopperRotor.rotation.y += delta * 19;
@@ -2012,6 +2147,7 @@ function animate(now: number): void {
     if (chopper) chopper.position.y = groundY + 3.4 + (2.5 - Math.max(0, takeoffRemaining)) * 3.4;
     if (takeoffRemaining <= 0) finishSuccess();
   }
+  const simulationStartedAt = performance.now();
   simulationAccumulator = Math.min(simulationAccumulator + delta, fixedStep * 8);
   while (simulationAccumulator >= fixedStep) {
     if (stressActive && hordeSimulation) {
@@ -2084,6 +2220,7 @@ function animate(now: number): void {
     }
     simulationAccumulator -= fixedStep;
   }
+  simulationFrameTimes.add(performance.now() - simulationStartedAt);
   if (wasAlive && !combat.alive) {
     finishDeath();
   }
@@ -2127,7 +2264,10 @@ function animate(now: number): void {
       updateEnemyHover(pointerX, pointerY, canvas!.matches(':hover'));
     }
   }
+  pollGpuFrameQueries();
+  const gpuQuery = beginGpuFrameQuery();
   renderer.render(scene, camera);
+  finishGpuFrameQuery(gpuQuery);
 
   sampleTime += delta;
   sampleFrames += 1;
@@ -2135,7 +2275,7 @@ function animate(now: number): void {
     const fps = sampleFrames / sampleTime;
     fpsAverage = fpsAverage === 0 ? fps : fpsAverage * 0.58 + fps * 0.42;
     elements.fpsValue!.innerHTML = `${Math.round(fpsAverage)} <small>FPS</small>`;
-    elements.frameValue!.innerHTML = `${(1000 / Math.max(1, fpsAverage)).toFixed(1)} <small>MS</small>`;
+    elements.frameValue!.innerHTML = `${frameIntervals.percentile95().toFixed(1)} <small>MS</small>`;
     sampleFrames = 0;
     sampleTime = 0;
   }
@@ -2146,6 +2286,7 @@ function animate(now: number): void {
   }
   if (now - lastUiTime > 120) {
     updateCombatUi();
+    updateRenderDiagnosticsUi();
     if (cameraRig.mode === 'third-person') renderControls();
     elements.entityValue!.textContent = String(
       world.objectCount +
@@ -2153,10 +2294,11 @@ function animate(now: number): void {
         lootGroup.children.length +
         1,
     );
-    if (stressActive) updateHordeUi();
+    if (stressActive && !elements.hordeLab!.hasAttribute('hidden')) updateHordeUi();
     updateNavigationTelemetry();
     lastUiTime = now;
   }
+  jsFrameTimes.add(performance.now() - frameStartedAt);
   requestAnimationFrame(animate);
 }
 

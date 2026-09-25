@@ -28,6 +28,8 @@ const attackInterval = 1.3;
 const attackDamage = 8;
 const cellSize = 4;
 const maximumNeighbors = 12;
+const transformChanged = 1;
+const colorChanged = 2;
 
 /**
  * A benchmark-only horde with stable array-index identity. LOD only changes update cadence;
@@ -46,6 +48,8 @@ export class HordeSimulation {
   readonly attacks: Uint16Array;
   private readonly cooldown: Float32Array;
   private readonly tierAccumulator: Float32Array;
+  private readonly visualChangeFlags: Uint8Array;
+  private pendingVisualChanges: number[] = [];
   private readonly nextInCell: Int32Array;
   private readonly cellHeads: Int32Array;
   private readonly gridWidth: number;
@@ -81,6 +85,7 @@ export class HordeSimulation {
     this.attacks = new Uint16Array(count);
     this.cooldown = new Float32Array(count);
     this.tierAccumulator = new Float32Array(count);
+    this.visualChangeFlags = new Uint8Array(count);
     this.nextInCell = new Int32Array(count);
     this.gridWidth = Math.ceil(world.size / cellSize);
     this.gridOrigin = -world.size / 2;
@@ -99,6 +104,8 @@ export class HordeSimulation {
   }
 
   reset(seed: string, pattern: HordeSpawnPattern): void {
+    this.pendingVisualChanges.length = 0;
+    this.visualChangeFlags.fill(0);
     const random = createRandom(seed.trim() || 'HORDE-01');
     const columns = Math.ceil(Math.sqrt(this.count));
     for (let index = 0; index < this.count; index += 1) {
@@ -115,6 +122,7 @@ export class HordeSimulation {
       this.attacks[index] = 0;
       this.cooldown[index] = 0.25 + (index % 11) * 0.07;
       this.tierAccumulator[index] = 0;
+      this.markVisualChanged(index, transformChanged | colorChanged);
     }
     this.playerHealth = 100;
     this.totalPlayerHits = 0;
@@ -147,7 +155,17 @@ export class HordeSimulation {
       return false;
     this.health[index] = Math.max(0, this.health[index]! - damage);
     if (this.health[index] === 0) this.alive[index] = 0;
+    this.markVisualChanged(index, transformChanged);
     return true;
+  }
+
+  consumeVisualChanges(visit: (index: number, transform: boolean, color: boolean) => void): void {
+    for (const index of this.pendingVisualChanges) {
+      const flags = this.visualChangeFlags[index]!;
+      visit(index, (flags & transformChanged) !== 0, (flags & colorChanged) !== 0);
+      this.visualChangeFlags[index] = 0;
+    }
+    this.pendingVisualChanges.length = 0;
   }
 
   findNearestAgent(x: number, z: number, radius: number): number | undefined {
@@ -199,7 +217,13 @@ export class HordeSimulation {
       const dx = playerX - this.x[index]!;
       const dz = playerZ - this.z[index]!;
       const distanceSquared = dx * dx + dz * dz;
-      if (refreshTiers) this.tier[index] = this.classifyTier(distanceSquared);
+      if (refreshTiers) {
+        const nextTier = this.classifyTier(distanceSquared);
+        if (this.tier[index] !== nextTier) {
+          this.tier[index] = nextTier;
+          this.markVisualChanged(index, colorChanged);
+        }
+      }
       const tier = this.tier[index]! as HordeTier;
       if (tier === 0) counts.near += 1;
       else if (tier === 1) counts.mid += 1;
@@ -379,6 +403,12 @@ export class HordeSimulation {
     this.y[index] = terrainHeightAt(this.world.seed, nextX, nextZ);
     this.z[index] = nextZ;
     this.facing[index] = Math.atan2(-directionX, -directionZ);
+    this.markVisualChanged(index, transformChanged);
+  }
+
+  private markVisualChanged(index: number, flags: number): void {
+    if (this.visualChangeFlags[index] === 0) this.pendingVisualChanges.push(index);
+    this.visualChangeFlags[index] = this.visualChangeFlags[index]! | flags;
   }
 
   private separationVector(index: number): { x: number; z: number } {

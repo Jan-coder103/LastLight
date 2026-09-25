@@ -18,7 +18,7 @@
         <div class="brand-lockup">
           <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
           <div>
-            <p class="eyebrow">FIELD TEST 06 <span>·</span> HORDE SIMULATION</p>
+            <p class="eyebrow">FIELD TEST 07 <span>·</span> PERFORMANCE PASS</p>
             <h1>LAST LIGHT</h1>
           </div>
         </div>
@@ -170,7 +170,7 @@
           <span class="lock-icon" aria-hidden="true">⌖</span
           ><span id="lock-label">CAPTURE MOUSE</span><span class="button-key">OPTIONAL</span>
         </button>
-        <p class="footer-note">PHASE 06 <span>—</span> HORDE SIMULATION</p>
+        <p class="footer-note">PHASE 07 <span>—</span> PERFORMANCE PASS</p>
       </footer>
 
       <aside class="diagnostics" aria-label="Development diagnostics">
@@ -184,8 +184,15 @@
             <span>FRAME RATE</span><strong id="fps-value">— <small>FPS</small></strong>
           </div>
           <div>
-            <span>FRAME TIME</span><strong id="frame-value">— <small>MS</small></strong>
+            <span>FRAME TIME P95</span><strong id="frame-value">— <small>MS</small></strong>
           </div>
+          <div><span>JS FRAME P95</span><strong id="cpu-frame-value">—</strong></div>
+          <div><span>SIM / FRAME</span><strong id="simulation-value">—</strong></div>
+          <div><span>DRAW CALLS / TRIANGLES</span><strong id="render-value">—</strong></div>
+          <div><span>GPU TIME P95</span><strong id="gpu-value">—</strong></div>
+          <div><span>HEAP / GEOMETRIES / TEXTURES</span><strong id="memory-value">—</strong></div>
+          <div><span>CAMERA / CANVAS</span><strong id="resolution-value">—</strong></div>
+          <div><span>ACTIVE EFFECTS</span><strong id="effects-value">—</strong></div>
           <div><span>WORLD OBJECTS</span><strong id="entity-value">—</strong></div>
           <div>
             <span>PATH MS / MAX</span><strong id="navigation-value">— / — <small>MS</small></strong>
@@ -197,7 +204,7 @@
       <section id="horde-lab" class="horde-lab" aria-label="Horde simulation lab" hidden>
         <div class="horde-lab-heading">
           <div>
-            <span class="eyebrow">PHASE 06 / STRESS SCENE</span>
+            <span class="eyebrow">PHASE 07 / STRESS PROFILE</span>
             <h2>HORDE LAB</h2>
           </div>
           <button

@@ -1307,9 +1307,6 @@ kbd {
     top: 12px;
     right: 12px;
   }
-  #game.is-horde-test .diagnostics {
-    display: none;
-  }
   .diag-heading {
     gap: 6px;
     margin-bottom: 8px;
