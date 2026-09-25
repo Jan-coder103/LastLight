@@ -4,7 +4,7 @@ Updated: 2026-09-25
 
 ## Current position
 
-Phase 1 implementation is ready for the owner playtest. The phase is **Awaiting owner playtest**; phase 2 has not started. This project is on branch `main`. The verified implementation and handoff commit references will be filled in after the commits are created.
+Phase 1 implementation is ready for the owner playtest. The phase is **Awaiting owner playtest**; phase 2 has not started. This project is on branch `main`. The implementation is committed as `03b2736` (`Build phase 1 exploration prototype`).
 
 ## Read first
 
