@@ -86,13 +86,16 @@ export class PlayerController {
   readonly velocity = new Vector3();
   private readonly keys = new Set<string>();
   private readonly path: NavPoint[] = [];
+  private readonly cursorWorldPoint = new Vector3();
   private world: WorldData;
   private facing = 0;
   private currentMode: CameraMode = 'third-person';
   private currentCameraYaw = 0;
   private dashRemaining = 0;
   private readonly dashDirection = new Vector3();
+  private hasCursorWorldPoint = false;
   private readonly lastMoveDirection = new Vector3();
+  private aimFacingRemaining = 0;
   private hasMoved = false;
   private enabled = true;
   private onViewToggle: () => void;
@@ -122,7 +125,9 @@ export class PlayerController {
     this.path.length = 0;
     this.dashRemaining = 0;
     this.lastMoveDirection.set(0, 0, 0);
+    this.aimFacingRemaining = 0;
     this.hasMoved = false;
+    this.hasCursorWorldPoint = false;
     this.setPosition(world.spawn.x, world.spawn.z);
   }
 
@@ -150,10 +155,30 @@ export class PlayerController {
     return this.dashRemaining > 0;
   }
 
+  get dashDirectionVector(): Vector3 {
+    return this.dashDirection.clone();
+  }
+
+  setCursorWorldPoint(x: number, z: number): void {
+    this.cursorWorldPoint.set(x, 0, z);
+    this.hasCursorWorldPoint = true;
+  }
+
+  faceToward(x: number, z: number): void {
+    const directionX = x - this.position.x;
+    const directionZ = z - this.position.z;
+    if (directionX * directionX + directionZ * directionZ < 0.001) return;
+    this.facing = Math.atan2(-directionX, -directionZ);
+    this.aimFacingRemaining = 0.45;
+    this.visual.rotation.y = this.facing;
+  }
+
   update(deltaSeconds: number, mode: CameraMode, cameraYaw: number, speedMultiplier = 1): void {
     const delta = Math.min(deltaSeconds, 0.05);
     this.currentMode = mode;
     this.currentCameraYaw = cameraYaw;
+    const keepAimFacing = mode === 'top-down' && this.aimFacingRemaining > 0;
+    this.aimFacingRemaining = Math.max(0, this.aimFacingRemaining - delta);
     this.velocity.set(0, 0, 0);
 
     if (this.enabled && this.dashRemaining > 0) {
@@ -169,8 +194,10 @@ export class PlayerController {
         this.moveBy(this.velocity.x * delta, this.velocity.z * delta);
         this.lastMoveDirection.copy(direction);
         this.hasMoved = true;
-        const facing = Math.atan2(-direction.x, -direction.z);
-        this.facing = angleTowards(this.facing, facing, 1 - Math.exp(-12 * delta));
+        if (!keepAimFacing) {
+          const facing = Math.atan2(-direction.x, -direction.z);
+          this.facing = angleTowards(this.facing, facing, 1 - Math.exp(-12 * delta));
+        }
       }
     }
 
@@ -181,9 +208,17 @@ export class PlayerController {
   }
 
   startDash(): void {
-    if (this.hasMoved) {
+    this.dashDirection.set(0, 0, 0);
+    if (this.currentMode === 'top-down' && this.hasCursorWorldPoint) {
+      this.dashDirection.set(
+        this.cursorWorldPoint.x - this.position.x,
+        0,
+        this.cursorWorldPoint.z - this.position.z,
+      );
+    } else if (this.hasMoved) {
       this.dashDirection.copy(this.lastMoveDirection);
-    } else {
+    }
+    if (this.dashDirection.lengthSq() < 0.01) {
       if (this.currentMode === 'third-person') {
         this.dashDirection.set(
           -Math.sin(this.currentCameraYaw),
@@ -195,6 +230,10 @@ export class PlayerController {
       }
     }
     this.dashDirection.normalize();
+    if (this.currentMode === 'top-down') {
+      this.facing = Math.atan2(-this.dashDirection.x, -this.dashDirection.z);
+      this.visual.rotation.y = this.facing;
+    }
     this.dashRemaining = dashDuration;
   }
 

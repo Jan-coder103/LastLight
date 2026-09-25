@@ -39,7 +39,7 @@ export class CameraRig {
   readonly camera: PerspectiveCamera;
   mode: CameraMode = 'third-person';
   yaw = 0;
-  pitch = 0.37;
+  pitch = 0.2;
   currentTarget = new Vector3();
   private world: WorldData;
   private readonly canvas: HTMLCanvasElement;
@@ -77,7 +77,7 @@ export class CameraRig {
   lookBy(deltaX: number, deltaY: number): void {
     if (this.mode !== 'third-person') return;
     this.yaw += deltaX * 0.0028;
-    this.pitch = Math.max(0.1, Math.min(0.82, this.pitch + deltaY * 0.0022));
+    this.pitch = Math.max(-0.62, Math.min(0.95, this.pitch + deltaY * 0.0022));
   }
 
   update(deltaSeconds: number, playerPosition: Vector3): void {
@@ -102,7 +102,7 @@ export class CameraRig {
     this.transition = undefined;
     this.mode = 'third-person';
     this.yaw = 0;
-    this.pitch = 0.37;
+    this.pitch = 0.2;
     this.setDestination(playerPosition);
     this.camera.position.copy(this.idealPosition);
     this.currentTarget.copy(this.idealTarget);
@@ -111,18 +111,27 @@ export class CameraRig {
 
   private setDestination(playerPosition: Vector3): void {
     const terrainY = playerPosition.y;
-    this.idealTarget.set(playerPosition.x, terrainY + 1.35, playerPosition.z);
     if (this.mode === 'top-down') {
+      this.idealTarget.set(playerPosition.x, terrainY + 1.35, playerPosition.z);
       this.idealPosition.set(playerPosition.x, terrainY + 48, playerPosition.z + 28);
       return;
     }
     const distance = 9.3;
-    const horizontal = Math.cos(this.pitch) * distance;
-    const vertical = Math.sin(this.pitch) * distance;
+    const shoulderOffset = 0.95;
+    const aimLead = 1.6;
+    const horizontalDistance = distance + aimLead;
+    const sine = Math.sin(this.yaw);
+    const cosine = Math.cos(this.yaw);
+    const targetY = terrainY + 3.2 - Math.tan(this.pitch) * horizontalDistance;
+    this.idealTarget.set(
+      playerPosition.x - sine * aimLead,
+      targetY,
+      playerPosition.z - cosine * aimLead,
+    );
     this.idealPosition.set(
-      playerPosition.x - Math.sin(this.yaw) * horizontal,
-      terrainY + 1.35 + vertical,
-      playerPosition.z + Math.cos(this.yaw) * horizontal,
+      playerPosition.x - sine * distance + cosine * shoulderOffset,
+      terrainY + 3.2,
+      playerPosition.z + cosine * distance + sine * shoulderOffset,
     );
     this.constrainToWorld(this.idealTarget, this.idealPosition);
   }

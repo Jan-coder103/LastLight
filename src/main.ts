@@ -1,6 +1,7 @@
 import {
   AmbientLight,
   ACESFilmicToneMapping,
+  ArrowHelper,
   BufferGeometry,
   CircleGeometry,
   Color,
@@ -14,6 +15,7 @@ import {
   PCFShadowMap,
   PerspectiveCamera,
   Raycaster,
+  RingGeometry,
   Scene,
   SphereGeometry,
   Vector2,
@@ -120,6 +122,11 @@ let pointerStart: { id: number; x: number; y: number } | undefined;
 let wasAlive = combat.alive;
 let lastUiTime = 0;
 let routeRefresh = 0;
+let hoverRefresh = 0;
+let navigationGoal: { x: number; z: number } | undefined;
+let pointerX = window.innerWidth / 2;
+let pointerY = window.innerHeight / 2;
+let observedDash = false;
 
 function updateModeUi(): void {
   const label = cameraRig.mode === 'third-person' ? 'THIRD PERSON' : 'TOP-DOWN';
@@ -135,7 +142,9 @@ function switchView(): void {
   if (cameraRig.mode !== 'third-person') releaseLookDrag();
   canvas?.focus({ preventScroll: true });
   updateModeUi();
-  updateRouteLine(true);
+  if (cameraRig.mode === 'top-down' && navigationGoal) replanNavigationGoal();
+  else updateRouteLine(true);
+  if (cameraRig.mode === 'top-down') updateTopDownDashAim(pointerX, pointerY);
 }
 
 function releaseMouseCapture(): void {
@@ -270,6 +279,8 @@ function setSeed(seed: string): void {
   scene.add(worldGroup);
   navigator = new GridNavigator(world);
   combat = new CombatSimulation(world, navigator);
+  navigationGoal = undefined;
+  observedDash = false;
   wasAlive = true;
   player.setWorld(world);
   player.setEnabled(true);
@@ -345,6 +356,31 @@ function addShockEffect(): void {
   timedEffects.push({ object: pulse, remaining: 0.22 });
 }
 
+function addDashIndicator(): void {
+  const direction = player.dashDirectionVector;
+  direction.y = 0;
+  if (direction.lengthSq() < 0.001) return;
+  direction.normalize();
+  const indicator = new Group();
+  indicator.position.copy(player.position);
+  const ring = new Mesh(
+    new RingGeometry(0.42, 0.52, 32),
+    new MeshBasicMaterial({
+      color: '#f1d37a',
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+      depthTest: false,
+    }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.14;
+  const arrow = new ArrowHelper(direction, new Vector3(0, 0.2, 0), 3.8, '#f1d37a', 0.7, 0.42);
+  indicator.add(ring, arrow);
+  scene.add(indicator);
+  timedEffects.push({ object: indicator, remaining: 0.42 });
+}
+
 function animateEffects(delta: number): void {
   for (let index = timedEffects.length - 1; index >= 0; index -= 1) {
     const effect = timedEffects[index];
@@ -363,7 +399,10 @@ player = new PlayerController(
     if (!combat.activateAbility(slot, player.position)) return;
     if (slot === 2) addShockEffect();
   },
-  () => combat.tryDash(),
+  () => {
+    if (cameraRig.mode === 'top-down') updateTopDownDashAim(pointerX, pointerY);
+    return combat.tryDash();
+  },
 );
 scene.add(player.visual);
 cameraRig.reset(player.position);
@@ -379,6 +418,8 @@ elements.restartButton!.addEventListener('click', () => {
   player.setPosition(world.spawn.x, world.spawn.z);
   player.setEnabled(true);
   cameraRig.reset(player.position);
+  navigationGoal = undefined;
+  observedDash = false;
   wasAlive = true;
   elements.deathOverlay!.setAttribute('hidden', '');
   createZombieViews();
@@ -421,6 +462,20 @@ function pointToNdc(event: PointerEvent | MouseEvent): Vector2 {
     : pointerNdc(event.clientX, event.clientY);
 }
 
+function terrainPointAt(clientX: number, clientY: number): Vector3 | undefined {
+  const terrain = worldGroup.getObjectByName('Seeded terrain');
+  if (!(terrain instanceof Mesh)) return undefined;
+  const raycaster = new Raycaster();
+  raycaster.setFromCamera(pointerNdc(clientX, clientY), camera);
+  return raycaster.intersectObject(terrain, false)[0]?.point;
+}
+
+function updateTopDownDashAim(clientX: number, clientY: number): void {
+  if (cameraRig.mode !== 'top-down') return;
+  const point = terrainPointAt(clientX, clientY);
+  if (point) player.setCursorWorldPoint(point.x, point.z);
+}
+
 function findZombieId(object: Object3D | undefined): string | undefined {
   let current = object;
   while (current) {
@@ -430,20 +485,44 @@ function findZombieId(object: Object3D | undefined): string | undefined {
   return undefined;
 }
 
+function firstWorldOrLivingHit(raycaster: Raycaster) {
+  return raycaster.intersectObjects([worldGroup, zombieGroup], true).find((hit) => {
+    const zombieId = findZombieId(hit.object);
+    return !zombieId || combat.zombies.some((zombie) => zombie.id === zombieId && zombie.alive);
+  });
+}
+
+function updateEnemyHover(clientX: number, clientY: number, overScene: boolean): void {
+  const pointerLocked = document.pointerLockElement === canvas;
+  if (!overScene && !pointerLocked) {
+    canvas!.classList.remove('is-enemy-hovering');
+    elements.reticle!.classList.remove('enemy-hover');
+    return;
+  }
+  const ndc = pointerLocked ? new Vector2(0, 0) : pointerNdc(clientX, clientY);
+  const raycaster = new Raycaster();
+  raycaster.setFromCamera(ndc, camera);
+  const hit = firstWorldOrLivingHit(raycaster);
+  const hoveringEnemy = Boolean(findZombieId(hit?.object));
+  canvas!.classList.toggle('is-enemy-hovering', hoveringEnemy);
+  elements.reticle!.classList.toggle('enemy-hover', hoveringEnemy);
+}
+
 function fireAt(event: PointerEvent): void {
   if (!combat.alive) return;
   const ndc = pointToNdc(event);
   const viewRay = new Raycaster();
   viewRay.setFromCamera(ndc, camera);
-  const aimHit = viewRay.intersectObjects([worldGroup, zombieGroup], true)[0];
+  const aimHit = firstWorldOrLivingHit(viewRay);
   const aimPoint = aimHit?.point ?? viewRay.ray.at(70, new Vector3());
+  if (cameraRig.mode === 'top-down') player.faceToward(aimPoint.x, aimPoint.z);
   const muzzle = player.muzzlePosition();
   const shotDirection = aimPoint.clone().sub(muzzle);
   const shotLength = Math.min(90, shotDirection.length());
   if (shotLength < 0.001) return;
   shotDirection.normalize();
   const weaponRay = new Raycaster(muzzle, shotDirection, 0, shotLength + 0.05);
-  const weaponHit = weaponRay.intersectObjects([worldGroup, zombieGroup], true)[0];
+  const weaponHit = firstWorldOrLivingHit(weaponRay);
   const hitPoint = weaponHit?.point ?? aimPoint;
   const targetId = findZombieId(weaponHit?.object);
   if (!combat.tryFire(targetId)) return;
@@ -457,11 +536,10 @@ function fireAt(event: PointerEvent): void {
 
 function moveToPointer(event: MouseEvent): void {
   if (cameraRig.mode !== 'top-down' || !combat.alive) return;
-  const terrain = worldGroup.getObjectByName('Seeded terrain');
-  if (!(terrain instanceof Mesh)) return;
-  const raycaster = new Raycaster();
-  raycaster.setFromCamera(pointerNdc(event.clientX, event.clientY), camera);
-  const destination = raycaster.intersectObject(terrain, false)[0]?.point;
+  pointerX = event.clientX;
+  pointerY = event.clientY;
+  updateTopDownDashAim(pointerX, pointerY);
+  const destination = terrainPointAt(event.clientX, event.clientY);
   if (!destination) return;
   const path = navigator.findPath(
     player.position.x,
@@ -470,9 +548,24 @@ function moveToPointer(event: MouseEvent): void {
     destination.z,
   );
   player.setNavigationPath(path);
+  navigationGoal = path.length > 0 ? { x: destination.x, z: destination.z } : undefined;
   routeRefresh = 1;
   updateRouteLine(true);
   if (path.length === 0) elements.seedHint!.textContent = 'No nearby clear route to that point.';
+}
+
+function replanNavigationGoal(): void {
+  if (!navigationGoal) return;
+  const path = navigator.findPath(
+    player.position.x,
+    player.position.z,
+    navigationGoal.x,
+    navigationGoal.z,
+  );
+  player.setNavigationPath(path);
+  if (path.length === 0) navigationGoal = undefined;
+  routeRefresh = 1;
+  updateRouteLine(true);
 }
 
 canvas.addEventListener('contextmenu', (event) => {
@@ -485,14 +578,24 @@ document.addEventListener('pointerlockerror', () => {
     'Mouse capture was blocked. Drag on the open scene to look around instead.';
 });
 document.addEventListener('mousemove', (event) => {
+  pointerX = event.clientX;
+  pointerY = event.clientY;
   if (document.pointerLockElement === canvas) {
     cameraRig.lookBy(event.movementX, event.movementY);
+    updateEnemyHover(window.innerWidth / 2, window.innerHeight / 2, true);
     return;
   }
   if (cameraRig.mode === 'third-person') {
     elements.reticle!.style.left = `${event.clientX}px`;
     elements.reticle!.style.top = `${event.clientY}px`;
+  } else {
+    updateTopDownDashAim(event.clientX, event.clientY);
   }
+  updateEnemyHover(
+    event.clientX,
+    event.clientY,
+    event.target === canvas || canvas.contains(event.target as Node),
+  );
 });
 canvas.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
@@ -569,6 +672,8 @@ function animate(now: number): void {
   frameCount += 1;
   simulationAccumulator = Math.min(simulationAccumulator + delta, fixedStep * 8);
   while (simulationAccumulator >= fixedStep) {
+    if (player.isDashing && !observedDash && cameraRig.mode === 'top-down') addDashIndicator();
+    const wasDashing = player.isDashing;
     combat.tick(fixedStep, player.position);
     player.update(
       fixedStep,
@@ -576,6 +681,11 @@ function animate(now: number): void {
       cameraRig.yaw,
       combat.adrenalineRemaining > 0 ? 1.5 : 1,
     );
+    if (wasDashing && !player.isDashing) replanNavigationGoal();
+    observedDash = player.isDashing;
+    if (cameraRig.mode === 'top-down' && !player.isDashing && player.navigationPath.length === 0) {
+      navigationGoal = undefined;
+    }
     simulationAccumulator -= fixedStep;
   }
   if (wasAlive && !combat.alive) {
@@ -593,6 +703,15 @@ function animate(now: number): void {
   animateEffects(delta);
   routeRefresh += delta;
   updateRouteLine();
+  hoverRefresh += delta;
+  if (hoverRefresh >= 0.1) {
+    hoverRefresh = 0;
+    if (document.pointerLockElement === canvas) {
+      updateEnemyHover(window.innerWidth / 2, window.innerHeight / 2, true);
+    } else {
+      updateEnemyHover(pointerX, pointerY, canvas!.matches(':hover'));
+    }
+  }
   renderer.render(scene, camera);
 
   sampleTime += delta;
