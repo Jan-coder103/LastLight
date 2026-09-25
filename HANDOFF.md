@@ -4,7 +4,7 @@ Updated: 2026-09-25
 
 ## Current position
 
-Phases 1–5 are **Accepted**. On 2026-09-25 the owner reported, “Playtest 5 - all fine! I tested and everything works,” and authorized Phase 6. Phase 6 large-horde simulation is implemented and verified; it is awaiting the owner’s threat-readability playtest. The current Phase 6 commit is recorded in the tracker.
+Phases 1–5 are **Accepted**. On 2026-09-25 the owner reported, “Playtest 5 - all fine! I tested and everything works,” and authorized Phase 6. Phase 6 large-horde simulation is implemented and verified in commit `13093c8`; it is awaiting the owner’s threat-readability playtest.
 
 ## Read first
 
