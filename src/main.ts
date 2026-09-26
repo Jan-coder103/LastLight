@@ -33,6 +33,9 @@ import {
 import type { AbilitySlot } from './input/controlMap';
 import { installAssetDocumentOverride } from './assets/catalog';
 import { readStoredAssetDocument, type AssetDocument } from './assets/assetDocument';
+import { buildCamp } from './camp/buildCamp';
+import { buyCampItem, campPrices, sellCampItem } from './camp/campEconomy';
+import { campEntrances, campServices, createCampWorld } from './camp/campWorld';
 import { CameraRig } from './camera/CameraRig';
 import { CombatSimulation, type ZombieState } from './game/CombatSimulation';
 import { benchmarkCountsForHorde, benchmarkHorde } from './game/HordeBenchmark';
@@ -163,6 +166,8 @@ const elements = {
   guideDistance: document.querySelector<HTMLElement>('#guide-distance'),
   guideAction: document.querySelector<HTMLElement>('#guide-action'),
   baseOverlay: document.querySelector<HTMLElement>('#base-overlay'),
+  baseCloseButton: document.querySelector<HTMLButtonElement>('#base-close-button'),
+  baseMenuButton: document.querySelector<HTMLButtonElement>('#base-menu-button'),
   baseMessage: document.querySelector<HTMLElement>('#base-message'),
   runCount: document.querySelector<HTMLElement>('#run-count'),
   bankGear: document.querySelector<HTMLElement>('#bank-gear'),
@@ -172,6 +177,8 @@ const elements = {
   harnessStatus: document.querySelector<HTMLElement>('#harness-status'),
   buySuppliesButton: document.querySelector<HTMLButtonElement>('#buy-supplies-button'),
   buyGearButton: document.querySelector<HTMLButtonElement>('#buy-gear-button'),
+  sellSuppliesButton: document.querySelector<HTMLButtonElement>('#sell-supplies-button'),
+  sellGearButton: document.querySelector<HTMLButtonElement>('#sell-gear-button'),
   buyCargoButton: document.querySelector<HTMLButtonElement>('#buy-cargo-button'),
   startRunButton: document.querySelector<HTMLButtonElement>('#start-run-button'),
   arrivalOverlay: document.querySelector<HTMLElement>('#arrival-overlay'),
@@ -204,8 +211,14 @@ for (const [key, element] of Object.entries(elements)) {
 let world: WorldData = generateWorld(elements.seedInput!.value);
 let worldGroup = buildWorld(world);
 scene.add(worldGroup);
-let navigator = new GridNavigator(world);
-let combatNavigator = new GridNavigator(world);
+worldGroup.visible = false;
+const campWorld = createCampWorld();
+const campGroup = buildCamp();
+scene.add(campGroup);
+const campNavigator = new GridNavigator(campWorld);
+let fieldNavigator = new GridNavigator(world);
+let navigator = campNavigator;
+let combatNavigator = fieldNavigator;
 let combat = new CombatSimulation(world, combatNavigator);
 let zombieGroup = new Group();
 zombieGroup.name = 'Hostiles';
@@ -216,7 +229,15 @@ let player!: PlayerController;
 
 type GamePhase =
   'base' | 'arrival' | 'disembarking' | 'active' | 'extracting' | 'takeoff' | 'result';
-type InteractiveKind = 'cache' | 'drop' | 'extraction' | 'building-door';
+type InteractiveKind =
+  | 'cache'
+  | 'drop'
+  | 'extraction'
+  | 'building-door'
+  | 'camp-shop'
+  | 'camp-storage'
+  | 'camp-operations'
+  | 'camp-departure';
 
 interface InteractiveView {
   id: string;
@@ -253,6 +274,16 @@ interface InteriorSession {
   outdoorZombieViews: Map<string, Group>;
 }
 
+interface CampInteriorSession {
+  entrance: BuildingEntrance;
+  layout: InteriorLayout;
+  world: WorldData;
+  navigator: GridNavigator;
+  group: Group;
+  views: Map<string, InteractiveView>;
+  returnPosition: Vector3;
+}
+
 let gamePhase: GamePhase = 'base';
 let stressActive = false;
 let hordeSimulation: HordeSimulation | undefined;
@@ -279,7 +310,9 @@ let lootGroup = new Group();
 lootGroup.name = 'Run loot';
 scene.add(lootGroup);
 const interactiveViews = new Map<string, InteractiveView>();
+const campInteractiveViews = new Map<string, InteractiveView>();
 let interiorSession: InteriorSession | undefined;
+let campInteriorSession: CampInteriorSession | undefined;
 const interiorHostiles = new Map<string, ZombieState[]>();
 const interiorLootRemaining = new Map<string, number>();
 let cacheSites: CacheSite[] = [];
@@ -332,7 +365,7 @@ function updateModeUi(): void {
 }
 
 function switchView(): void {
-  if (gamePhase !== 'active' && !stressActive) return;
+  if (gamePhase !== 'active' && gamePhase !== 'base' && !stressActive) return;
   cameraRig.switchMode(player.position);
   elements.hordeCamera!.value = cameraRig.mode;
   autoAttackTargetId = undefined;
@@ -378,37 +411,53 @@ function row(keys: string, action: string): string {
 
 function renderControls(): void {
   const rows =
-    cameraRig.mode === 'third-person'
-      ? [
-          row('W A S D', 'Move · camera-relative'),
-          row('DRAG', 'Look / aim'),
-          row('LMB', 'Fire rifle'),
-          row(
-            'Q',
-            `Dash${combat.dashCooldownRemaining > 0 ? ` · ${combat.dashCooldownRemaining.toFixed(1)}s` : ''}`,
-          ),
-          row('1', 'Field dressing'),
-          row('2', 'Shock pulse'),
-          row('3', 'Adrenaline'),
-          row('X', 'Use carried supply'),
-          row('F', 'Interact / enter / exit'),
-          row('TAB', 'Switch camera'),
-        ]
-      : [
-          row('RMB', 'Click to move'),
-          row('ESC', 'Cancel route'),
-          row('LMB', 'Fire at cursor'),
-          row(
-            'Q',
-            `Dash${combat.dashCooldownRemaining > 0 ? ` · ${combat.dashCooldownRemaining.toFixed(1)}s` : ''}`,
-          ),
-          row('W', 'Field dressing'),
-          row('E', 'Shock pulse'),
-          row('R', 'Adrenaline'),
-          row('X', 'Use carried supply'),
-          row('F', 'Interact / enter / exit'),
-          row('TAB', 'Switch camera'),
-        ];
+    gamePhase === 'base'
+      ? cameraRig.mode === 'third-person'
+        ? [
+            row('W A S D', 'Walk around camp'),
+            row('DRAG', 'Look around'),
+            row('F', 'Use nearby service / door'),
+            row('M', 'Open camp terminal'),
+            row('TAB', 'Switch camera'),
+          ]
+        : [
+            row('RMB', 'Click to move'),
+            row('ESC', 'Cancel route'),
+            row('F', 'Use nearby service / door'),
+            row('M', 'Open camp terminal'),
+            row('TAB', 'Switch camera'),
+          ]
+      : cameraRig.mode === 'third-person'
+        ? [
+            row('W A S D', 'Move · camera-relative'),
+            row('DRAG', 'Look / aim'),
+            row('LMB', 'Fire rifle'),
+            row(
+              'Q',
+              `Dash${combat.dashCooldownRemaining > 0 ? ` · ${combat.dashCooldownRemaining.toFixed(1)}s` : ''}`,
+            ),
+            row('1', 'Field dressing'),
+            row('2', 'Shock pulse'),
+            row('3', 'Adrenaline'),
+            row('X', 'Use carried supply'),
+            row('F', 'Interact / enter / exit'),
+            row('TAB', 'Switch camera'),
+          ]
+        : [
+            row('RMB', 'Click to move'),
+            row('ESC', 'Cancel route'),
+            row('LMB', 'Fire at cursor'),
+            row(
+              'Q',
+              `Dash${combat.dashCooldownRemaining > 0 ? ` · ${combat.dashCooldownRemaining.toFixed(1)}s` : ''}`,
+            ),
+            row('W', 'Field dressing'),
+            row('E', 'Shock pulse'),
+            row('R', 'Adrenaline'),
+            row('X', 'Use carried supply'),
+            row('F', 'Interact / enter / exit'),
+            row('TAB', 'Switch camera'),
+          ];
   elements.controlsContent!.innerHTML = rows.join('');
 }
 
@@ -421,7 +470,37 @@ function updateCombatUi(): void {
     elements.combatMessage!.textContent = 'Horde stress scene running.';
     return;
   }
+  if (gamePhase === 'base') {
+    const hudHeading = document.querySelector('.combat-hud-top span');
+    const threatLabel = document.querySelector('.combat-hud .field-line span');
+    const stockLabel = document.querySelector('.cargo-line span');
+    const controlsHeading = document.querySelector('.controls-card .card-heading span');
+    if (hudHeading) hudHeading.textContent = 'CAMP STATUS';
+    if (threatLabel) threatLabel.textContent = 'THREAT';
+    if (stockLabel) stockLabel.textContent = 'CAMP STOCK';
+    if (controlsHeading) controlsHeading.textContent = 'CAMP CONTROLS';
+    elements.hostileCount!.textContent = 'SAFE';
+    elements.healthValue!.textContent = `${Math.ceil(combat.health)} / ${combat.maxHealth}`;
+    elements.healthFill!.style.width = `${Math.max(0, Math.min(100, combat.health))}%`;
+    elements.combatMessage!.textContent = campInteriorSession
+      ? 'Safe-zone building · find the lit marker to return outside.'
+      : 'Wayfarer Camp · move between services, or open the camp terminal with M.';
+    elements.runClock!.textContent = 'CAMP';
+    elements.cargoValue!.textContent = `${saveData.base.gear} G / ${saveData.base.supplies} S`;
+    elements.cargoBreakdown!.textContent = `CR ${saveData.base.money} · FUEL ${saveData.base.fuel}`;
+    elements.abilityStatus!.textContent = '';
+    updateNearbyAction();
+    return;
+  }
   const healthPercent = Math.max(0, Math.min(100, (combat.health / combat.maxHealth) * 100));
+  const hudHeading = document.querySelector('.combat-hud-top span');
+  const threatLabel = document.querySelector('.combat-hud .field-line span');
+  const stockLabel = document.querySelector('.cargo-line span');
+  const controlsHeading = document.querySelector('.controls-card .card-heading span');
+  if (hudHeading) hudHeading.textContent = 'FIELD STATUS';
+  if (threatLabel) threatLabel.textContent = 'HOSTILES';
+  if (stockLabel) stockLabel.textContent = 'CARRIED / CAPACITY';
+  if (controlsHeading) controlsHeading.textContent = 'FIELD CONTROLS';
   elements.hostileCount!.textContent = String(combat.livingZombieCount);
   elements.healthValue!.textContent = `${Math.ceil(combat.health)} / ${combat.maxHealth}`;
   elements.healthFill!.style.width = `${healthPercent}%`;
@@ -459,13 +538,17 @@ function updateBaseUi(): void {
   elements.harnessStatus!.textContent = saveData.cargoUpgrade
     ? `Cargo capacity: ${cargoCapacity(saveData)} units · upgraded`
     : `Cargo capacity: ${cargoCapacity(saveData)} units`;
-  elements.buySuppliesButton!.disabled = saveData.base.money < 35;
-  elements.buyGearButton!.disabled = saveData.base.money < 50;
-  elements.buyCargoButton!.disabled = saveData.cargoUpgrade || saveData.base.money < 90;
+  elements.buySuppliesButton!.disabled = saveData.base.money < campPrices.supplies;
+  elements.buyGearButton!.disabled = saveData.base.money < campPrices.gear;
+  elements.sellSuppliesButton!.disabled = saveData.base.supplies < 1 || saveData.base.money >= 9999;
+  elements.sellGearButton!.disabled = saveData.base.gear < 1 || saveData.base.money >= 9999;
+  elements.buyCargoButton!.disabled =
+    saveData.cargoUpgrade || saveData.base.money < campPrices.cargoUpgrade;
   elements.buyCargoButton!.innerHTML = saveData.cargoUpgrade
     ? 'CARGO HARNESS INSTALLED <span>✓</span>'
     : 'UPGRADE CARGO HARNESS <span>90 CR</span>';
   elements.zoneStatus!.textContent = gamePhase === 'base' ? 'BASE' : 'ENGAGED';
+  elements.baseMenuButton!.hidden = gamePhase !== 'base';
 }
 
 function updateExtractionGuide(): void {
@@ -533,11 +616,18 @@ function updateRouteLine(force = false): void {
   scene.add(routeLine);
 }
 
+function resetCampCamera(): void {
+  cameraRig.reset(player.position);
+  cameraRig.pitch = 0.42;
+  cameraRig.snapTo(player.position);
+}
+
 function setSeed(seed: string): void {
   if (gamePhase !== 'base' || stressActive) {
     elements.seedHint!.textContent = 'Return to camp before changing the world seed.';
     return;
   }
+  if (campInteriorSession) leaveCampBuilding();
   clearRunScene();
   const trimmed = seed.trim().slice(0, 32) || 'RAVEN-07';
   elements.seedInput!.value = trimmed;
@@ -548,26 +638,30 @@ function setSeed(seed: string): void {
 
   world = generateWorld(trimmed);
   worldGroup = buildWorld(world);
+  worldGroup.visible = false;
   scene.add(worldGroup);
-  navigator = new GridNavigator(world);
-  combatNavigator = new GridNavigator(world);
+  fieldNavigator = new GridNavigator(world);
+  navigator = campNavigator;
+  combatNavigator = fieldNavigator;
   combat = new CombatSimulation(world, combatNavigator);
   navigationTask = undefined;
   setNavigationStatus('IDLE');
   observedDash = false;
   autoAttackTargetId = undefined;
   wasAlive = true;
-  player.setWorld(world);
-  player.setEnabled(false);
-  cameraRig.setWorld(world);
-  cameraRig.reset(player.position);
+  player.setWorld(campWorld, () => 0);
+  player.setEnabled(elements.baseOverlay!.hasAttribute('hidden'));
+  player.setPosition(campWorld.spawn.x, campWorld.spawn.z);
+  campGroup.visible = true;
+  cameraRig.setWorld(campWorld);
+  resetCampCamera();
   createZombieViews();
   zombieGroup.visible = false;
   elements.deathOverlay!.setAttribute('hidden', '');
   elements.arrivalOverlay!.setAttribute('hidden', '');
   elements.extractionGuide!.setAttribute('hidden', '');
-  elements.baseOverlay!.removeAttribute('hidden');
-  elements.seedHint!.textContent = 'Map regenerated from this seed.';
+  elements.seedHint!.textContent =
+    'Field map regenerated. Camp storage and upgrades are unchanged.';
   elements.diagSeed!.textContent = world.seed;
   elements.entityValue!.textContent = String(world.objectCount + combat.livingZombieCount + 1);
   updateModeUi();
@@ -576,6 +670,29 @@ function setSeed(seed: string): void {
   releaseMouseCapture();
   canvas?.focus({ preventScroll: true });
   updateCombatUi();
+}
+
+function setCampContext(position = campWorld.spawn, resetCamera = true): void {
+  campGroup.visible = true;
+  worldGroup.visible = false;
+  if (zombieGroup) zombieGroup.visible = false;
+  navigator = campNavigator;
+  combatNavigator = fieldNavigator;
+  player.setWorld(campWorld, () => 0);
+  player.setPosition(position.x, position.z);
+  player.setEnabled(elements.baseOverlay!.hasAttribute('hidden'));
+  cameraRig.setWorld(campWorld);
+  if (resetCamera) resetCampCamera();
+  else cameraRig.snapTo(player.position);
+  navigationTask = undefined;
+  clearRoute();
+  setNavigationStatus('IDLE');
+  document.querySelector('#game')?.classList.add('is-base');
+  const mapName = document.querySelector('.map-label strong');
+  if (mapName) mapName.textContent = 'Wayfarer Camp';
+  updateModeUi();
+  updateCombatUi();
+  updateBaseUi();
 }
 
 function disposeTree(root: Object3D): void {
@@ -796,16 +913,24 @@ function startHordeTest(): void {
   hordeInstance.userData.color = new Color();
   scene.add(hordeVisual);
 
+  if (campInteriorSession) leaveCampBuilding();
+  campGroup.visible = false;
+  worldGroup.visible = true;
+  navigator = fieldNavigator;
+  combatNavigator = fieldNavigator;
   navigationTask = undefined;
   player.cancelNavigation();
   navigator.setDynamicObstacles([]);
+  player.setWorld(world, (x, z) => terrainHeightAt(world.seed, x, z));
   player.setPosition(world.spawn.x, world.spawn.z);
   player.setEnabled(true);
+  cameraRig.setWorld(world);
   cameraRig.reset(player.position);
   if (elements.hordeCamera!.value !== 'third-person') cameraRig.switchMode(player.position);
   stressActive = true;
   document.querySelector('#game')?.classList.add('is-horde-test');
   elements.baseOverlay!.setAttribute('hidden', '');
+  elements.baseMenuButton!.hidden = true;
   elements.hordeLiveStats!.removeAttribute('hidden');
   elements.hordeActiveTools!.setAttribute('hidden', '');
   elements.hordeStart!.setAttribute('hidden', '');
@@ -834,11 +959,9 @@ function stopHordeTest(): void {
   hordeVisual = undefined;
   hordeSimulation = undefined;
   hordeRenderTier = new Uint8Array();
-  player.setEnabled(false);
-  player.setPosition(world.spawn.x, world.spawn.z);
-  cameraRig.reset(player.position);
+  setCampContext();
   document.querySelector('#game')?.classList.remove('is-horde-test');
-  elements.baseOverlay!.removeAttribute('hidden');
+  elements.baseOverlay!.setAttribute('hidden', '');
   elements.hordeLiveStats!.setAttribute('hidden', '');
   elements.hordeActiveTools!.setAttribute('hidden', '');
   elements.hordeStart!.removeAttribute('hidden');
@@ -847,6 +970,7 @@ function stopHordeTest(): void {
   elements.hordeStatus!.textContent =
     'Stress scene ended. Start another reproducible horde from camp.';
   elements.zoneStatus!.textContent = 'BASE';
+  updateBaseUi();
   updateModeUi();
   updateBaseUi();
 }
@@ -1080,6 +1204,33 @@ function findObjectWithInteractiveId(root: Object3D, id: string): Object3D | und
   return match;
 }
 
+function createCampInteractiveViews(): void {
+  campInteractiveViews.clear();
+  for (const service of campServices) {
+    const object = findObjectWithInteractiveId(campGroup, service.id);
+    if (!object) continue;
+    campInteractiveViews.set(service.id, {
+      id: service.id,
+      kind: service.kind,
+      x: service.x,
+      z: service.z,
+      object,
+    });
+  }
+  for (const entrance of campEntrances) {
+    const object = findObjectWithInteractiveId(campGroup, entrance.id);
+    if (!object) continue;
+    campInteractiveViews.set(entrance.id, {
+      id: entrance.id,
+      kind: 'building-door',
+      x: entrance.x,
+      z: entrance.z,
+      object,
+      entrance,
+    });
+  }
+}
+
 function createRunLoot(): void {
   scene.remove(lootGroup);
   disposeTree(lootGroup);
@@ -1117,11 +1268,20 @@ function createRunLoot(): void {
 }
 
 function activeInteractiveViews(): Map<string, InteractiveView> {
-  return interiorSession?.views ?? interactiveViews;
+  return (
+    interiorSession?.views ??
+    campInteriorSession?.views ??
+    (gamePhase === 'base' ? campInteractiveViews : interactiveViews)
+  );
 }
 
 function activeWorldVisual(): Group {
-  return interiorSession?.group ?? worldGroup;
+  if (stressActive) return worldGroup;
+  return (
+    interiorSession?.group ??
+    campInteriorSession?.group ??
+    (gamePhase === 'base' ? campGroup : worldGroup)
+  );
 }
 
 function activeLootVisual(): Group {
@@ -1365,7 +1525,141 @@ function collectLoot(view: InteractiveView): void {
   updateCombatUi();
 }
 
+function openBaseTerminal(
+  message = 'Camp ledger, quartermaster, and mission board are ready.',
+): void {
+  if (gamePhase !== 'base' || stressActive) return;
+  elements.baseMessage!.textContent = message;
+  elements.baseOverlay!.removeAttribute('hidden');
+  player.setEnabled(false);
+  updateBaseUi();
+  canvas?.blur();
+}
+
+function closeBaseTerminal(): void {
+  elements.baseOverlay!.setAttribute('hidden', '');
+  if (gamePhase === 'base' && !stressActive) {
+    player.setEnabled(true);
+    canvas?.focus({ preventScroll: true });
+  }
+}
+
+function enterCampBuilding(entrance: BuildingEntrance): void {
+  if (gamePhase !== 'base' || campInteriorSession || stressActive) return;
+  clearNavigation('IDLE');
+  clearRoute();
+  releaseMouseCapture();
+  releaseLookDrag();
+  const layout = generateInterior(`${campWorld.seed}:${entrance.id}`);
+  const roomWorld = interiorWorld(layout, campWorld);
+  const group = buildInterior(layout, campWorld);
+  const roomNavigator = new GridNavigator(roomWorld);
+  const views = new Map<string, InteractiveView>();
+  const exitObject = findObjectWithInteractiveId(group, 'interior-exit');
+  if (exitObject) {
+    views.set('interior-exit', {
+      id: 'interior-exit',
+      kind: 'building-door',
+      x: layout.exit.x,
+      z: layout.exit.z,
+      object: exitObject,
+    });
+  }
+  campGroup.visible = false;
+  scene.add(group);
+  campInteriorSession = {
+    entrance,
+    layout,
+    world: roomWorld,
+    navigator: roomNavigator,
+    group,
+    views,
+    returnPosition: player.position.clone(),
+  };
+  navigator = roomNavigator;
+  player.setWorld(roomWorld, () => 0);
+  player.setPosition(layout.entry.x, layout.entry.z);
+  player.setEnabled(true);
+  cameraRig.setWorld(roomWorld);
+  cameraRig.snapTo(player.position);
+  elements.baseOverlay!.setAttribute('hidden', '');
+  elements.zoneStatus!.textContent = 'CAMP / INSIDE';
+  elements.seedHint!.textContent = `${layout.rooms.length} room safe-zone building · use the lit exit to return to camp.`;
+  const mapName = document.querySelector('.map-label strong');
+  if (mapName)
+    mapName.textContent = entrance.id === 'camp-clinic' ? 'Camp Clinic' : 'Camp Barracks';
+  updateModeUi();
+  updateCombatUi();
+  updateNearbyAction();
+  canvas?.focus({ preventScroll: true });
+}
+
+function leaveCampBuilding(): void {
+  const session = campInteriorSession;
+  if (!session) return;
+  scene.remove(session.group);
+  disposeTree(session.group);
+  campInteriorSession = undefined;
+  campGroup.visible = true;
+  navigator = campNavigator;
+  player.setWorld(campWorld, () => 0);
+  player.setPosition(session.returnPosition.x, session.returnPosition.z);
+  player.setEnabled(elements.baseOverlay!.hasAttribute('hidden'));
+  cameraRig.setWorld(campWorld);
+  cameraRig.snapTo(player.position);
+  navigationTask = undefined;
+  clearRoute();
+  setNavigationStatus('IDLE');
+  elements.zoneStatus!.textContent = 'BASE';
+  elements.seedHint!.textContent = 'Back in Wayfarer Camp. Your stored resources remain safe.';
+  const mapName = document.querySelector('.map-label strong');
+  if (mapName) mapName.textContent = 'Wayfarer Camp';
+  updateModeUi();
+  updateCombatUi();
+  updateNearbyAction();
+  canvas?.focus({ preventScroll: true });
+}
+
+function interactWithCamp(view: InteractiveView, allowApproach: boolean): void {
+  const distance = Math.hypot(view.x - player.position.x, view.z - player.position.z);
+  if (view.kind === 'building-door') {
+    if (campInteriorSession) {
+      if (distance <= 2.8) leaveCampBuilding();
+      else if (allowApproach && cameraRig.mode === 'top-down') moveToInteractive(view);
+      else elements.seedHint!.textContent = 'Move closer to the lit exit marker.';
+      return;
+    }
+    if (!view.entrance) return;
+    if (distance <= 3.6) enterCampBuilding(view.entrance);
+    else if (allowApproach && cameraRig.mode === 'top-down') moveToInteractive(view);
+    else elements.seedHint!.textContent = 'Move closer to the barracks or clinic entrance.';
+    return;
+  }
+  if (distance > 3.8) {
+    if (allowApproach && cameraRig.mode === 'top-down') moveToInteractive(view);
+    else elements.seedHint!.textContent = 'Walk closer to the marked camp service.';
+    return;
+  }
+  if (view.kind === 'camp-departure') {
+    startRun();
+  } else if (view.kind === 'camp-shop') {
+    openBaseTerminal(
+      'Quartermaster · buy field gear, medical supplies, or the cargo harness; sell spare stock for credits.',
+    );
+  } else if (view.kind === 'camp-storage') {
+    openBaseTerminal('Camp storage · these banked resources stay safe between deployments.');
+  } else if (view.kind === 'camp-operations') {
+    openBaseTerminal(
+      'Operations board · Greywood is open. Other destinations will unlock when their maps are ready.',
+    );
+  }
+}
+
 function interactWith(view: InteractiveView, allowApproach = true): void {
+  if (gamePhase === 'base') {
+    interactWithCamp(view, allowApproach);
+    return;
+  }
   if (view.kind === 'building-door') {
     if (interiorSession) {
       if (Math.hypot(view.x - player.position.x, view.z - player.position.z) <= 2.8) {
@@ -1433,6 +1727,19 @@ function closestInteractive(): InteractiveView | undefined {
 }
 
 function interactNearest(): void {
+  if (gamePhase === 'base') {
+    const nearby = closestInteractive();
+    if (!nearby) return;
+    const range = nearby.kind === 'building-door' && campInteriorSession ? 2.8 : 3.8;
+    if (Math.hypot(nearby.x - player.position.x, nearby.z - player.position.z) <= range) {
+      interactWith(nearby, false);
+    } else if (cameraRig.mode === 'top-down') {
+      moveToInteractive(nearby);
+    } else {
+      interactWith(nearby, false);
+    }
+    return;
+  }
   if (gamePhase !== 'active') return;
   const nearby = closestInteractive();
   if (
@@ -1459,6 +1766,40 @@ function interactNearest(): void {
 }
 
 function updateNearbyAction(): void {
+  if (gamePhase === 'base') {
+    const nearby = closestInteractive();
+    if (!nearby) {
+      elements.nearbyAction!.setAttribute('hidden', '');
+      return;
+    }
+    const distance = Math.hypot(nearby.x - player.position.x, nearby.z - player.position.z);
+    const prompt = campInteriorSession
+      ? distance <= 2.8
+        ? 'F  RETURN TO CAMP'
+        : cameraRig.mode === 'top-down'
+          ? 'CLICK TO APPROACH EXIT'
+          : 'WALK TO LIT EXIT'
+      : nearby.kind === 'building-door'
+        ? distance <= 3.6
+          ? 'F  ENTER BUILDING'
+          : cameraRig.mode === 'top-down'
+            ? 'CLICK TO APPROACH DOOR'
+            : 'WALK TO BUILDING'
+        : distance <= 3.8
+          ? nearby.kind === 'camp-shop'
+            ? 'F  QUARTERMASTER'
+            : nearby.kind === 'camp-storage'
+              ? 'F  CAMP STORAGE'
+              : nearby.kind === 'camp-operations'
+                ? 'F  OPERATIONS BOARD'
+                : 'F  DEPART FOR GREYWOOD'
+          : cameraRig.mode === 'top-down'
+            ? 'CLICK TO APPROACH SERVICE'
+            : 'WALK TO CAMP SERVICE';
+    elements.nearbyAction!.textContent = prompt;
+    elements.nearbyAction!.removeAttribute('hidden');
+    return;
+  }
   if (gamePhase !== 'active') {
     elements.nearbyAction!.setAttribute('hidden', '');
     return;
@@ -1544,7 +1885,11 @@ function useCarriedSupply(): void {
 }
 
 function moveToLocation(x: number, z: number): void {
-  if (cameraRig.mode !== 'top-down' || (gamePhase !== 'active' && !stressActive)) return;
+  if (
+    cameraRig.mode !== 'top-down' ||
+    (gamePhase !== 'active' && gamePhase !== 'base' && !stressActive)
+  )
+    return;
   autoAttackTargetId = undefined;
   const path = requestNavigationPath(x, z);
   if (path.length === 0) {
@@ -1563,10 +1908,14 @@ function moveToLocation(x: number, z: number): void {
 }
 
 function moveToInteractive(view: InteractiveView): void {
-  if (cameraRig.mode !== 'top-down' || gamePhase !== 'active') return;
+  if (cameraRig.mode !== 'top-down' || (gamePhase !== 'active' && gamePhase !== 'base')) return;
   autoAttackTargetId = undefined;
   const interactionRange =
-    view.kind === 'extraction' ? 6.5 : interiorSession && view.kind === 'building-door' ? 2.8 : 3.6;
+    view.kind === 'extraction'
+      ? 6.5
+      : (interiorSession || campInteriorSession) && view.kind === 'building-door'
+        ? 2.8
+        : 3.6;
   const distance = Math.hypot(view.x - player.position.x, view.z - player.position.z);
   if (distance <= interactionRange) {
     clearNavigation('ARRIVED');
@@ -1596,11 +1945,12 @@ function moveToInteractive(view: InteractiveView): void {
   setNavigationStatus('APPROACH');
   routeRefresh = 1;
   updateRouteLine(true);
-  combat.lastMessage = `Moving into reach of ${view.kind === 'cache' ? 'the cache' : view.kind === 'drop' ? 'the pickup' : 'the chopper'}.`;
+  combat.lastMessage = `Moving into reach of ${view.kind === 'cache' ? 'the cache' : view.kind === 'drop' ? 'the pickup' : view.kind === 'extraction' ? 'the chopper' : 'the camp service'}.`;
   if (view.kind === 'building-door')
     combat.lastMessage = interiorSession
       ? 'Moving toward the marked exit.'
       : 'Moving toward the building door.';
+  if (gamePhase === 'base') elements.seedHint!.textContent = 'Following the camp path.';
   updateCombatUi();
 }
 
@@ -1660,7 +2010,12 @@ function finishNavigationTask(task: NavigationTask): void {
 
 function replanNavigationTask(): void {
   const task = navigationTask;
-  if (!task || cameraRig.mode !== 'top-down' || (gamePhase !== 'active' && !stressActive)) return;
+  if (
+    !task ||
+    cameraRig.mode !== 'top-down' ||
+    (gamePhase !== 'active' && gamePhase !== 'base' && !stressActive)
+  )
+    return;
   const path = requestNavigationPath(task.x, task.z, task.range);
   if (path.length > 0) {
     player.setNavigationPath(path);
@@ -1678,7 +2033,7 @@ function replanNavigationTask(): void {
     const useRange =
       view?.kind === 'extraction'
         ? 6.5
-        : interiorSession && view?.kind === 'building-door'
+        : (interiorSession || campInteriorSession) && view?.kind === 'building-door'
           ? 2.8
           : 3.6;
     if (view && Math.hypot(view.x - player.position.x, view.z - player.position.z) <= useRange) {
@@ -1754,7 +2109,12 @@ function clearRunScene(): void {
 
 function startRun(): void {
   if (gamePhase !== 'base' || stressActive) return;
+  if (campInteriorSession) leaveCampBuilding();
   clearRunScene();
+  campGroup.visible = false;
+  worldGroup.visible = true;
+  navigator = fieldNavigator;
+  combatNavigator = fieldNavigator;
   navigator.setDynamicObstacles([]);
   dynamicNavigationRefresh = 0;
   cargo = emptyInventory();
@@ -1778,9 +2138,11 @@ function startRun(): void {
   combat.reset();
   createZombieViews();
   zombieGroup.visible = false;
+  player.setWorld(world, (x, z) => terrainHeightAt(world.seed, x, z));
   player.setPosition(world.spawn.x, world.spawn.z);
   player.setEnabled(false);
   player.cancelNavigation();
+  cameraRig.setWorld(world);
   cameraRig.reset(player.position);
   createRunLoot();
   chopper = createChopper();
@@ -1797,6 +2159,8 @@ function startRun(): void {
   scene.add(extractionGuideArrow);
   gamePhase = 'arrival';
   document.querySelector('#game')?.classList.remove('is-base');
+  elements.nearbyAction!.setAttribute('hidden', '');
+  updateBaseUi();
   clearNavigation('IDLE');
   observedDash = false;
   autoAttackTargetId = undefined;
@@ -1808,6 +2172,8 @@ function startRun(): void {
   elements.disembarkButton!.disabled = true;
   elements.extractionGuide!.setAttribute('hidden', '');
   elements.zoneStatus!.textContent = 'ARRIVAL';
+  const mapName = document.querySelector('.map-label strong');
+  if (mapName) mapName.textContent = 'City–Forest Perimeter';
   elements.seedHint!.textContent = 'Chopper inbound over the extraction zone.';
   updateModeUi();
   updateCombatUi();
@@ -1891,10 +2257,7 @@ function returnToBase(): void {
   combat.reset();
   createZombieViews();
   zombieGroup.visible = false;
-  player.setEnabled(false);
-  player.setPosition(world.spawn.x, world.spawn.z);
-  player.cancelNavigation();
-  cameraRig.reset(player.position);
+  setCampContext();
   navigationTask = undefined;
   setNavigationStatus('IDLE');
   observedDash = false;
@@ -1903,8 +2266,9 @@ function returnToBase(): void {
   elements.deathOverlay!.setAttribute('hidden', '');
   elements.arrivalOverlay!.setAttribute('hidden', '');
   elements.extractionGuide!.setAttribute('hidden', '');
-  elements.baseOverlay!.removeAttribute('hidden');
-  elements.seedHint!.textContent = 'Same seed, same streets.';
+  elements.baseOverlay!.setAttribute('hidden', '');
+  elements.seedHint!.textContent =
+    'Welcome back to Wayfarer Camp. Press F near a service or M for the camp terminal.';
   elements.zoneStatus!.textContent = 'BASE';
   updateBaseUi();
   updateCombatUi();
@@ -1981,10 +2345,12 @@ player = new PlayerController(
   world,
   () => switchView(),
   (slot: AbilitySlot) => {
+    if (gamePhase !== 'active' && !stressActive) return;
     if (!combat.activateAbility(slot, player.position)) return;
     if (slot === 2) addShockEffect();
   },
   () => {
+    if (gamePhase !== 'active' && !stressActive) return false;
     if (cameraRig.mode === 'top-down') updateTopDownDashAim(pointerX, pointerY);
     const started = combat.tryDash();
     if (started && cameraRig.mode === 'top-down') autoAttackTargetId = undefined;
@@ -1992,11 +2358,17 @@ player = new PlayerController(
   },
 );
 scene.add(player.visual);
-player.setEnabled(false);
-cameraRig.reset(player.position);
+createCampInteractiveViews();
+player.setWorld(campWorld, () => 0);
+player.setEnabled(true);
+worldGroup.visible = false;
+campGroup.visible = true;
+cameraRig.setWorld(campWorld);
+resetCampCamera();
 createZombieViews();
 zombieGroup.visible = false;
 updateBaseUi();
+updateCombatUi();
 if (activeAssetDocument) {
   elements.baseMessage!.textContent = `Asset Bench override active for ${activeAssetDocument.asset.assetId}. Start a generated run to preview the edited asset.`;
 } else if (assetDocumentLoadError) {
@@ -2025,12 +2397,12 @@ elements.hordeCamera!.addEventListener('change', () => {
   if (selected !== cameraRig.mode) switchView();
 });
 elements.restartButton!.addEventListener('click', returnToBase);
+elements.baseMenuButton!.addEventListener('click', () => openBaseTerminal());
+elements.baseCloseButton!.addEventListener('click', closeBaseTerminal);
 elements.startRunButton!.addEventListener('click', startRun);
 elements.disembarkButton!.addEventListener('click', disembark);
 elements.buySuppliesButton!.addEventListener('click', () => {
-  if (gamePhase !== 'base' || saveData.base.money < 35) return;
-  saveData.base.money -= 35;
-  saveData.base.supplies += 2;
+  if (gamePhase !== 'base' || !buyCampItem(saveData, 'supplies')) return;
   const saved = storeSave(saveData);
   elements.baseMessage!.textContent = saved
     ? 'Two medical supplies added to camp storage.'
@@ -2038,19 +2410,33 @@ elements.buySuppliesButton!.addEventListener('click', () => {
   updateBaseUi();
 });
 elements.buyGearButton!.addEventListener('click', () => {
-  if (gamePhase !== 'base' || saveData.base.money < 50) return;
-  saveData.base.money -= 50;
-  saveData.base.gear += 1;
+  if (gamePhase !== 'base' || !buyCampItem(saveData, 'gear')) return;
   const saved = storeSave(saveData);
   elements.baseMessage!.textContent = saved
     ? 'A field gear kit has been added to camp storage.'
     : 'Gear kit added for this session; browser storage is unavailable.';
   updateBaseUi();
 });
+elements.sellGearButton!.addEventListener('click', () => {
+  if (gamePhase !== 'base' || !sellCampItem(saveData, 'gear')) return;
+  const saved = storeSave(saveData);
+  elements.baseMessage!.textContent = saved
+    ? 'One spare gear kit sold for 25 credits.'
+    : 'Gear kit sold for this session; browser storage is unavailable.';
+  updateBaseUi();
+  updateCombatUi();
+});
+elements.sellSuppliesButton!.addEventListener('click', () => {
+  if (gamePhase !== 'base' || !sellCampItem(saveData, 'supplies')) return;
+  const saved = storeSave(saveData);
+  elements.baseMessage!.textContent = saved
+    ? 'One spare medical supply sold for 12 credits.'
+    : 'Medical supply sold for this session; browser storage is unavailable.';
+  updateBaseUi();
+  updateCombatUi();
+});
 elements.buyCargoButton!.addEventListener('click', () => {
-  if (gamePhase !== 'base' || saveData.cargoUpgrade || saveData.base.money < 90) return;
-  saveData.base.money -= 90;
-  saveData.cargoUpgrade = true;
+  if (gamePhase !== 'base' || !buyCampItem(saveData, 'cargoUpgrade')) return;
   const saved = storeSave(saveData);
   elements.baseMessage!.textContent = saved
     ? 'Harness installed. Carrying capacity increased by five units.'
@@ -2058,6 +2444,24 @@ elements.buyCargoButton!.addEventListener('click', () => {
   updateBaseUi();
 });
 window.addEventListener('keydown', (event) => {
+  if (event.repeat) return;
+  const isFormControl =
+    event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA'].includes(event.target.tagName);
+  if (event.code === 'KeyM' && gamePhase === 'base' && !isFormControl) {
+    event.preventDefault();
+    if (elements.baseOverlay!.hasAttribute('hidden')) openBaseTerminal();
+    else closeBaseTerminal();
+    return;
+  }
+  if (
+    event.code === 'Escape' &&
+    gamePhase === 'base' &&
+    !elements.baseOverlay!.hasAttribute('hidden')
+  ) {
+    event.preventDefault();
+    closeBaseTerminal();
+    return;
+  }
   if (event.code === 'KeyX' && !event.repeat && gamePhase === 'active') {
     if (
       event.target instanceof HTMLElement &&
@@ -2068,7 +2472,7 @@ window.addEventListener('keydown', (event) => {
     useCarriedSupply();
     return;
   }
-  if (event.code !== 'KeyF' || event.repeat || gamePhase !== 'active') return;
+  if (event.code !== 'KeyF' || (gamePhase !== 'active' && gamePhase !== 'base')) return;
   if (
     event.target instanceof HTMLElement &&
     ['INPUT', 'TEXTAREA', 'BUTTON'].includes(event.target.tagName)
@@ -2262,6 +2666,16 @@ function fireAt(event: PointerEvent): void {
     }
     return;
   }
+  if (gamePhase === 'base') {
+    const viewRay = new Raycaster();
+    viewRay.setFromCamera(pointToNdc(event), camera);
+    const hit = viewRay.intersectObject(activeWorldVisual(), true)[0];
+    const id = findInteractiveId(hit?.object);
+    const interactive = id ? activeInteractiveViews().get(id) : undefined;
+    if (interactive) interactWith(interactive);
+    else if (cameraRig.mode === 'top-down') moveToPointer(event);
+    return;
+  }
   if (!combat.alive || gamePhase !== 'active') return;
   const ndc = pointToNdc(event);
   const viewRay = new Raycaster();
@@ -2303,7 +2717,11 @@ function updateAutoAttack(): void {
 }
 
 function moveToPointer(event: MouseEvent): void {
-  if (cameraRig.mode !== 'top-down' || !combat.alive || (gamePhase !== 'active' && !stressActive))
+  if (
+    cameraRig.mode !== 'top-down' ||
+    (gamePhase !== 'base' && !combat.alive) ||
+    (gamePhase !== 'active' && gamePhase !== 'base' && !stressActive)
+  )
     return;
   autoAttackTargetId = undefined;
   pointerX = event.clientX;
@@ -2481,6 +2899,9 @@ function animate(now: number): void {
       hordeSimulation.tick(fixedStep, player.position.x, player.position.z);
       player.update(fixedStep, cameraRig.mode, cameraRig.yaw, 1);
       updateNavigationProgress();
+    } else if (gamePhase === 'base') {
+      player.update(fixedStep, cameraRig.mode, cameraRig.yaw, 1);
+      updateNavigationProgress();
     } else if (gamePhase === 'active' || gamePhase === 'extracting') {
       if (gamePhase === 'active') {
         if (!interiorSession) runElapsed += fixedStep;
@@ -2633,7 +3054,7 @@ function animate(now: number): void {
     updateRenderDiagnosticsUi();
     if (cameraRig.mode === 'third-person') renderControls();
     elements.entityValue!.textContent = String(
-      world.objectCount +
+      (gamePhase === 'base' ? campGroup.children.length : world.objectCount) +
         (stressActive ? (hordeSimulation?.count ?? 0) : combat.zombies.length) +
         lootGroup.children.length +
         1,

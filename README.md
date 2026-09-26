@@ -30,7 +30,9 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. The target 
 | Tab or **Change View**         | Switch camera without moving player   | Switch camera without moving player   |
 | World Seed field + reload icon | Rebuild the map and encounter         | Rebuild the map and encounter         |
 
-Start a run from the camp panel. The chopper arrives in third person; pressing **Disembark** switches to the angled top-down camera. Search a cache with F when close or left-click its crate; collect the revealed pickups with F or by clicking them. Top-down clicks on distant loot set a route. Recover at least one cache item before the chopper clears extraction. Gear, supplies, and fuel use carrying capacity; credits do not. X consumes a carried medical supply to restore up to 35 health. F boards when you are in the landing ring and no hostile is close; hold position for four seconds while the chopper is vulnerable to interruption.
+At camp, use **W/A/S/D** to walk, right-click in top-down view to route, **F** at a marked service or building, **M** for the camp terminal, and **Tab** to change camera. The terminal can also be opened by clicking its world panel.
+
+Depart from the operations board, camp terminal, or chopper. The chopper arrives in third person; pressing **Disembark** switches to the angled top-down camera. Search a cache with F when close or left-click its crate; collect the revealed pickups with F or by clicking them. Top-down clicks on distant loot set a route. Recover at least one cache item before the chopper clears extraction. Gear, supplies, and fuel use carrying capacity; credits do not. X consumes a carried medical supply to restore up to 35 health. F boards when you are in the landing ring and no hostile is close; hold position for four seconds while the chopper is vulnerable to interruption.
 
 The extraction arrow and distance remain on screen during the run. A radio warning arrives before each small reinforcement wave, leaving time to head back. You can extract at any time. The camp quartermaster sells gear and medical supplies, and can install a one-time cargo harness upgrade. One gear kit and one medical supply are taken from camp at deployment if available. Banked items and shop purchases are saved in browser storage; carried items are lost on death.
 
@@ -55,6 +57,7 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 
 - `src/world/generateWorld.ts` builds seeded districts, roads, loot regions, landmarks, placements, collision boxes, chopper spawn, and terrain height without depending on rendering.
 - `src/world/buildWorld.ts` turns generated data into Three.js terrain and scene objects.
+- `src/camp/` defines the walkable camp, its navigation/services, and quartermaster transaction rules.
 - `src/interiors/interiorLayout.ts` creates reproducible room layouts, loot, encounter positions, and collision data; `src/interiors/buildInterior.ts` assembles the reusable room pieces.
 - `src/assets/` contains authored asset modules and shared versioned metadata.
 - `asset-editor.html` and `src/assetEditor/` provide the separate Asset Bench for reviewing and adjusting the same authored definitions.
@@ -126,6 +129,14 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 3. Set a dimension outside the allowed range and confirm the validation message appears and JSON save/game actions are disabled. Restore a valid value.
 4. Save the asset JSON, reopen that file, and confirm the edited values return. Use **Try in Game**, start a run, and check the selected asset in the generated field.
 5. Use **Restore Source**, reload the game, and confirm the test override is cleared.
+
+## Phase 10 playtest checklist
+
+1. Explore Wayfarer Camp in both camera views. Walk with WASD and use right-click routes in top-down view; check the gate, fence, guards, service markers, and that paths reach the quartermaster, storage, operations board, and chopper.
+2. Use **F** at the quartermaster, storage, operations board, and chopper. Open **M** and confirm the quick terminal remains available. Greywood should be selectable; Military Base and Large City should be visibly unavailable.
+3. Enter and leave the barracks and clinic. Check that the interior is navigable in both views and returning to camp preserves the view and position without starting or advancing a field run.
+4. Buy field gear and supplies, sell carried items, and install the cargo harness. Confirm prices and affordability messages, one-time upgrade behavior, stock display, and saved credits/stock after a reload.
+5. Deploy through the board or chopper. Confirm Greywood remains free, the starting kit follows saved camp stock, extraction banks returned cargo, and death loses carried cargo while stored camp resources remain safe.
 
 The regular encounter is intentionally capped at seven hostiles. For Phase 6, open **Horde Simulation Lab** from camp or the dev telemetry button. Choose 100, 1,000, 5,000, or 10,000 agents; set a spawn seed, layout, and camera; then start the isolated stress scene. WASD movement and top-down click-to-move let the horde pursue the player. The lab shows near/mid/far tier counts, the nearest-agent query, player attacks received, and simulation time. End the scene to return to camp.
 

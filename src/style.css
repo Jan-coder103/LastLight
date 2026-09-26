@@ -547,6 +547,11 @@ kbd {
   background: rgba(12, 15, 13, 0.66);
   backdrop-filter: blur(8px);
 }
+.base-overlay {
+  z-index: 8;
+  background: rgba(12, 15, 13, 0.86);
+  backdrop-filter: none;
+}
 .arrival-overlay[hidden],
 .base-overlay[hidden] {
   display: none;
@@ -600,11 +605,28 @@ kbd {
 }
 .base-panel {
   width: min(680px, calc(100vw - 32px));
+  position: relative;
 }
 .base-heading {
+  position: relative;
   display: flex;
   justify-content: space-between;
   gap: 22px;
+  padding-right: 39px;
+}
+.base-close-button {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 30px;
+  height: 30px;
+  color: #d6d0bc;
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
 }
 .base-heading p {
   margin: 0;
@@ -691,6 +713,14 @@ kbd {
   margin-top: auto;
   background: rgba(162, 190, 112, 0.13);
   border-color: rgba(162, 190, 112, 0.35);
+}
+.base-panel .deploy-card .destination-locked {
+  margin-top: 0;
+  color: #858a7d;
+  border-color: rgba(235, 228, 200, 0.1);
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 8px;
+  text-align: left;
 }
 .deploy-card button span {
   margin-left: 7px;
@@ -854,7 +884,8 @@ kbd {
   background: rgba(235, 228, 200, 0.16);
 }
 .view-button,
-.lock-button {
+.lock-button,
+.base-menu-button {
   height: 39px;
   display: flex;
   align-items: center;
@@ -869,7 +900,8 @@ kbd {
   cursor: pointer;
 }
 .view-button:hover,
-.lock-button:hover {
+.lock-button:hover,
+.base-menu-button:hover {
   border-color: rgba(211, 181, 110, 0.22);
   background: rgba(211, 181, 110, 0.07);
 }
@@ -901,6 +933,14 @@ kbd {
 .footer-note span {
   padding: 0 5px;
   color: var(--accent);
+}
+.base-menu-button {
+  margin-left: 8px;
+  border-color: rgba(211, 181, 110, 0.2);
+  background: rgba(211, 181, 110, 0.08);
+}
+.base-menu-button .button-key {
+  margin-left: 2px;
 }
 
 .diagnostics {
@@ -1366,7 +1406,8 @@ kbd {
     margin: 0 4px;
   }
   .view-button,
-  .lock-button {
+  .lock-button,
+  .base-menu-button {
     gap: 5px;
     padding: 0 5px;
     font-size: 8px;

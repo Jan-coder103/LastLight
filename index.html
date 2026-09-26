@@ -18,7 +18,7 @@
         <div class="brand-lockup">
           <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
           <div>
-            <p class="eyebrow">FIELD TEST 08 <span>·</span> ENTERABLE BUILDINGS</p>
+            <p class="eyebrow">WAYFARER CAMP <span>·</span> SAFE-ZONE HUB</p>
             <h1>LAST LIGHT</h1>
           </div>
         </div>
@@ -46,8 +46,7 @@
       <section class="map-label" aria-label="Map location">
         <div class="signal-dot"></div>
         <div>
-          <span class="eyebrow">GREYWOOD / PROCEDURAL REGION</span
-          ><strong>City–Forest Perimeter</strong>
+          <span class="eyebrow">WAYFARER / SAFE-ZONE COMPOUND</span><strong>Wayfarer Camp</strong>
         </div>
         <span class="map-separator"></span>
         <div class="coords">
@@ -64,15 +63,15 @@
 
       <section class="combat-hud" aria-label="Run status" aria-live="polite">
         <div class="combat-hud-top">
-          <span>FIELD STATUS</span><strong id="run-clock">00:00</strong>
+          <span>CAMP STATUS</span><strong id="run-clock">CAMP</strong>
         </div>
-        <div class="field-line"><span>HOSTILES</span><strong id="hostile-count">3</strong></div>
+        <div class="field-line"><span>THREAT</span><strong id="hostile-count">SAFE</strong></div>
         <div class="health-label">
           <span>HEALTH</span><strong id="health-value">100 / 100</strong>
         </div>
         <div class="health-track"><span id="health-fill"></span></div>
         <div class="field-line cargo-line">
-          <span>CARRIED / CAPACITY</span><strong id="cargo-value">0 / 10</strong>
+          <span>CAMP STOCK</span><strong id="cargo-value">0 G / 0 S</strong>
         </div>
         <div class="cargo-breakdown" id="cargo-breakdown">GEAR 0 · SUP 0 · CR 0 · FUEL 0</div>
         <p class="nearby-action" id="nearby-action" hidden></p>
@@ -106,7 +105,14 @@
         </div>
       </section>
 
-      <section class="base-overlay" id="base-overlay" aria-label="Base camp">
+      <section
+        class="base-overlay"
+        id="base-overlay"
+        aria-label="Camp terminal"
+        role="dialog"
+        aria-modal="true"
+        hidden
+      >
         <div class="base-panel">
           <div class="base-heading">
             <div>
@@ -117,8 +123,16 @@
             <div class="base-run-count">
               <span>RUNS BANKED</span><strong id="run-count">0</strong>
             </div>
+            <button
+              id="base-close-button"
+              class="icon-button base-close-button"
+              type="button"
+              aria-label="Close camp terminal"
+            >
+              ×
+            </button>
           </div>
-          <div class="base-ledger" aria-label="Stored resources">
+          <div class="base-ledger" aria-label="Camp storage">
             <div><span>GEAR</span><strong id="bank-gear">0</strong></div>
             <div><span>SUPPLIES</span><strong id="bank-supplies">0</strong></div>
             <div><span>CREDITS</span><strong id="bank-money">0</strong></div>
@@ -133,15 +147,29 @@
               <button id="buy-supplies-button" type="button">
                 BUY MEDICAL SUPPLIES <span>35 CR</span>
               </button>
+              <button id="sell-gear-button" type="button">
+                SELL ONE GEAR KIT <span>25 CR</span>
+              </button>
+              <button id="sell-supplies-button" type="button">
+                SELL ONE MEDICAL SUPPLY <span>12 CR</span>
+              </button>
               <button id="buy-cargo-button" type="button">
                 UPGRADE CARGO HARNESS <span>90 CR</span>
               </button>
               <small id="harness-status">Cargo capacity: 10 units</small>
             </div>
             <div class="deploy-card">
-              <span class="eyebrow">NEXT DEPLOYMENT</span>
-              <p>City–forest zone · no fuel charge</p>
-              <button id="start-run-button" type="button">DEPLOY TO GREYWOOD <span>↗</span></button>
+              <span class="eyebrow">OPERATIONS / DEPARTURE</span>
+              <p>Choose a destination. Greywood is open and uses no fuel.</p>
+              <button id="start-run-button" type="button">
+                GREYWOOD · AVAILABLE <span>↗</span>
+              </button>
+              <button class="destination-locked" type="button" disabled>
+                MILITARY BASE · MAP LOCKED
+              </button>
+              <button class="destination-locked" type="button" disabled>
+                LARGE CITY · MAP LOCKED
+              </button>
               <button id="open-horde-lab" class="secondary-action" type="button">
                 OPEN HORDE SIMULATION LAB
               </button>
@@ -173,7 +201,10 @@
           <span class="lock-icon" aria-hidden="true">⌖</span
           ><span id="lock-label">CAPTURE MOUSE</span><span class="button-key">OPTIONAL</span>
         </button>
-        <p class="footer-note">PHASE 08 <span>—</span> BUILDING INTERIORS</p>
+        <button id="base-menu-button" class="base-menu-button" type="button" hidden>
+          CAMP TERMINAL <span class="button-key">M</span>
+        </button>
+        <p class="footer-note">PHASE 10 <span>—</span> WALKABLE CAMP</p>
       </footer>
 
       <aside class="diagnostics" aria-label="Development diagnostics">

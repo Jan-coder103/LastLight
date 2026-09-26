@@ -4,17 +4,19 @@ Updated: 2026-09-26
 
 ## Current position
 
-Phases 1–9 are **Accepted**. Phase 10 is **Not started**; the owner said they will start it later. The owner reported that the Phase 8 playtest succeeded on 2026-09-26 and authorized Phase 9 (“start with the next phase”). Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
+Phases 1–9 are **Accepted**. Phase 10 is implemented and **Awaiting owner playtest**. On 2026-09-26, after accepting Phase 9, the owner said it had just been playtested and approved and gave the green light to continue with the next phase. Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
 
 Phase 8 adds generated 2–4 room interiors for city buildings, interactive doors, room loot and one infected, a return to the same outdoor position, and a pause for the outdoor timer/horde while inside. Implementation commit: `cf41524`; entry-clearance correction: `e20fa6d`. The owner reported the retest succeeded and accepted Phase 8.
 
 Phase 9 adds a separate Asset Bench at `/asset-editor.html`, using the game’s shared five-asset catalog. It previews asset variants with orbit/zoom and near/far cameras; edits dimensions, collision, interaction points, and named material color/roughness/metalness; validates and imports/exports versioned JSON; and applies the active document to the game before world generation. Implementation commit: `3825cb5`. The owner found that the OS color picker’s Select action did not update the editor; commit `5042f7e` added direct `input` and `change` handling and preview updates without rebuilding the inspector. The owner retested and confirmed it works, accepting Phase 9 on 2026-09-26.
 
+Phase 10 adds a separate walkable camp scene with a gate, perimeter fence, towers/guards, friendly NPCs, physical service stations, barracks and clinic interiors, a map/mission board, and a chopper pad. M opens the quick camp terminal; F uses nearby services and doors. Quartermaster buy/sell and the one-time cargo harness update existing saved camp data. Greywood is available at no fuel cost; Military Base and Large City are disabled. Camp buildings reuse the Phase 8 room/interior system. This phase is awaiting the owner playtest; see the Phase 10 checklist in `README.md` and detailed evidence in `tracker.md`.
+
 ## Read first
 
 1. `plan.md` for the vision, technical direction, phase scope, and acceptance criteria.
 2. `tracker.md` for phase status, verification evidence, decisions, and the owner playtest log.
-3. `README.md` for startup commands, controls, simulation benchmark measurements, and the Phase 8/9 playtest checklists.
+3. `README.md` for startup commands, controls, simulation benchmark measurements, and the Phase 8/9/10 playtest checklists.
 
 ## Phase 2 decisions and tuning
 
@@ -160,6 +162,14 @@ Phase 9 adds a separate Asset Bench at `/asset-editor.html`, using the game’s 
 - The owner retested the OS picker after the correction and confirmed that color selection updates the editor; Phase 9 was accepted on 2026-09-26.
 - Browser interaction changed the bark swatch to `#ca9d4f`, then restored source defaults. Production build passed; the owner confirmed the native picker flow in playtest. See the checklist in `README.md`.
 
+## Phase 10 decisions and current evidence
+
+- The hub uses its own flat scene/collider/navigation context; it does not generate the large field world. Its entrances use the established seeded interior builder and return to the saved camp position/view.
+- Services are reachable in both camera modes. Physical interactions use F; M opens the quick terminal. Greywood is available and free; future destination cards remain disabled. Fuel selection is deferred until those destinations exist.
+- First-pass quartermaster prices are 50 credits for field gear, 35 for two medical supplies, and 90 for the one-time cargo harness; sales return 25 for gear and 12 per supply. These prices require owner feedback.
+- Browser smoke at 639×698 / 1.00× confirmed camp rendering, route arrival at the quartermaster, F interaction and terminal opening, entrance into and return from a camp building, and Greywood deployment. No purchase was made during smoke, so storage/save round-trip still needs the owner’s playtest.
+- `npm test` passed (11 files, 41 tests). `npm run build` and `npm run format:check` passed. Vite reports the existing 555.71 kB asset-document chunk above its 500 kB advisory threshold.
+
 ## Verification
 
 - `npm test` — passed: 8 files, 34 tests. Includes deterministic 2–4 room generation, room/loot/encounter route reachability, and walkable exterior entrances in the existing 24-seed regression.
@@ -174,7 +184,7 @@ Phase 9 adds a separate Asset Bench at `/asset-editor.html`, using the game’s 
 ## Known limits and next action
 
 - Phase 7 remains owner-accepted, but its regular-run and 10,000-agent reference-hardware profiles were not documented. The reference browser/machine and numeric final limits remain open.
-- Next: wait for the owner to start Phase 10. Do not begin it until requested.
+- Next: owner playtests the Phase 10 camp workflow and reports acceptance or revisions. Do not mark Phase 10 accepted before explicit owner approval.
 - Stress visuals are intentionally simplified low-poly instances; this phase proves tracked simulation and horde behavior, while Phase 7 owns draw-call, memory, frame-time, and reference-hardware targets.
 - Local obstacle steering is a short deflection check rather than full route planning. The owner should flag groups that stall at blocked cells or bunch in narrow spaces.
 - The regular run still caps at seven hostiles and remains separate from the Horde Simulation Lab.
