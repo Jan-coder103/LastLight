@@ -4,11 +4,11 @@ Updated: 2026-09-26
 
 ## Current position
 
-Phases 1–8 are **Accepted**; Phase 9 Asset Bench is **Awaiting owner retest** after a color-picker correction. The owner reported that the Phase 8 playtest succeeded on 2026-09-26 and authorized Phase 9 (“start with the next phase”). Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
+Phases 1–9 are **Accepted**. Phase 10 is **Not started**; the owner said they will start it later. The owner reported that the Phase 8 playtest succeeded on 2026-09-26 and authorized Phase 9 (“start with the next phase”). Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
 
 Phase 8 adds generated 2–4 room interiors for city buildings, interactive doors, room loot and one infected, a return to the same outdoor position, and a pause for the outdoor timer/horde while inside. Implementation commit: `cf41524`; entry-clearance correction: `e20fa6d`. The owner reported the retest succeeded and accepted Phase 8.
 
-Phase 9 adds a separate Asset Bench at `/asset-editor.html`, using the game’s shared five-asset catalog. It previews asset variants with orbit/zoom and near/far cameras; edits dimensions, collision, interaction points, and named material color/roughness/metalness; validates and imports/exports versioned JSON; and applies the active document to the game before world generation. Implementation commit: `3825cb5`. The owner reported that the OS color picker’s Select action did not update the editor. Color controls now listen directly for `input` and `change` and update the preview without rebuilding the inspector; production build passed. Color-picker correction commit: `5042f7e`. Owner retest of the native picker flow is the next gate.
+Phase 9 adds a separate Asset Bench at `/asset-editor.html`, using the game’s shared five-asset catalog. It previews asset variants with orbit/zoom and near/far cameras; edits dimensions, collision, interaction points, and named material color/roughness/metalness; validates and imports/exports versioned JSON; and applies the active document to the game before world generation. Implementation commit: `3825cb5`. The owner found that the OS color picker’s Select action did not update the editor; commit `5042f7e` added direct `input` and `change` handling and preview updates without rebuilding the inspector. The owner retested and confirmed it works, accepting Phase 9 on 2026-09-26.
 
 ## Read first
 
@@ -157,8 +157,8 @@ Phase 9 adds a separate Asset Bench at `/asset-editor.html`, using the game’s 
 - `last-light-authored-asset` version 1 stores an asset ID, placement dimensions, optional collider, up to 16 interaction points, and the complete named material palette. Validation rejects unsupported versions, unknown assets/materials, out-of-range numbers, invalid colors, and duplicate point IDs.
 - The game reads an active document from browser storage before generating its world. Dimensions and collision affect generated placement/navigation; material values affect rendered prototypes; the building shell’s `front-door` point sets its interaction approach.
 - Local browser smoke at 639×698: selected and edited the boulder, saw an invalid dimension disable save/use, reopened an asset JSON document, applied it to Last Light, started a generated run, and captured no console warnings/errors. The test override was cleared afterward.
-- The owner playtested the editor and reported that selecting a color in the OS picker did not change the editor. Color inputs now bind handlers directly to the control for both `input` and `change`; the preview refreshes while the inspector remains intact.
-- Browser interaction changed the bark swatch to `#ca9d4f`, then restored source defaults. Production build passed. This does not cover choosing a color in the native OS picker; owner retest remains pending. See the checklist in `README.md`.
+- The owner retested the OS picker after the correction and confirmed that color selection updates the editor; Phase 9 was accepted on 2026-09-26.
+- Browser interaction changed the bark swatch to `#ca9d4f`, then restored source defaults. Production build passed; the owner confirmed the native picker flow in playtest. See the checklist in `README.md`.
 
 ## Verification
 
@@ -174,7 +174,7 @@ Phase 9 adds a separate Asset Bench at `/asset-editor.html`, using the game’s 
 ## Known limits and next action
 
 - Phase 7 remains owner-accepted, but its regular-run and 10,000-agent reference-hardware profiles were not documented. The reference browser/machine and numeric final limits remain open.
-- Next: owner retests the native OS color picker and confirms the swatch and preview change, then completes the Phase 9 workflow. Record acceptance before beginning Phase 10.
+- Next: wait for the owner to start Phase 10. Do not begin it until requested.
 - Stress visuals are intentionally simplified low-poly instances; this phase proves tracked simulation and horde behavior, while Phase 7 owns draw-call, memory, frame-time, and reference-hardware targets.
 - Local obstacle steering is a short deflection check rather than full route planning. The owner should flag groups that stall at blocked cells or bunch in narrow spaces.
 - The regular run still caps at seven hostiles and remains separate from the Horde Simulation Lab.

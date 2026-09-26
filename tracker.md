@@ -1,9 +1,9 @@
 # Development tracker
 
 Last updated: 2026-09-26  
-Current gate: Phases 1–8 are accepted. Phase 9 Asset Bench is awaiting owner retest after a native color-picker correction.
+Current gate: Phases 1–9 are accepted. Phase 10 is not started; the owner plans to begin it later.
 
-Next authorized work: Owner retests OS color-picker selection and the Asset Bench edit/save/reopen/use-in-run workflow. Phase 10 remains behind Phase 9 acceptance. Phase 7 was explicitly approved by the owner on 2026-09-26; the outstanding reference-machine profiles remain undocumented because no reference setup was supplied.
+Next authorized work: Wait for the owner to start Phase 10. Phase 7 was explicitly approved by the owner on 2026-09-26; the outstanding reference-machine profiles remain undocumented because no reference setup was supplied.
 
 ## Phase status
 
@@ -17,7 +17,7 @@ Next authorized work: Owner retests OS color-picker selection and the Asset Benc
 | 6     | 10,000-agent simulation                                           | Accepted                | Accepted       | Owner playtest was good; reported stable 60 FPS and 17 ms or less per frame with 10,000 enemies on 2026-09-25. Environment unspecified. |
 | 7     | Performance and LOD                                               | Accepted                | Accepted       | Owner approved Phase 7 and authorized the next phase on 2026-09-26. Active/stress reference profiles remain undocumented.               |
 | 8     | Enterable buildings                                               | Accepted                | Accepted       | Owner reported the Phase 8 playtest succeeded on 2026-09-26 after the entry-clearance fix.                                              |
-| 9     | Separate asset editor                                             | Awaiting owner playtest | Retest pending | Owner reported that the OS color picker's Select action did not update the editor. Direct color-control input/change handling is implemented; owner retest remains open. |
+| 9     | Separate asset editor                                             | Accepted                | Accepted       | Owner confirmed the native color picker now updates the editor and marked Phase 9 complete on 2026-09-26.                                 |
 | 10    | Walkable base camp                                                | Not started             | Pending        | Hub, shops, upgrades, destinations.                                                                                                     |
 | 11    | Weather, lighting, effects                                        | Not started             | Pending        | Preserve performance.                                                                                                                   |
 
@@ -264,7 +264,7 @@ Owner approval is recorded as the phase gate. The reference-machine normal/stres
 - [x] Provide a direct Asset Bench action to apply the current document and enter the game.
 - [x] Automated coverage passes: 9 files, 37 tests; production build and formatting pass.
 - [x] Local browser smoke imported an asset JSON document, applied the boulder material edit, opened Last Light, and started a generated run; console warning/error capture was empty.
-- [ ] Owner retests the OS color picker and confirms the swatch and preview update, then checks invalid-value feedback, save/reopen, and the generated-run workflow.
+- [x] Owner confirmed the OS color picker now updates the swatch and preview; Phase 9 playtest accepted on 2026-09-26.
 
 ## Evidence and playtest log
 
@@ -294,6 +294,7 @@ Owner approval is recorded as the phase gate. The reference-machine normal/stres
 | 2026-09-26 | 8 acceptance | Owner approval     | Owner reported “Playtest was successful” and authorized the next phase (“start with the next phase”). Phase 8 accepted; no additional issue reported.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Phase 8 accepted; Phase 9 authorized.                                                                    |
 | 2026-09-26 | 9            | `3825cb5`          | Added a separate editor for the shared five-asset catalog; editable dimensions, collision, interaction points, and materials; versioned JSON import/export and validation; orbit/zoom and near/far previews; and a direct game handoff. `npm test` passed (9 files, 37 tests); build and format checks passed. Browser smoke imported the boulder JSON, applied it to the game, started a generated run, and had no console warnings/errors.                                                                                                                                                                                                                                                                                     | Awaiting owner playtest of the Asset Bench workflow.                                                     |
 | 2026-09-26 | 9 revision  | `5042f7e`          | Owner reported that choosing a color in the OS picker and pressing Select did not update the editor. Color controls now handle `input` and `change` directly and refresh the preview without rebuilding the inspector. Production build passed; browser interaction changed the bark swatch to `#ca9d4f`, then source defaults were restored. The OS picker flow still needs owner retest.                                                                                                                                                                                                                | Awaiting owner retest of color selection and the Phase 9 workflow before acceptance.                     |
+| 2026-09-26 | 9 acceptance | Owner approval     | Owner confirmed “Works now!” and marked Phase 9 complete after retesting the native color picker. Phase 9 accepted. Owner said Phase 10 will start later.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Phase 9 accepted; wait for the owner to start Phase 10.                                                   |
 
 ## Open issues and revisions
 
