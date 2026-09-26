@@ -1,9 +1,9 @@
 # Development tracker
 
 Last updated: 2026-09-26  
-Current gate: Phases 1–7 are accepted. Phase 8 implementation is complete and awaiting owner playtest.
+Current gate: Phases 1–8 are accepted. Phase 9 Asset Bench is implemented and awaiting owner playtest.
 
-Next authorized work: Owner retests Phase 8 entry clearance and the complete enter/move/exit flow after the playtest fix. Phase 7 was explicitly approved by the owner on 2026-09-26; the outstanding reference-machine profiles remain undocumented because no reference setup was supplied.
+Next authorized work: Owner playtests the Asset Bench edit/save/reopen/use-in-run workflow. Phase 7 was explicitly approved by the owner on 2026-09-26; the outstanding reference-machine profiles remain undocumented because no reference setup was supplied.
 
 ## Phase status
 
@@ -16,8 +16,8 @@ Next authorized work: Owner retests Phase 8 entry clearance and the complete ent
 | 5     | Better player navigation                                          | Accepted                | Accepted       | Owner: “Playtest 5 - all fine! I tested and everything works.” Approved on 2026-09-25.                                                  |
 | 6     | 10,000-agent simulation                                           | Accepted                | Accepted       | Owner playtest was good; reported stable 60 FPS and 17 ms or less per frame with 10,000 enemies on 2026-09-25. Environment unspecified. |
 | 7     | Performance and LOD                                               | Accepted                | Accepted       | Owner approved Phase 7 and authorized the next phase on 2026-09-26. Active/stress reference profiles remain undocumented.               |
-| 8     | Enterable buildings                                               | Awaiting owner playtest | Pending        | Seeded 2–4 room interiors, doors, loot, encounter, return, and outdoor pause are implemented; browser interaction smoke remains open.   |
-| 9     | Separate asset editor                                             | Not started             | Pending        | Shared asset format.                                                                                                                    |
+| 8     | Enterable buildings                                               | Accepted                | Accepted       | Owner reported the Phase 8 playtest succeeded on 2026-09-26 after the entry-clearance fix.                                              |
+| 9     | Separate asset editor                                             | Awaiting owner playtest | Pending        | Separate Asset Bench page edits shared assets and exports versioned JSON; game loading is integrated.                                   |
 | 10    | Walkable base camp                                                | Not started             | Pending        | Hub, shops, upgrades, destinations.                                                                                                     |
 | 11    | Weather, lighting, effects                                        | Not started             | Pending        | Preserve performance.                                                                                                                   |
 
@@ -249,6 +249,23 @@ Owner approval is recorded as the phase gate. The reference-machine normal/stres
 - [ ] Browser smoke confirms building-door entry, interior camera/navigation/combat/loot, same-position exit, and resumed outdoor simulation.
 - [ ] Owner playtests room clarity, controls in both views, encounter/loot persistence, and exterior pause/resume; record acceptance or revisions.
 
+## Phase 9 checklist
+
+### 9.1 Shared asset editing
+
+- [x] Build a separate Asset Bench page from the same five authored asset definitions used by the game.
+- [x] Preview asset variants with orbit and zoom controls, plus near and far camera presets.
+- [x] Inspect and edit placement dimensions, optional collision, interaction points, material color, roughness, and metalness.
+- [x] Save and reopen a versioned portable JSON document; reject unsupported versions and invalid values with clear messages.
+
+### 9.2 Game integration and gate
+
+- [x] Apply a valid Asset Bench document before game world generation so its bounds, collision, materials, and building interaction points are used directly.
+- [x] Provide a direct Asset Bench action to apply the current document and enter the game.
+- [x] Automated coverage passes: 9 files, 37 tests; production build and formatting pass.
+- [x] Local browser smoke imported an asset JSON document, applied the boulder material edit, opened Last Light, and started a generated run; console warning/error capture was empty.
+- [ ] Owner playtests editing, invalid-value feedback, save/reopen, and the generated-run workflow.
+
 ## Evidence and playtest log
 
 | Date       | Phase        | Build/commit       | Verification and result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Owner feedback / next action                                                                             |
@@ -274,6 +291,8 @@ Owner approval is recorded as the phase gate. The reference-machine normal/stres
 | 2026-09-26 | 7 acceptance | Owner approval     | Owner explicitly approved Phase 7 and authorized the next phase (“green lights for next phase”). No revisions reported. The existing active-run and 10k reference profiles remain undocumented; no browser/hardware claim added.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Phase 7 accepted; Phase 8 authorized.                                                                    |
 | 2026-09-26 | 8            | `cf41524`          | Added seeded 2–4 room interiors, wall/furniture collision and navigation, usable building entrances, loot, one infected encounter, persistent per-run room state, and outdoor timer/horde pause/resume. `npm test` passed (8 files, 34 tests); `npm run build` passed (645.89 kB minified, 168.19 kB gzip; Vite advisory above 500 kB); `npm run format:check` passed. Browser launch, deployment/disembark and route interaction worked at 639×698 / 1×; console warnings/errors were empty. The full interior interaction was not reached during the smoke.                                                                                                                                                                    | Awaiting owner playtest of the complete entry/exit flow and both camera modes.                           |
 | 2026-09-26 | 8 revision   | `e20fa6d`          | Owner playtest found that entry placed the player inside the center divider and blocked movement. The front-divider opening now aligns with the entry/exit position, creating a clear passage. Automated and browser checks were not rerun for this correction.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Awaiting owner retest of spawn clearance and interior movement.                                          |
+| 2026-09-26 | 8 acceptance | Owner approval     | Owner reported “Playtest was successful” and authorized the next phase (“start with the next phase”). Phase 8 accepted; no additional issue reported.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Phase 8 accepted; Phase 9 authorized.                                                                    |
+| 2026-09-26 | 9            | `3825cb5`          | Added a separate editor for the shared five-asset catalog; editable dimensions, collision, interaction points, and materials; versioned JSON import/export and validation; orbit/zoom and near/far previews; and a direct game handoff. `npm test` passed (9 files, 37 tests); build and format checks passed. Browser smoke imported the boulder JSON, applied it to the game, started a generated run, and had no console warnings/errors.                                                                                                                                                                                                                                                                                     | Awaiting owner playtest of the Asset Bench workflow.                                                     |
 
 ## Open issues and revisions
 
@@ -286,7 +305,8 @@ Owner approval is recorded as the phase gate. The reference-machine normal/stres
 | 5.1 | 5     | Verify click-to-move route recovery, dynamic obstruction, and automatic interaction approaches.                                        | Medium   | Resolved    | Owner said “Playtest 5 - all fine! I tested and everything works.” and authorized Phase 6 on 2026-09-25.                          |
 | 6.1 | 6     | Owner assesses horde threat readability, tier transitions, crowd behavior, and repeatability.                                          | Medium   | Resolved    | Owner reported a good playtest and stable 60 FPS / 17 ms or less per frame with 10,000 enemies on 2026-09-25; no issues reported. |
 | 7.1 | 7     | Capture representative normal/stress and camera-specific performance on reference hardware, then verify repeated-run memory stability. | High     | In progress | Diagnostics and sparse instance updates are implemented; only an idle-camp embedded-browser profile is recorded so far.           |
-| 8.1 | 8     | Verify the full building entry/interior/exit flow in the browser and owner playtest.                                                   | Medium   | In progress | Owner found a blocked entry spawn; `e20fa6d` aligns the divider opening with the entry point. Awaiting retest.                    |
+| 8.1 | 8     | Verify the full building entry/interior/exit flow in the browser and owner playtest.                                                   | Medium   | Resolved    | Owner reported a successful Phase 8 playtest on 2026-09-26 after the entry-clearance correction.                                  |
+| 9.1 | 9     | Owner playtests editing, invalid-value feedback, save/reopen, and generated-run integration.                                           | Medium   | In progress | Automated checks and local browser smoke pass; awaiting owner workflow feedback.                                                  |
 
 ## Decisions to record
 

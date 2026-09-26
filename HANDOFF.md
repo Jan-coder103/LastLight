@@ -4,15 +4,17 @@ Updated: 2026-09-26
 
 ## Current position
 
-Phases 1–7 are **Accepted**; Phase 8 implementation is complete and **Awaiting owner playtest**. The owner approved Phase 7 and authorized Phase 8 on 2026-09-26 (“green lights for next phase”). Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
+Phases 1–8 are **Accepted**; Phase 9 Asset Bench is implemented and **Awaiting owner playtest**. The owner reported that the Phase 8 playtest succeeded on 2026-09-26 and authorized Phase 9 (“start with the next phase”). Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
 
-Phase 8 adds generated 2–4 room interiors for city buildings, interactive doors, room loot and one infected, a return to the same outdoor position, and a pause for the outdoor timer/horde while inside. Implementation commit: `cf41524`; entry-clearance correction: `e20fa6d`. The owner playtest found the player spawned against the center divider and could not move; the front-divider opening now aligns with the entry/exit point. Owner retest is pending. The earlier automated coverage, build, and formatting passed before this correction; it has not been rerun. Browser console error/warning capture was empty during the earlier smoke, which did not reach the interior flow.
+Phase 8 adds generated 2–4 room interiors for city buildings, interactive doors, room loot and one infected, a return to the same outdoor position, and a pause for the outdoor timer/horde while inside. Implementation commit: `cf41524`; entry-clearance correction: `e20fa6d`. The owner reported the retest succeeded and accepted Phase 8.
+
+Phase 9 adds a separate Asset Bench at `/asset-editor.html`, using the game’s shared five-asset catalog. It previews asset variants with orbit/zoom and near/far cameras; edits dimensions, collision, interaction points, and named material color/roughness/metalness; validates and imports/exports versioned JSON; and applies the active document to the game before world generation. Implementation commit: `3825cb5`. Automated tests, build, formatting, and a browser smoke pass; owner playtest is the next gate.
 
 ## Read first
 
 1. `plan.md` for the vision, technical direction, phase scope, and acceptance criteria.
 2. `tracker.md` for phase status, verification evidence, decisions, and the owner playtest log.
-3. `README.md` for startup commands, controls, simulation benchmark measurements, and the Phase 8 playtest checklist.
+3. `README.md` for startup commands, controls, simulation benchmark measurements, and the Phase 8/9 playtest checklists.
 
 ## Phase 2 decisions and tuning
 
@@ -149,17 +151,28 @@ Phase 8 adds generated 2–4 room interiors for city buildings, interactive door
 - The outdoor timer and hostiles pause inside. Player health, ammo cooldown, dash/ability cooldowns, and the room encounter continue. Room hostiles and remaining loot persist for the rest of the run; a new run clears that progress.
 - Browser preview launch, deploy/disembark, and top-down route were observed at 639×698 / 1.00× in the Codex in-app browser. Console warning/error capture was empty. The full door/room/exit flow remains unverified in browser and is specifically included in the owner playtest checklist.
 
+## Phase 9 decisions and current evidence
+
+- The Asset Bench is a separate Vite page that imports the same `assetCatalog` and asset visual factories as the game.
+- `last-light-authored-asset` version 1 stores an asset ID, placement dimensions, optional collider, up to 16 interaction points, and the complete named material palette. Validation rejects unsupported versions, unknown assets/materials, out-of-range numbers, invalid colors, and duplicate point IDs.
+- The game reads an active document from browser storage before generating its world. Dimensions and collision affect generated placement/navigation; material values affect rendered prototypes; the building shell’s `front-door` point sets its interaction approach.
+- Local browser smoke at 639×698: selected and edited the boulder, saw an invalid dimension disable save/use, reopened an asset JSON document, applied it to Last Light, started a generated run, and captured no console warnings/errors. The test override was cleared afterward.
+- Phase 9 owner playtest remains pending; see the checklist in `README.md`.
+
 ## Verification
 
 - `npm test` — passed: 8 files, 34 tests. Includes deterministic 2–4 room generation, room/loot/encounter route reachability, and walkable exterior entrances in the existing 24-seed regression.
 - `npm run build` — passed; 645.89 kB minified (168.19 kB gzip). Vite still emits its default advisory above 500 kB.
 - `npm run format:check` — passed.
 - Browser preview — game rendered at 60 FPS / 16.7 ms in the 639×698 embedded-browser viewport; deploy, touchdown, disembark, and click-to-move route telemetry worked. The attempted field traversal ended in death before door entry; console error/warning capture was empty. Owner should verify the full new interaction flow.
+- Phase 9 `npm test` — passed: 9 files, 37 tests. Portable asset JSON round-trips and rejects invalid dimensions, collision, interaction points, and material settings; an override changes the shared game definition.
+- Phase 9 `npm run build` — passed and emits both `index.html` and `asset-editor.html`. Vite warns that the shared Three.js chunk exceeds 500 kB.
+- Phase 9 `npm run format:check` — passed.
 
 ## Known limits and next action
 
 - Phase 7 remains owner-accepted, but its regular-run and 10,000-agent reference-hardware profiles were not documented. The reference browser/machine and numeric final limits remain open.
-- Next: owner retests Phase 8 entry clearance and movement, then checks door targeting, camera behavior, loot/encounter persistence, same-position exit, and outdoor pause/resume. Repeat verification before marking Phase 8 Accepted.
+- Next: owner playtests Phase 9 selection, preview distances, bounded edits, invalid-value feedback, JSON save/reopen, and use of an edited asset in a generated run. Record feedback before beginning Phase 10.
 - Stress visuals are intentionally simplified low-poly instances; this phase proves tracked simulation and horde behavior, while Phase 7 owns draw-call, memory, frame-time, and reference-hardware targets.
 - Local obstacle steering is a short deflection check rather than full route planning. The owner should flag groups that stall at blocked cells or bunch in narrow spaces.
 - The regular run still caps at seven hostiles and remains separate from the Horde Simulation Lab.

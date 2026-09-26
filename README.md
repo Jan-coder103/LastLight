@@ -57,6 +57,7 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 - `src/world/buildWorld.ts` turns generated data into Three.js terrain and scene objects.
 - `src/interiors/interiorLayout.ts` creates reproducible room layouts, loot, encounter positions, and collision data; `src/interiors/buildInterior.ts` assembles the reusable room pieces.
 - `src/assets/` contains authored asset modules and shared versioned metadata.
+- `asset-editor.html` and `src/assetEditor/` provide the separate Asset Bench for reviewing and adjusting the same authored definitions.
 - `src/player/PlayerController.ts` owns direct third-person movement, top-down route following, dash movement, and the player visual.
 - `src/navigation/GridNavigator.ts` routes the player around static colliders and refreshed hostile positions; combat pursuers use a separate static navigation map.
 - `src/game/CombatSimulation.ts` owns health, firing and ability cooldowns, damage, and zombie pursuit/attacks.
@@ -67,9 +68,15 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 - `src/camera/CameraRig.ts` owns both camera views and their transition.
 - `src/main.ts` assembles the scene, UI, renderer, and diagnostics.
 
+## Asset Bench
+
+From the camp panel, open **Asset Bench**. Select one of the five shared assets, orbit or zoom the preview, and compare the near and far camera presets. Edit placement bounds, collision, interaction points, or material color/roughness/metalness. The inspector limits values and blocks saving when metadata is invalid.
+
+**Save JSON** exports a versioned `last-light-authored-asset` document. **Open JSON** validates and reopens that file. **Try in Game** stores the validated document for this browser and opens Last Light; start a run to use the edited bounds, collision, materials, or building interaction point. **Restore Source** clears the saved game override and resets the selected asset in the editor.
+
 ## Adding an authored asset
 
-Create a small module in `src/assets/` that exports an `AuthoredAsset` with a stable ID, schema version, dimensions, optional collider, interaction points, and a visual factory. The definition data stays explicit and separate from generated placements so a future editor can consume the same metadata. Register the module in `src/assets/catalog.ts`, then place its ID from `src/world/generateWorld.ts`; keep generated position/rotation/scale/variant values in `AssetPlacement`, not in the asset definition. Add a deterministic test if the placement changes generation behavior.
+Create a small module in `src/assets/` that exports an `AuthoredAsset` with a stable ID, schema version, dimensions, optional collider, interaction points, named materials, and a visual factory. Register it in `src/assets/catalog.ts`, then place its ID from `src/world/generateWorld.ts`; keep generated position/rotation/scale/variant values in `AssetPlacement`, not in the asset definition. Add deterministic coverage if the placement changes generation behavior.
 
 ## Phase 3 playtest checklist
 
@@ -111,6 +118,14 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 3. Switch camera views indoors and confirm the selected view, player heading, collision, and controls remain predictable. Try a route through each room and around furniture.
 4. Collect an item and clear the infected, then exit. Confirm the scout returns to the same outdoor position and the horde/run clock resume. Re-enter the same building and check that collected loot and defeated infected stay cleared.
 5. Change the world seed from camp and revisit a building. Confirm its interior repeats from that seed and that the run remains playable after leaving it.
+
+## Phase 9 playtest checklist
+
+1. Open **Asset Bench** from camp. Select the building shell and a prop; orbit each preview, zoom with the wheel, and compare **Near** and **Far** camera views.
+2. Edit a material color and collision size, then adjust a building interaction point. Confirm the preview and inspector reflect the changes.
+3. Set a dimension outside the allowed range and confirm the validation message appears and JSON save/game actions are disabled. Restore a valid value.
+4. Save the asset JSON, reopen that file, and confirm the edited values return. Use **Try in Game**, start a run, and check the selected asset in the generated field.
+5. Use **Restore Source**, reload the game, and confirm the test override is cleared.
 
 The regular encounter is intentionally capped at seven hostiles. For Phase 6, open **Horde Simulation Lab** from camp or the dev telemetry button. Choose 100, 1,000, 5,000, or 10,000 agents; set a spawn seed, layout, and camera; then start the isolated stress scene. WASD movement and top-down click-to-move let the horde pursue the player. The lab shows near/mid/far tier counts, the nearest-agent query, player attacks received, and simulation time. End the scene to return to camp.
 
