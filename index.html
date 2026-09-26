@@ -22,25 +22,42 @@
             <h1>LAST LIGHT</h1>
           </div>
         </div>
-        <form class="seed-card" id="seed-form">
-          <label for="seed-input">WORLD SEED</label>
-          <div class="seed-controls">
-            <input id="seed-input" name="seed" maxlength="32" value="RAVEN-07" autocomplete="off" />
-            <button
-              type="submit"
-              class="icon-button"
-              aria-label="Reload world with this seed"
-              title="Reload world with this seed"
-            >
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path
-                  d="M16.2 7.3A6.4 6.4 0 0 0 4.9 5.1L3.3 6.8M3.3 6.8V3.7M3.3 6.8h3.2M3.8 12.7a6.4 6.4 0 0 0 11.3 2.2l1.6-1.7m0 0v3.1m0-3.1h-3.2"
-                />
-              </svg>
-            </button>
-          </div>
-          <span id="seed-hint">Same seed, same streets.</span>
-        </form>
+        <div class="topbar-actions">
+          <button
+            id="settings-button"
+            class="settings-button"
+            type="button"
+            aria-haspopup="dialog"
+            aria-controls="settings-overlay"
+          >
+            ATMOSPHERE <span class="button-key">O</span>
+          </button>
+          <form class="seed-card" id="seed-form">
+            <label for="seed-input">WORLD SEED</label>
+            <div class="seed-controls">
+              <input
+                id="seed-input"
+                name="seed"
+                maxlength="32"
+                value="RAVEN-07"
+                autocomplete="off"
+              />
+              <button
+                type="submit"
+                class="icon-button"
+                aria-label="Reload world with this seed"
+                title="Reload world with this seed"
+              >
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <path
+                    d="M16.2 7.3A6.4 6.4 0 0 0 4.9 5.1L3.3 6.8M3.3 6.8V3.7M3.3 6.8h3.2M3.8 12.7a6.4 6.4 0 0 0 11.3 2.2l1.6-1.7m0 0v3.1m0-3.1h-3.2"
+                  />
+                </svg>
+              </button>
+            </div>
+            <span id="seed-hint">Same seed, same streets.</span>
+          </form>
+        </div>
       </header>
 
       <section class="map-label" aria-label="Map location">
@@ -66,6 +83,9 @@
           <span>CAMP STATUS</span><strong id="run-clock">CAMP</strong>
         </div>
         <div class="field-line"><span>THREAT</span><strong id="hostile-count">SAFE</strong></div>
+        <div class="field-line">
+          <span>SKY</span><strong id="atmosphere-status">CAMP · CLEAR</strong>
+        </div>
         <div class="health-label">
           <span>HEALTH</span><strong id="health-value">100 / 100</strong>
         </div>
@@ -77,6 +97,65 @@
         <p class="nearby-action" id="nearby-action" hidden></p>
         <p id="combat-message">Three hostiles detected. Stay mobile.</p>
         <div class="ability-status" id="ability-status"></div>
+      </section>
+
+      <section
+        class="settings-overlay"
+        id="settings-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        hidden
+      >
+        <div class="settings-panel">
+          <div class="settings-heading">
+            <div>
+              <span class="eyebrow">FIELD OPTIONS</span>
+              <h2 id="settings-title">ATMOSPHERE & ACCESSIBILITY</h2>
+              <p>Visual presets lock when you deploy. Accessibility changes take effect now.</p>
+            </div>
+            <button
+              id="settings-close"
+              class="icon-button"
+              type="button"
+              aria-label="Close field options"
+            >
+              ×
+            </button>
+          </div>
+          <div class="settings-selects">
+            <label for="time-preference">LIGHTING PRESET</label>
+            <select id="time-preference">
+              <option value="seeded">Seeded per run</option>
+              <option value="low-sun">Low sun</option>
+              <option value="high-moon">High moon</option>
+            </select>
+            <label for="weather-preference">WEATHER PRESET</label>
+            <select id="weather-preference">
+              <option value="seeded">Seeded per run</option>
+              <option value="clear">Clear</option>
+              <option value="mist">Mist</option>
+              <option value="rain">Rain & distant thunder</option>
+            </select>
+          </div>
+          <div class="settings-toggles">
+            <label
+              ><input id="reduce-motion" type="checkbox" /> Reduce motion and camera shake</label
+            >
+            <label><input id="reduce-flashes" type="checkbox" /> Reduce bright flashes</label>
+            <label><input id="rain-visuals" type="checkbox" /> Show rain particles</label>
+            <label
+              ><input id="audio-cues" type="checkbox" /> Play quiet action and weather cues</label
+            >
+          </div>
+          <label class="shake-control" for="shake-intensity">
+            <span>IMPACT SHAKE</span><output id="shake-value" for="shake-intensity">55%</output>
+            <input id="shake-intensity" type="range" min="0" max="100" value="55" />
+          </label>
+          <p id="settings-note" class="settings-note" aria-live="polite">
+            Lighting and weather selections apply to the next deployment.
+          </p>
+        </div>
       </section>
 
       <section class="extraction-guide" id="extraction-guide" aria-live="polite" hidden>
@@ -204,7 +283,7 @@
         <button id="base-menu-button" class="base-menu-button" type="button" hidden>
           CAMP TERMINAL <span class="button-key">M</span>
         </button>
-        <p class="footer-note">PHASE 10 <span>—</span> WALKABLE CAMP</p>
+        <p class="footer-note">PHASE 11 <span>—</span> ATMOSPHERE</p>
       </footer>
 
       <aside class="diagnostics" aria-label="Development diagnostics">

@@ -46,6 +46,11 @@ export class CameraRig {
   private transition: Transition | undefined;
   private readonly idealPosition = new Vector3();
   private readonly idealTarget = new Vector3();
+  private readonly shakeTarget = new Vector3();
+  private shakeElapsed = 0;
+  private shakeRemaining = 0;
+  private shakeDuration = 0;
+  private shakeStrength = 0;
 
   constructor(camera: PerspectiveCamera, canvas: HTMLCanvasElement, world: WorldData) {
     this.camera = camera;
@@ -54,6 +59,14 @@ export class CameraRig {
     this.camera.position.set(0, 5.5, 7.4);
     this.currentTarget.set(0, 1.35, -5);
     this.camera.lookAt(this.currentTarget);
+  }
+
+  kickShake(strength: number, duration = 0.2): void {
+    if (!Number.isFinite(strength) || strength <= 0 || duration <= 0) return;
+    this.shakeStrength = Math.max(this.shakeStrength, Math.min(strength, 0.16));
+    this.shakeDuration = Math.max(this.shakeDuration, Math.min(duration, 0.5));
+    this.shakeRemaining = this.shakeDuration;
+    this.shakeElapsed = 0;
   }
 
   setWorld(world: WorldData): void {
@@ -98,11 +111,22 @@ export class CameraRig {
       this.camera.position.lerp(this.idealPosition, blend);
       this.currentTarget.lerp(this.idealTarget, blend);
     }
-    this.camera.lookAt(this.currentTarget);
+    const deltaX = this.shakeOffsetX(delta);
+    const deltaY = this.shakeOffsetY();
+    this.camera.position.x += deltaX;
+    this.camera.position.y += deltaY;
+    this.shakeTarget.set(
+      this.currentTarget.x + deltaX,
+      this.currentTarget.y + deltaY,
+      this.currentTarget.z,
+    );
+    this.camera.lookAt(this.shakeTarget);
   }
 
   reset(playerPosition: Vector3): void {
     this.transition = undefined;
+    this.shakeRemaining = 0;
+    this.shakeStrength = 0;
     this.mode = 'third-person';
     this.yaw = 0;
     this.pitch = 0.2;
@@ -153,6 +177,23 @@ export class CameraRig {
       this.idealPosition.z - cosine * Math.cos(this.pitch) * focusDistance,
     );
     this.constrainToWorld(this.idealTarget, this.idealPosition);
+  }
+
+  private shakeOffsetX(delta: number): number {
+    if (this.shakeRemaining <= 0) {
+      this.shakeStrength = 0;
+      return 0;
+    }
+    this.shakeElapsed += delta;
+    this.shakeRemaining = Math.max(0, this.shakeRemaining - delta);
+    const envelope = this.shakeRemaining / this.shakeDuration;
+    return Math.sin(this.shakeElapsed * 61) * this.shakeStrength * envelope;
+  }
+
+  private shakeOffsetY(): number {
+    if (this.shakeRemaining <= 0) return 0;
+    const envelope = this.shakeRemaining / this.shakeDuration;
+    return Math.sin(this.shakeElapsed * 83) * this.shakeStrength * 0.55 * envelope;
   }
 
   private constrainToWorld(target: Vector3, desired: Vector3): void {

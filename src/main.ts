@@ -33,6 +33,16 @@ import {
 import type { AbilitySlot } from './input/controlMap';
 import { installAssetDocumentOverride } from './assets/catalog';
 import { readStoredAssetDocument, type AssetDocument } from './assets/assetDocument';
+import { AtmosphereRuntime } from './atmosphere/AtmosphereRuntime';
+import { AudioFeedback } from './atmosphere/AudioFeedback';
+import { ParticleBursts } from './atmosphere/ParticleBursts';
+import {
+  loadAtmosphereSettings,
+  resolveRunAtmosphere,
+  saveAtmosphereSettings,
+  type AtmosphereSettings,
+  type RunAtmosphere,
+} from './atmosphere/settings';
 import { buildCamp } from './camp/buildCamp';
 import { buyCampItem, campPrices, sellCampItem } from './camp/campEconomy';
 import { campEntrances, campServices, createCampWorld } from './camp/campWorld';
@@ -69,6 +79,19 @@ import './style.css';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene');
 if (!canvas) throw new Error('The #scene canvas is missing from index.html');
+
+function safeLocalStorage(): Storage | undefined {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+const optionsStorage = safeLocalStorage();
+const prefersReducedMotion =
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+const atmosphereSettings = loadAtmosphereSettings(optionsStorage, prefersReducedMotion);
 
 let activeAssetDocument: AssetDocument | undefined;
 let assetDocumentLoadError = '';
@@ -123,11 +146,35 @@ sun.shadow.camera.bottom = -155;
 sun.shadow.bias = -0.00025;
 sun.target.position.set(0, 0, 0);
 scene.add(sun, sun.target);
+const audioFeedback = new AudioFeedback();
+const atmosphereRuntime = new AtmosphereRuntime(
+  scene,
+  skyLight,
+  fillLight,
+  sun,
+  () => audioFeedback.play('thunder'),
+  (exposure) => {
+    renderer.toneMappingExposure = exposure;
+  },
+);
+const particleBursts = new ParticleBursts(scene);
 
 const elements = {
   seedForm: document.querySelector<HTMLFormElement>('#seed-form'),
   seedInput: document.querySelector<HTMLInputElement>('#seed-input'),
   seedHint: document.querySelector<HTMLElement>('#seed-hint'),
+  settingsButton: document.querySelector<HTMLButtonElement>('#settings-button'),
+  settingsOverlay: document.querySelector<HTMLElement>('#settings-overlay'),
+  settingsClose: document.querySelector<HTMLButtonElement>('#settings-close'),
+  settingsNote: document.querySelector<HTMLElement>('#settings-note'),
+  timePreference: document.querySelector<HTMLSelectElement>('#time-preference'),
+  weatherPreference: document.querySelector<HTMLSelectElement>('#weather-preference'),
+  reduceMotion: document.querySelector<HTMLInputElement>('#reduce-motion'),
+  reduceFlashes: document.querySelector<HTMLInputElement>('#reduce-flashes'),
+  rainVisuals: document.querySelector<HTMLInputElement>('#rain-visuals'),
+  audioCues: document.querySelector<HTMLInputElement>('#audio-cues'),
+  shakeIntensity: document.querySelector<HTMLInputElement>('#shake-intensity'),
+  shakeValue: document.querySelector<HTMLOutputElement>('#shake-value'),
   modeName: document.querySelector<HTMLElement>('#view-name'),
   lockButton: document.querySelector<HTMLButtonElement>('#lock-button'),
   lockLabel: document.querySelector<HTMLElement>('#lock-label'),
@@ -147,6 +194,7 @@ const elements = {
   diagSeed: document.querySelector<HTMLElement>('#diag-seed'),
   controlsContent: document.querySelector<HTMLElement>('#controls-content'),
   hostileCount: document.querySelector<HTMLElement>('#hostile-count'),
+  atmosphereStatus: document.querySelector<HTMLElement>('#atmosphere-status'),
   healthValue: document.querySelector<HTMLElement>('#health-value'),
   healthFill: document.querySelector<HTMLElement>('#health-fill'),
   combatMessage: document.querySelector<HTMLElement>('#combat-message'),
@@ -209,6 +257,7 @@ for (const [key, element] of Object.entries(elements)) {
 }
 
 let world: WorldData = generateWorld(elements.seedInput!.value);
+let currentRunAtmosphere: RunAtmosphere = resolveRunAtmosphere(world.seed, atmosphereSettings);
 let worldGroup = buildWorld(world);
 scene.add(worldGroup);
 worldGroup.visible = false;
@@ -341,6 +390,9 @@ let routeLine: Line | undefined;
 let dragPointerId: number | undefined;
 let pointerStart: { id: number; x: number; y: number } | undefined;
 let wasAlive = combat.alive;
+let lastFeedbackHealth = 100;
+let feedbackTimeout = 0;
+let optionsReturnFocus: HTMLElement | null = null;
 let lastUiTime = 0;
 let routeRefresh = 0;
 let hoverRefresh = 0;
@@ -362,6 +414,98 @@ function updateModeUi(): void {
   elements.viewButton!.setAttribute('aria-label', `Change camera from ${label.toLowerCase()} view`);
   document.querySelector('#game')?.classList.toggle('is-top-down', cameraRig.mode === 'top-down');
   renderControls();
+}
+
+function updateAtmosphereStatus(): void {
+  let status: string;
+  if (gamePhase === 'base' || campInteriorSession) {
+    status = 'CAMP · CLEAR';
+  } else {
+    const time = currentRunAtmosphere.time === 'low-sun' ? 'LOW SUN' : 'HIGH MOON';
+    const weather = currentRunAtmosphere.weather.toUpperCase();
+    status = `${time} · ${weather}`;
+  }
+  if (elements.atmosphereStatus!.textContent !== status)
+    elements.atmosphereStatus!.textContent = status;
+}
+
+function applyAccessibilityOptions(): void {
+  const game = document.querySelector('#game');
+  game?.classList.toggle('reduce-motion', atmosphereSettings.reduceMotion);
+  game?.classList.toggle('reduce-flashes', atmosphereSettings.reduceFlashes);
+  audioFeedback.setOptions(atmosphereSettings.audioCues, atmosphereRuntime.weather);
+}
+
+function settingsStatusText(): string {
+  const time = currentRunAtmosphere.time === 'low-sun' ? 'Low sun' : 'High moon';
+  const weather =
+    currentRunAtmosphere.weather[0]!.toUpperCase() + currentRunAtmosphere.weather.slice(1);
+  return gamePhase === 'base' && !stressActive
+    ? 'Lighting and weather selections apply to your next deployment.'
+    : `Current run stays ${time} · ${weather}. Lighting changes apply next deployment.`;
+}
+
+function persistAtmosphereSettings(): void {
+  const saved = saveAtmosphereSettings(atmosphereSettings, optionsStorage);
+  elements.settingsNote!.textContent = saved
+    ? settingsStatusText()
+    : 'Options apply for this session; browser storage is unavailable.';
+}
+
+function updateSettingsControls(): void {
+  elements.timePreference!.value = atmosphereSettings.time;
+  elements.weatherPreference!.value = atmosphereSettings.weather;
+  elements.reduceMotion!.checked = atmosphereSettings.reduceMotion;
+  elements.reduceFlashes!.checked = atmosphereSettings.reduceFlashes;
+  elements.rainVisuals!.checked = atmosphereSettings.rainVisuals;
+  elements.audioCues!.checked = atmosphereSettings.audioCues;
+  elements.shakeIntensity!.value = String(Math.round(atmosphereSettings.shakeIntensity * 100));
+  elements.shakeValue!.value = `${Math.round(atmosphereSettings.shakeIntensity * 100)}%`;
+  elements.settingsNote!.textContent = settingsStatusText();
+}
+
+function applyRunAtmosphere(seed: string): void {
+  currentRunAtmosphere = resolveRunAtmosphere(seed, atmosphereSettings);
+  atmosphereRuntime.setRun(currentRunAtmosphere, seed);
+  audioFeedback.setOptions(atmosphereSettings.audioCues, currentRunAtmosphere.weather);
+  updateAtmosphereStatus();
+  updateSettingsControls();
+}
+
+function setCampAtmosphere(): void {
+  atmosphereRuntime.setCamp();
+  audioFeedback.setOptions(atmosphereSettings.audioCues, 'clear');
+  updateAtmosphereStatus();
+  updateSettingsControls();
+}
+
+function openAtmosphereOptions(): void {
+  optionsReturnFocus =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  updateSettingsControls();
+  elements.settingsOverlay!.removeAttribute('hidden');
+  elements.settingsClose!.focus();
+}
+
+function closeAtmosphereOptions(): void {
+  elements.settingsOverlay!.setAttribute('hidden', '');
+  (optionsReturnFocus ?? elements.settingsButton!).focus();
+  optionsReturnFocus = null;
+}
+
+function flashDamageFeedback(): void {
+  if (!atmosphereSettings.reduceFlashes) {
+    const game = document.querySelector('#game');
+    game?.classList.remove('damage-flash');
+    void game?.clientWidth;
+    game?.classList.add('damage-flash');
+    window.clearTimeout(feedbackTimeout);
+    feedbackTimeout = window.setTimeout(() => game?.classList.remove('damage-flash'), 340);
+  }
+  if (!atmosphereSettings.reduceMotion && atmosphereSettings.shakeIntensity > 0) {
+    cameraRig.kickShake(0.08 * atmosphereSettings.shakeIntensity, 0.28);
+  }
+  audioFeedback.play('damage');
 }
 
 function switchView(): void {
@@ -462,6 +606,7 @@ function renderControls(): void {
 }
 
 function updateCombatUi(): void {
+  updateAtmosphereStatus();
   if (stressActive && hordeSimulation) {
     const health = Math.ceil(hordeSimulation.playerHealth);
     elements.hostileCount!.textContent = `${hordeSimulation.livingCount} / ${hordeSimulation.count}`;
@@ -653,6 +798,7 @@ function setSeed(seed: string): void {
   player.setEnabled(elements.baseOverlay!.hasAttribute('hidden'));
   player.setPosition(campWorld.spawn.x, campWorld.spawn.z);
   campGroup.visible = true;
+  setCampAtmosphere();
   cameraRig.setWorld(campWorld);
   resetCampCamera();
   createZombieViews();
@@ -675,6 +821,7 @@ function setSeed(seed: string): void {
 function setCampContext(position = campWorld.spawn, resetCamera = true): void {
   campGroup.visible = true;
   worldGroup.visible = false;
+  setCampAtmosphere();
   if (zombieGroup) zombieGroup.visible = false;
   navigator = campNavigator;
   combatNavigator = fieldNavigator;
@@ -768,7 +915,9 @@ function updateRenderDiagnosticsUi(): void {
   elements.gpuValue!.textContent = gpu;
   elements.memoryValue!.textContent = `${heap} · ${info.memory.geometries}g / ${info.memory.textures}t`;
   elements.resolutionValue!.textContent = `${cameraRig.mode} · ${renderer.domElement.width}×${renderer.domElement.height} @${renderer.getPixelRatio().toFixed(2)}x`;
-  elements.effectsValue!.textContent = String(timedEffects.length);
+  elements.effectsValue!.textContent = String(
+    timedEffects.length + particleBursts.activeCount + Number(atmosphereRuntime.isRaining),
+  );
 }
 
 function updateHordeUi(): void {
@@ -928,6 +1077,10 @@ function startHordeTest(): void {
   cameraRig.reset(player.position);
   if (elements.hordeCamera!.value !== 'third-person') cameraRig.switchMode(player.position);
   stressActive = true;
+  applyRunAtmosphere(seed);
+  lastFeedbackHealth = hordeSimulation.playerHealth;
+  updateAtmosphereStatus();
+  updateSettingsControls();
   document.querySelector('#game')?.classList.add('is-horde-test');
   elements.baseOverlay!.setAttribute('hidden', '');
   elements.baseMenuButton!.hidden = true;
@@ -1566,6 +1719,7 @@ function enterCampBuilding(entrance: BuildingEntrance): void {
     });
   }
   campGroup.visible = false;
+  setCampAtmosphere();
   scene.add(group);
   campInteriorSession = {
     entrance,
@@ -1601,6 +1755,7 @@ function leaveCampBuilding(): void {
   disposeTree(session.group);
   campInteriorSession = undefined;
   campGroup.visible = true;
+  setCampAtmosphere();
   navigator = campNavigator;
   player.setWorld(campWorld, () => 0);
   player.setPosition(session.returnPosition.x, session.returnPosition.z);
@@ -2113,6 +2268,7 @@ function startRun(): void {
   clearRunScene();
   campGroup.visible = false;
   worldGroup.visible = true;
+  applyRunAtmosphere(world.seed);
   navigator = fieldNavigator;
   combatNavigator = fieldNavigator;
   navigator.setDynamicObstacles([]);
@@ -2158,6 +2314,7 @@ function startRun(): void {
   );
   scene.add(extractionGuideArrow);
   gamePhase = 'arrival';
+  updateAtmosphereStatus();
   document.querySelector('#game')?.classList.remove('is-base');
   elements.nearbyAction!.setAttribute('hidden', '');
   updateBaseUi();
@@ -2165,6 +2322,7 @@ function startRun(): void {
   observedDash = false;
   autoAttackTargetId = undefined;
   wasAlive = true;
+  lastFeedbackHealth = combat.health;
   elements.baseOverlay!.setAttribute('hidden', '');
   elements.deathOverlay!.setAttribute('hidden', '');
   elements.arrivalOverlay!.removeAttribute('hidden');
@@ -2305,6 +2463,13 @@ function addShockEffect(): void {
   timedEffects.push({ object: pulse, remaining: 0.22 });
 }
 
+function addAbilityParticles(color: string, count = 10): void {
+  if (atmosphereSettings.reduceMotion) return;
+  const position = player.position.clone();
+  position.y += 0.55;
+  particleBursts.burst(position, color, count, 1.25, 0.48);
+}
+
 function addDashIndicator(): void {
   const direction = player.dashDirectionVector;
   direction.y = 0;
@@ -2347,12 +2512,29 @@ player = new PlayerController(
   (slot: AbilitySlot) => {
     if (gamePhase !== 'active' && !stressActive) return;
     if (!combat.activateAbility(slot, player.position)) return;
-    if (slot === 2) addShockEffect();
+    if (slot === 1) {
+      audioFeedback.play('heal');
+      addAbilityParticles('#b3d89c');
+    } else if (slot === 2) {
+      addShockEffect();
+      audioFeedback.play('shock');
+      addAbilityParticles('#9fd8d0', 14);
+      if (!atmosphereSettings.reduceMotion)
+        cameraRig.kickShake(0.04 * atmosphereSettings.shakeIntensity, 0.22);
+    } else {
+      audioFeedback.play('adrenaline');
+      addAbilityParticles('#e9cb7a');
+    }
   },
   () => {
     if (gamePhase !== 'active' && !stressActive) return false;
     if (cameraRig.mode === 'top-down') updateTopDownDashAim(pointerX, pointerY);
     const started = combat.tryDash();
+    if (started) {
+      audioFeedback.play('dash');
+      if (!atmosphereSettings.reduceMotion)
+        cameraRig.kickShake(0.025 * atmosphereSettings.shakeIntensity, 0.17);
+    }
     if (started && cameraRig.mode === 'top-down') autoAttackTargetId = undefined;
     return started;
   },
@@ -2365,6 +2547,8 @@ worldGroup.visible = false;
 campGroup.visible = true;
 cameraRig.setWorld(campWorld);
 resetCampCamera();
+applyAccessibilityOptions();
+setCampAtmosphere();
 createZombieViews();
 zombieGroup.visible = false;
 updateBaseUi();
@@ -2379,6 +2563,57 @@ elements.seedForm!.addEventListener('submit', (event) => {
   event.preventDefault();
   setSeed(elements.seedInput!.value);
 });
+elements.settingsButton!.addEventListener('click', openAtmosphereOptions);
+elements.settingsClose!.addEventListener('click', closeAtmosphereOptions);
+elements.settingsOverlay!.addEventListener('click', (event) => {
+  if (event.target === elements.settingsOverlay) closeAtmosphereOptions();
+});
+elements.settingsOverlay!.addEventListener('keydown', (event) => {
+  if (event.key !== 'Tab') return;
+  const focusable = Array.from(
+    elements.settingsOverlay!.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    ),
+  );
+  if (focusable.length === 0) return;
+  const first = focusable[0]!;
+  const last = focusable[focusable.length - 1]!;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+});
+elements.timePreference!.addEventListener('change', () => {
+  atmosphereSettings.time = elements.timePreference!.value as AtmosphereSettings['time'];
+  persistAtmosphereSettings();
+});
+elements.weatherPreference!.addEventListener('change', () => {
+  atmosphereSettings.weather = elements.weatherPreference!.value as AtmosphereSettings['weather'];
+  persistAtmosphereSettings();
+});
+for (const [input, key] of [
+  [elements.reduceMotion!, 'reduceMotion'],
+  [elements.reduceFlashes!, 'reduceFlashes'],
+  [elements.rainVisuals!, 'rainVisuals'],
+  [elements.audioCues!, 'audioCues'],
+] as const) {
+  input.addEventListener('change', () => {
+    atmosphereSettings[key] = input.checked;
+    applyAccessibilityOptions();
+    if (key === 'audioCues' && input.checked) audioFeedback.unlock();
+    persistAtmosphereSettings();
+  });
+}
+elements.shakeIntensity!.addEventListener('input', () => {
+  atmosphereSettings.shakeIntensity = Number(elements.shakeIntensity!.value) / 100;
+  elements.shakeValue!.value = `${elements.shakeIntensity!.value}%`;
+  persistAtmosphereSettings();
+});
+window.addEventListener('pointerdown', () => audioFeedback.unlock(), { passive: true });
+window.addEventListener('keydown', () => audioFeedback.unlock());
 elements.viewButton!.addEventListener('click', switchView);
 elements.openHordeLab!.addEventListener('click', openHordeLab);
 elements.hordeLabToggle!.addEventListener('click', () => {
@@ -2446,7 +2681,19 @@ elements.buyCargoButton!.addEventListener('click', () => {
 window.addEventListener('keydown', (event) => {
   if (event.repeat) return;
   const isFormControl =
-    event.target instanceof HTMLElement && ['INPUT', 'TEXTAREA'].includes(event.target.tagName);
+    event.target instanceof HTMLElement &&
+    ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(event.target.tagName);
+  if (event.code === 'Escape' && !elements.settingsOverlay!.hasAttribute('hidden')) {
+    event.preventDefault();
+    closeAtmosphereOptions();
+    return;
+  }
+  if (event.code === 'KeyO' && !isFormControl) {
+    event.preventDefault();
+    if (elements.settingsOverlay!.hasAttribute('hidden')) openAtmosphereOptions();
+    else closeAtmosphereOptions();
+    return;
+  }
   if (event.code === 'KeyM' && gamePhase === 'base' && !isFormControl) {
     event.preventDefault();
     if (elements.baseOverlay!.hasAttribute('hidden')) openBaseTerminal();
@@ -2634,6 +2881,21 @@ function fireAlongRay(aimPoint: Vector3): boolean {
   const hitPoint = weaponHit?.point ?? aimPoint;
   const targetId = findZombieId(weaponHit?.object);
   if (!combat.tryFire(targetId)) return false;
+  audioFeedback.play('shot');
+  if (targetId) {
+    const hostile = combat.zombies.find((zombie) => zombie.id === targetId);
+    audioFeedback.play('hit');
+    if (!atmosphereSettings.reduceMotion)
+      particleBursts.burst(
+        hitPoint,
+        hostile?.alive ? '#e8d18f' : '#cf9870',
+        hostile?.alive ? 5 : 8,
+        1.9,
+        0.24,
+      );
+    elements.reticle!.classList.add('hit');
+    window.setTimeout(() => elements.reticle!.classList.remove('hit'), 120);
+  }
   addShotEffect(muzzle, hitPoint);
   for (const zombie of combat.zombies) {
     const visual = zombieViews.get(zombie.id);
@@ -2661,8 +2923,17 @@ function fireAt(event: PointerEvent): void {
       stressHit.instanceId !== undefined &&
       hordeSimulation.damageAgent(stressHit.instanceId, 50)
     ) {
+      const index = stressHit.instanceId;
+      const position = new Vector3(
+        hordeSimulation.x[index]!,
+        hordeSimulation.y[index]! + 0.9,
+        hordeSimulation.z[index]!,
+      );
+      audioFeedback.play('shot');
+      audioFeedback.play('hit');
+      if (!atmosphereSettings.reduceMotion) particleBursts.burst(position, '#e8d18f', 5, 1.9, 0.24);
       updateHordeUi();
-      elements.hordeStatus!.textContent = `Agent #${hordeSimulation.ids[stressHit.instanceId]} hit · ${hordeSimulation.health[stressHit.instanceId]} health remaining.`;
+      elements.hordeStatus!.textContent = `Agent #${hordeSimulation.ids[index]} hit · ${hordeSimulation.health[index]} health remaining.`;
     }
     return;
   }
@@ -2984,7 +3255,21 @@ function animate(now: number): void {
     if (visual) syncZombieVisual(visual, zombie);
   }
   updateHordeVisual();
+  const visibleHealth =
+    stressActive && hordeSimulation ? hordeSimulation.playerHealth : combat.health;
+  if (visibleHealth < lastFeedbackHealth) flashDamageFeedback();
+  lastFeedbackHealth = visibleHealth;
   cameraRig.update(delta, player.position);
+  const rainCanRender =
+    stressActive || (gamePhase !== 'base' && !interiorSession && !campInteriorSession);
+  atmosphereRuntime.update(
+    delta,
+    player.position,
+    cameraRig.mode === 'top-down',
+    rainCanRender && atmosphereSettings.rainVisuals,
+    atmosphereSettings.reduceFlashes,
+  );
+  particleBursts.update(delta);
   if (cameraRig.mode === 'third-person') {
     player.setFacingDirection(
       cameraRig.currentTarget.x - camera.position.x,
