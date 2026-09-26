@@ -197,18 +197,14 @@ export function createHelicopter(interactiveId?: string, castShadows = false): H
   const fuselage = addTroopCabinShell(group, materials.body, interactiveId);
   const cabinFloor = addBox(group, materials.underside, 1.42, 0.1, 2.0, 0, -0.28, 0.2);
   cabinFloor.receiveShadow = true;
-  for (const side of [-1, 1]) {
-    addBox(group, materials.seat, 0.56, 0.12, 1.2, side * 0.43, -0.13, 0.24);
-    addBox(group, materials.seat, 0.11, 0.38, 1.2, side * 0.72, 0.1, 0.24);
-    for (const z of [-0.18, 0.62]) {
-      addRod(
-        group,
-        materials.rotor,
-        new Vector3(side * 0.43, -0.23, z),
-        new Vector3(side * 0.43, -0.05, z),
-        0.035,
-      );
+  for (const z of [-0.73, 1.0]) {
+    addBox(group, materials.seat, 1.34, 0.12, 0.38, 0, -0.13, z);
+    addBox(group, materials.seat, 1.3, 0.36, 0.1, 0, 0.1, z + 0.22);
+    for (const x of [-0.46, 0.46]) {
+      addRod(group, materials.rotor, new Vector3(x, -0.23, z), new Vector3(x, -0.05, z), 0.035);
     }
+  }
+  for (const side of [-1, 1]) {
     addBox(group, materials.bodyLight, 0.1, 0.08, 1.28, side * 0.78, -0.22, 0.24);
   }
 
@@ -335,6 +331,6 @@ export function createHelicopter(interactiveId?: string, castShadows = false): H
     fuselage.receiveShadow = true;
   }
 
-  group.scale.setScalar(1.35);
+  group.scale.setScalar(1.85);
   return { group, mainRotor, tailRotor };
 }

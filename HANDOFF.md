@@ -190,8 +190,9 @@ Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain preset
 - Replaced the blocky camp and field helicopters with a shared low-poly model featuring cockpit framing/glazing, a shaped fuselage and tail boom, tail rotor, lights, tubular skids, and separately animated main/tail rotors. The camp rotors turn slowly while parked; the field rotors spin during deployment/extraction.
 - After the owner's screenshot follow-up, scaled the helicopter 12% larger, fitted the windscreen to the curved nose, and rotated the tail rotor plane 90 degrees so it faces sideways and spins around its lateral axle.
 - After the next scale review, increased the whole model again and opened troop-door apertures on both sides, with visible longitudinal bench seats and floor space for disembarking. Removed the side glazing and door panels that covered the openings.
+- The owner's next screenshot showed the openings still too small beside the character and the longitudinal benches crowding the doorway. Increased the model from 1.35 to 1.85 scale (about a 13.3 m main-rotor diameter), changed the seats to transverse benches at the front/rear of the cabin, and enlarged the open side aperture to roughly 2.2 m high by 2.3 m long so a character can fit through.
 - Split service menus: F at the quartermaster opens trade actions; camp storage opens a banked-inventory view; the operations board opens destination selection. M still opens the combined terminal.
-- `npm run build`, `npm run format:check`, and `git diff --check` passed for the open-door scale revision. Automated tests and browser playtest were not rerun; the owner is continuing the combined playtest.
+- `npm run build`, `npm run format:check`, and `git diff --check` passed for the open-door scale revision. Verification of the larger transverse-seat revision is pending; automated tests and browser playtest have not been rerun. The owner is continuing the combined playtest.
 
 ## Verification
 
