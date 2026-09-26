@@ -6,7 +6,7 @@ Updated: 2026-09-26
 
 Phases 1–7 are **Accepted**; Phase 8 implementation is complete and **Awaiting owner playtest**. The owner approved Phase 7 and authorized Phase 8 on 2026-09-26 (“green lights for next phase”). Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
 
-Phase 8 adds generated 2–4 room interiors for city buildings, interactive doors, room loot and one infected, a return to the same outdoor position, and a pause for the outdoor timer/horde while inside. Automated coverage, build, and formatting pass. The browser preview launches, deploys, disembarks, and routes; console error/warning capture is empty. The full door-to-interior-to-exit interaction has not yet been verified in browser, so owner playtest is the next gate.
+Phase 8 adds generated 2–4 room interiors for city buildings, interactive doors, room loot and one infected, a return to the same outdoor position, and a pause for the outdoor timer/horde while inside. Implementation commit: `cf41524`. Automated coverage, build, and formatting pass. The browser preview launches, deploys, disembarks, and routes; console error/warning capture is empty. The full door-to-interior-to-exit interaction has not yet been verified in browser, so owner playtest is the next gate.
 
 ## Read first
 
