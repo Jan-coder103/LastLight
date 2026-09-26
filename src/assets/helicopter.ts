@@ -106,12 +106,60 @@ function addCurvedPatch(
   return patch;
 }
 
+function addTroopCabinShell(
+  parent: Group,
+  material: MeshStandardMaterial,
+  interactiveId?: string,
+): Mesh {
+  const zSegments = 48;
+  const radialSegments = 64;
+  const positions: number[] = [];
+  const indices: number[] = [];
+  for (let row = 0; row <= zSegments; row += 1) {
+    const z = -1.42 + (3 * row) / zSegments;
+    const normalizedZ = (z - 0.08) / 1.5;
+    const ringRadius = Math.sqrt(Math.max(0, 1 - normalizedZ ** 2));
+    for (let column = 0; column <= radialSegments; column += 1) {
+      const angle = (column * Math.PI * 2) / radialSegments;
+      positions.push(
+        1.03 * ringRadius * Math.cos(angle),
+        0.08 + 0.68 * ringRadius * Math.sin(angle),
+        z,
+      );
+    }
+  }
+  for (let row = 0; row < zSegments; row += 1) {
+    const zCenter = -1.42 + (3 * (row + 0.5)) / zSegments;
+    for (let column = 0; column < radialSegments; column += 1) {
+      const angle = ((column + 0.5) * Math.PI * 2) / radialSegments;
+      const distanceToSide = Math.min(angle, Math.abs(Math.PI - angle), Math.PI * 2 - angle);
+      const openDoorway = zCenter > -0.38 && zCenter < 0.88 && distanceToSide < 1.05;
+      if (openDoorway) continue;
+
+      const a = row * (radialSegments + 1) + column;
+      const b = a + 1;
+      const c = a + radialSegments + 1;
+      const d = c + 1;
+      indices.push(a, b, c, b, d, c);
+    }
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const shell = new Mesh(geometry, material);
+  if (interactiveId) shell.userData.interactiveId = interactiveId;
+  parent.add(shell);
+  return shell;
+}
+
 /** Shared low-poly camp and field model, with independently animated rotor assemblies. */
 export function createHelicopter(interactiveId?: string, castShadows = false): HelicopterModel {
   const materials = {
     body: new MeshStandardMaterial({ color: '#58624d', roughness: 0.9, flatShading: true }),
     bodyLight: new MeshStandardMaterial({ color: '#74765c', roughness: 0.94, flatShading: true }),
     underside: new MeshStandardMaterial({ color: '#303832', roughness: 0.84, flatShading: true }),
+    seat: new MeshStandardMaterial({ color: '#6b624d', roughness: 0.98, flatShading: true }),
     rotor: new MeshStandardMaterial({ color: '#292f2b', roughness: 0.82, metalness: 0.12 }),
     glass: new MeshStandardMaterial({
       color: '#526e70',
@@ -143,12 +191,26 @@ export function createHelicopter(interactiveId?: string, castShadows = false): H
   group.name = 'Wayfarer utility helicopter';
   if (interactiveId) group.userData.interactiveId = interactiveId;
 
-  const belly = addMesh(group, new SphereGeometry(1, 12, 8), materials.underside, 0, -0.14, 0.12);
-  belly.scale.set(0.9, 0.38, 1.25);
+  const belly = addMesh(group, new SphereGeometry(1, 12, 8), materials.underside, 0, -0.48, 0.12);
+  belly.scale.set(0.72, 0.17, 1.25);
 
-  const fuselage = addMesh(group, new SphereGeometry(1, 12, 8), materials.body, 0, 0.08, 0.08);
-  fuselage.scale.set(1.03, 0.52, 1.5);
-  if (interactiveId) fuselage.userData.interactiveId = interactiveId;
+  const fuselage = addTroopCabinShell(group, materials.body, interactiveId);
+  const cabinFloor = addBox(group, materials.underside, 1.42, 0.1, 2.0, 0, -0.28, 0.2);
+  cabinFloor.receiveShadow = true;
+  for (const side of [-1, 1]) {
+    addBox(group, materials.seat, 0.56, 0.12, 1.2, side * 0.43, -0.13, 0.24);
+    addBox(group, materials.seat, 0.11, 0.38, 1.2, side * 0.72, 0.1, 0.24);
+    for (const z of [-0.18, 0.62]) {
+      addRod(
+        group,
+        materials.rotor,
+        new Vector3(side * 0.43, -0.23, z),
+        new Vector3(side * 0.43, -0.05, z),
+        0.035,
+      );
+    }
+    addBox(group, materials.bodyLight, 0.1, 0.08, 1.28, side * 0.78, -0.22, 0.24);
+  }
 
   const nose = addMesh(group, new SphereGeometry(1, 10, 7), materials.bodyLight, 0, 0.05, -1.02);
   nose.scale.set(0.72, 0.43, 0.82);
@@ -173,24 +235,6 @@ export function createHelicopter(interactiveId?: string, castShadows = false): H
         return new Vector3(x, y + 0.05, front - 0.016);
       },
     );
-    addCurvedPatch(
-      group,
-      materials.glass,
-      side < 0 ? -0.95 : 0.55,
-      side < 0 ? -0.35 : 1.15,
-      0.13,
-      0.32,
-      8,
-      5,
-      (z, y) => {
-        const normalizedY = (y - 0.08) / 0.52;
-        const normalizedZ = (z - 0.08) / 1.5;
-        const shellX = 1.03 * Math.sqrt(Math.max(0, 1 - normalizedY ** 2 - normalizedZ ** 2));
-        return new Vector3(side * (shellX + 0.012), y, z);
-      },
-      side < 0,
-    );
-    addBox(group, materials.underside, 0.055, 0.045, 0.12, side * 1.0, -0.12, 0.28);
   }
   addCurvedPatch(group, materials.underside, -0.02, 0.02, 0.07, 0.3, 1, 6, (x, y) => {
     const normalizedX = x / 0.72;
@@ -203,11 +247,8 @@ export function createHelicopter(interactiveId?: string, castShadows = false): H
   lowerNose.rotation.x = -0.08;
   addMesh(group, new SphereGeometry(0.12, 8, 6), materials.light, 0, -0.02, -1.77);
 
-  // Side access panels and small exhausts give the otherwise smooth fuselage scale.
+  // Keep both troop doors open; only the engine exhausts sit on the side shell.
   for (const side of [-1, 1]) {
-    const doorSeam = addBox(group, materials.bodyLight, 0.025, 0.42, 0.78, side * 1.0, -0.04, 0.25);
-    doorSeam.rotation.y = side * 0.035;
-    addBox(group, materials.trim, 0.055, 0.055, 0.15, side * 1.025, 0.04, 0.62);
     const exhaust = addMesh(
       group,
       new CylinderGeometry(0.08, 0.11, 0.42, 7),
@@ -294,6 +335,6 @@ export function createHelicopter(interactiveId?: string, castShadows = false): H
     fuselage.receiveShadow = true;
   }
 
-  group.scale.setScalar(1.12);
+  group.scale.setScalar(1.35);
   return { group, mainRotor, tailRotor };
 }

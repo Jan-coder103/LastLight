@@ -137,7 +137,7 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 
 1. Explore Wayfarer Camp in both camera views. Walk with WASD and use right-click routes in top-down view; check the gate, fence, guards, service markers, and that paths reach the quartermaster, storage, operations board, and chopper. Confirm the operations board lines up with its northern interaction marker and the tower ladder rungs follow the tilted backplate.
 2. Use **F** at the quartermaster, storage, and operations board. Confirm each opens its own trade, inventory, or destination menu. Open **M** and confirm the combined quick terminal remains available. Greywood should be selectable; Military Base and Large City should be visibly unavailable.
-3. Inspect the parked and deployed helicopter from both camera views; check its scale beside characters, the flush cockpit glazing, side-facing animated tail rotor, skids, and moving main rotor at camp and field distances.
+3. Inspect the parked and deployed helicopter from both camera views; check its scale beside characters, both open troop doors and visible bench seats, the flush cockpit glazing, side-facing animated tail rotor, skids, and moving main rotor at camp and field distances.
 4. Enter and leave the barracks and clinic. Check that the interior is navigable in both views and returning to camp preserves the view and position without starting or advancing a field run.
 5. Buy field gear and supplies, sell carried items, and install the cargo harness. Confirm prices and affordability messages, one-time upgrade behavior, stock display, and saved credits/stock after a reload.
 6. Deploy through the board or chopper. Confirm Greywood remains free, the starting kit follows saved camp stock, extraction banks returned cargo, and death loses carried cargo while stored camp resources remain safe.
@@ -151,9 +151,9 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 5. Adjust impact shake from 0% to a comfortable value. Reload the page and confirm options persist; if the operating system requests reduced motion and no saved choice exists, confirm the reduced-motion default is respected.
 6. Open **Horde Simulation Lab**, start 10,000 agents, and inspect weather/effects with diagnostics visible. Record browser, viewport, camera, frame-time p95, JS/GPU timing, draw calls, triangles, heap, and active effects. Compare stress and normal scenes; report stutter, visual obstruction, discomfort, or audio issues.
 
-## Combined Phase 10 + 11 owner playtest (deferred by owner)
+## Combined Phase 10 + 11 owner playtest (in progress)
 
-The owner asked to defer Phase 10's playtest and combine it with Phase 11. Both phases remain **Awaiting owner playtest**, not accepted. Complete the two checklists above in one review, then record one owner result for each phase in `tracker.md`.
+The owner is playtesting Phase 10 and Phase 11 together. Both phases remain **Revisions needed**, not accepted. Complete the two checklists above in one review, then record one owner result for each phase in `tracker.md`.
 
 For the camp/economy portion, explore the hub in both camera views; visit each service and enter/exit both camp buildings; verify the quick terminal and locked destinations; buy and resell gear/supplies; and install the one-time cargo harness when funds allow. Reload and verify stock, credits, upgrade state, and atmosphere options. Then deploy to Greywood, play and extract once, and confirm banked cargo survives while a later death loses only carried cargo. Finish with the Phase 11 preset/accessibility/audio/effect checks above. Phase 7's reference hardware remains unspecified, so report the browser and machine with performance observations.
 
