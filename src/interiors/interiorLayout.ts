@@ -59,6 +59,7 @@ const wallThickness = 0.24;
 const doorWidth = 3.2;
 const outerX = 10;
 const outerZ = 8.4;
+const entryZ = 6.1;
 const roomWidth = 9.5;
 const roomDepth = 8;
 const roomCenters = [
@@ -141,7 +142,15 @@ function makeWalls(activeCells: Set<number>): InteriorWall[] {
         );
         const hasRightRoom = activeCells.has(row * 2 + 1);
         walls.push(
-          ...splitInterval(`divider-x-${row}`, 'x', 0, zStart, zEnd, frontZ ? 4 : -4, hasRightRoom),
+          ...splitInterval(
+            `divider-x-${row}`,
+            'x',
+            0,
+            zStart,
+            zEnd,
+            frontZ ? entryZ : -4,
+            hasRightRoom,
+          ),
         );
       } else {
         walls.push(
@@ -254,8 +263,8 @@ export function generateInterior(seed: string): InteriorLayout {
       x: encounterRoom.centerX + 1.75,
       z: encounterRoom.centerZ - 1.8,
     },
-    entry: { x: 0, z: 6.1 },
-    exit: { x: 0, z: 6.1 },
+    entry: { x: 0, z: entryZ },
+    exit: { x: 0, z: entryZ },
     colliders: [...walls.map(colliderForWall), ...furnitureColliders],
   };
 }
