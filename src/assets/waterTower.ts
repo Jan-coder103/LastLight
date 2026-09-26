@@ -6,11 +6,13 @@ const steelMaterial = new MeshStandardMaterial({
   roughness: 0.8,
   metalness: 0.25,
 });
+steelMaterial.name = 'steel';
 const tankMaterial = new MeshStandardMaterial({
   color: '#7b7059',
   roughness: 0.9,
   flatShading: true,
 });
+tankMaterial.name = 'tank';
 
 export const waterTower: AuthoredAsset = {
   schemaVersion: 1,

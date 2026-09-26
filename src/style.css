@@ -696,6 +696,28 @@ kbd {
   margin-left: 7px;
   color: #b9ce92;
 }
+.asset-bench-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 33px;
+  margin-top: 1px;
+  padding: 0 9px;
+  border: 1px solid rgba(235, 228, 200, 0.14);
+  border-radius: 3px;
+  color: #c7c8b8;
+  font: 8px/1 var(--mono);
+  letter-spacing: 0.07em;
+  text-decoration: none;
+}
+.asset-bench-link:hover {
+  border-color: rgba(211, 181, 110, 0.4);
+  color: #f2dfab;
+  background: rgba(211, 181, 110, 0.08);
+}
+.asset-bench-link span {
+  color: #b9aa80;
+}
 .base-footnote {
   margin: 17px 0 0;
   color: #858a7d !important;

@@ -6,16 +6,19 @@ const steelMaterial = new MeshStandardMaterial({
   roughness: 0.82,
   metalness: 0.22,
 });
+steelMaterial.name = 'steel';
 const fadedRedMaterial = new MeshStandardMaterial({
   color: '#9b624d',
   roughness: 0.9,
   flatShading: true,
 });
+fadedRedMaterial.name = 'base-paint';
 const beaconMaterial = new MeshStandardMaterial({
   color: '#d9b56e',
   roughness: 0.75,
   emissive: '#392a12',
 });
+beaconMaterial.name = 'beacon';
 
 export const radioMast: AuthoredAsset = {
   schemaVersion: 1,

@@ -2,11 +2,15 @@ import { ConeGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial } fro
 import type { AuthoredAsset } from './assetTypes';
 
 const trunkMaterial = new MeshStandardMaterial({ color: '#594332', roughness: 1 });
+trunkMaterial.name = 'bark';
 const pineMaterials = [
   new MeshStandardMaterial({ color: '#355842', roughness: 1, flatShading: true }),
   new MeshStandardMaterial({ color: '#42684d', roughness: 1, flatShading: true }),
   new MeshStandardMaterial({ color: '#2d4b3c', roughness: 1, flatShading: true }),
 ];
+pineMaterials[0]!.name = 'foliage-light';
+pineMaterials[1]!.name = 'foliage-middle';
+pineMaterials[2]!.name = 'foliage-dark';
 
 export const pineTree: AuthoredAsset = {
   schemaVersion: 1,

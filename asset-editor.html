@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#171b16" />
+    <meta
+      name="description"
+      content="Review, adjust, and export the authored 3D assets used by Last Light."
+    />
+    <title>Last Light // Asset Bench</title>
+  </head>
+  <body class="asset-editor-page">
+    <main class="asset-editor">
+      <header class="editor-topbar">
+        <a class="editor-brand" href="/" aria-label="Back to Last Light">
+          <span class="editor-brand-mark" aria-hidden="true">LL</span>
+          <span><small>LAST LIGHT / WORKSHOP</small><strong>ASSET BENCH</strong></span>
+        </a>
+        <div class="editor-actions">
+          <input id="open-file" type="file" accept="application/json,.json" hidden />
+          <button id="open-button" class="quiet-button" type="button">OPEN JSON</button>
+          <button id="reset-button" class="quiet-button" type="button">RESTORE SOURCE</button>
+          <button id="save-button" class="action-button" type="button">SAVE JSON</button>
+          <button id="game-button" class="action-button game-action" type="button">
+            TRY IN GAME <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="editor-body">
+        <aside class="asset-library" aria-label="Authored assets">
+          <div class="section-title">
+            <span>ASSET LIBRARY</span><strong id="asset-count">05</strong>
+          </div>
+          <p class="section-copy">The same authored definitions used by generated runs.</p>
+          <nav id="asset-list" class="asset-list" aria-label="Select an asset"></nav>
+          <div class="library-note"><span class="status-dot"></span> SOURCE CATALOG · LOCAL</div>
+        </aside>
+
+        <section class="preview-panel" aria-label="Asset preview">
+          <div class="preview-toolbar">
+            <div class="preview-heading">
+              <span class="eyebrow" id="preview-category">PROP / 3D PREVIEW</span>
+              <h1 id="preview-name">Pine Tree</h1>
+            </div>
+            <div class="preview-tools">
+              <label class="variant-control" for="variant-select">
+                <span>VARIANT</span>
+                <select id="variant-select" aria-label="Asset variant">
+                  <option value="0">01</option>
+                  <option value="1">02</option>
+                  <option value="2">03</option>
+                </select>
+              </label>
+              <div class="camera-toggle" role="group" aria-label="Preview camera distance">
+                <button type="button" data-distance="near" class="selected">NEAR</button>
+                <button type="button" data-distance="far">FAR</button>
+              </div>
+            </div>
+          </div>
+          <div id="preview-wrap" class="preview-wrap">
+            <canvas id="asset-canvas" aria-label="Drag to orbit the 3D asset preview"></canvas>
+            <div class="preview-tag"><span class="status-dot"></span> LIVE PREVIEW</div>
+            <div class="preview-hint">DRAG TO ORBIT <span>·</span> SCROLL TO ZOOM</div>
+          </div>
+          <div class="preview-caption">
+            <span id="asset-id-label">ASSET / PINE-TREE</span>
+            <span id="bounds-caption">BOUNDS 4.0 × 8.5 × 4.0 M</span>
+          </div>
+        </section>
+
+        <aside class="inspector-panel" aria-label="Asset properties">
+          <div class="inspector-title">
+            <div>
+              <span class="eyebrow">SOURCE DATA</span>
+              <h2>INSPECTOR</h2>
+            </div>
+            <span class="version-badge">V1</span>
+          </div>
+          <div id="inspector" class="inspector-content"></div>
+          <div id="validation-status" class="validation-status" role="status" aria-live="polite">
+            <span class="status-dot"></span><span>Definition valid</span>
+          </div>
+          <p id="editor-message" class="editor-message" aria-live="polite">
+            Changes apply to the preview. Save a portable JSON file or try this asset in a run.
+          </p>
+        </aside>
+      </div>
+    </main>
+    <script type="module" src="/src/assetEditor/main.ts"></script>
+  </body>
+</html>

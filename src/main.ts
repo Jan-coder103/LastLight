@@ -31,6 +31,8 @@ import {
   type Material,
 } from 'three';
 import type { AbilitySlot } from './input/controlMap';
+import { installAssetDocumentOverride } from './assets/catalog';
+import { readStoredAssetDocument, type AssetDocument } from './assets/assetDocument';
 import { CameraRig } from './camera/CameraRig';
 import { CombatSimulation, type ZombieState } from './game/CombatSimulation';
 import { benchmarkCountsForHorde, benchmarkHorde } from './game/HordeBenchmark';
@@ -64,6 +66,16 @@ import './style.css';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene');
 if (!canvas) throw new Error('The #scene canvas is missing from index.html');
+
+let activeAssetDocument: AssetDocument | undefined;
+let assetDocumentLoadError = '';
+try {
+  activeAssetDocument = readStoredAssetDocument();
+  if (activeAssetDocument) installAssetDocumentOverride(activeAssetDocument);
+} catch (error) {
+  assetDocumentLoadError =
+    error instanceof Error ? error.message : 'The saved asset file is invalid.';
+}
 
 const scene = new Scene();
 scene.background = new Color('#a9a488');
@@ -1985,6 +1997,11 @@ cameraRig.reset(player.position);
 createZombieViews();
 zombieGroup.visible = false;
 updateBaseUi();
+if (activeAssetDocument) {
+  elements.baseMessage!.textContent = `Asset Bench override active for ${activeAssetDocument.asset.assetId}. Start a generated run to preview the edited asset.`;
+} else if (assetDocumentLoadError) {
+  elements.baseMessage!.textContent = `Saved asset override could not be loaded: ${assetDocumentLoadError}`;
+}
 
 elements.seedForm!.addEventListener('submit', (event) => {
   event.preventDefault();

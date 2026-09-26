@@ -6,6 +6,7 @@ const stoneMaterial = new MeshStandardMaterial({
   roughness: 1,
   flatShading: true,
 });
+stoneMaterial.name = 'stone';
 
 export const boulder: AuthoredAsset = {
   schemaVersion: 1,

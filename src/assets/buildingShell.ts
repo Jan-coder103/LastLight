@@ -6,17 +6,23 @@ const wallMaterials = [
   new MeshStandardMaterial({ color: '#8b887d', roughness: 1 }),
   new MeshStandardMaterial({ color: '#aaa18f', roughness: 1 }),
 ];
+wallMaterials[0]!.name = 'wall-sand';
+wallMaterials[1]!.name = 'wall-slate';
+wallMaterials[2]!.name = 'wall-dust';
 const roofMaterial = new MeshStandardMaterial({
   color: '#514f49',
   roughness: 1,
   flatShading: true,
 });
+roofMaterial.name = 'roof';
 const windowMaterial = new MeshStandardMaterial({
   color: '#65766d',
   roughness: 0.8,
   metalness: 0.05,
 });
+windowMaterial.name = 'window';
 const doorMaterial = new MeshStandardMaterial({ color: '#4b4035', roughness: 1 });
+doorMaterial.name = 'door';
 
 export const buildingShell: AuthoredAsset = {
   schemaVersion: 1,

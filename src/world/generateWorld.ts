@@ -615,10 +615,19 @@ export function generateWorld(seed: string): WorldData {
   const entranceNavigator = new GridNavigator(generatedWorld);
   const entrances = rotatedPlacements.flatMap((placement, index) => {
     if (placement.assetId !== 'building-shell') return [];
+    const doorPoint = getAsset(placement.assetId).interactionPoints.find(
+      (point) => point.id === 'front-door',
+    )?.position ?? { x: 0, y: 0, z: 8.57 };
     const outwardX = Math.sin(placement.rotationY);
     const outwardZ = Math.cos(placement.rotationY);
-    const doorX = placement.position.x + outwardX * 8.57 * placement.scale;
-    const doorZ = placement.position.z + outwardZ * 8.57 * placement.scale;
+    const doorX =
+      placement.position.x +
+      (doorPoint.x * Math.cos(placement.rotationY) + doorPoint.z * Math.sin(placement.rotationY)) *
+        placement.scale;
+    const doorZ =
+      placement.position.z +
+      (-doorPoint.x * Math.sin(placement.rotationY) + doorPoint.z * Math.cos(placement.rotationY)) *
+        placement.scale;
     const sideX = -outwardZ;
     const sideZ = outwardX;
     let approach: { x: number; z: number } | undefined;
