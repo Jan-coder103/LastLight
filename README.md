@@ -137,7 +137,7 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 
 1. Explore Wayfarer Camp in both camera views. Walk with WASD and use right-click routes in top-down view; check the gate, fence, guards, service markers, and that paths reach the quartermaster, storage, operations board, and chopper. Confirm the operations board lines up with its northern interaction marker and the tower ladder rungs follow the tilted backplate.
 2. Use **F** at the quartermaster, storage, and operations board. Confirm each opens its own trade, inventory, or destination menu. Open **M** and confirm the combined quick terminal remains available. Greywood should be selectable; Military Base and Large City should be visibly unavailable.
-3. Inspect the parked and deployed helicopter from both camera views; check the cockpit, tail, skids, and moving rotors remain legible at camp and field distances.
+3. Inspect the parked and deployed helicopter from both camera views; check its scale beside characters, the flush cockpit glazing, side-facing animated tail rotor, skids, and moving main rotor at camp and field distances.
 4. Enter and leave the barracks and clinic. Check that the interior is navigable in both views and returning to camp preserves the view and position without starting or advancing a field run.
 5. Buy field gear and supplies, sell carried items, and install the cargo harness. Confirm prices and affordability messages, one-time upgrade behavior, stock display, and saved credits/stock after a reload.
 6. Deploy through the board or chopper. Confirm Greywood remains free, the starting kit follows saved camp stock, extraction banks returned cargo, and death loses carried cargo while stored camp resources remain safe.

@@ -188,8 +188,9 @@ Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain preset
 - Moved the operations board visual to the same north-side coordinates as its service marker.
 - Grouped each tower's ladder backing and rungs so the rungs inherit the backing's slight tilt.
 - Replaced the blocky camp and field helicopters with a shared low-poly model featuring cockpit framing/glazing, a shaped fuselage and tail boom, side windows and access details, tail rotor, lights, tubular skids, and separately animated main/tail rotors. The camp rotors turn slowly while parked; the field rotors spin during deployment/extraction.
+- After the owner's screenshot follow-up, scaled the helicopter 12% larger, replaced protruding box panes with glazing fitted to the curved nose and cabin surfaces, and rotated the tail rotor plane 90 degrees so it faces sideways and spins around its lateral axle.
 - Split service menus: F at the quartermaster opens trade actions; camp storage opens a banked-inventory view; the operations board opens destination selection. M still opens the combined terminal.
-- `npm run build`, `npm run format:check`, and `git diff --check` passed after these changes. Automated tests and browser playtest were not rerun; the owner is continuing the combined playtest and will provide further feedback.
+- `npm run build` passed after the helicopter follow-up. Automated tests and browser playtest were not rerun; the owner is continuing the combined playtest and will provide further feedback.
 
 ## Verification
 

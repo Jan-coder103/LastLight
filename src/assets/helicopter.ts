@@ -1,6 +1,9 @@
 import {
+  BufferGeometry,
   BoxGeometry,
   CylinderGeometry,
+  DoubleSide,
+  Float32BufferAttribute,
   Group,
   Mesh,
   MeshStandardMaterial,
@@ -61,6 +64,48 @@ function addRod(
   return rod;
 }
 
+function addCurvedPatch(
+  parent: Group,
+  material: MeshStandardMaterial,
+  uMin: number,
+  uMax: number,
+  vMin: number,
+  vMax: number,
+  uSegments: number,
+  vSegments: number,
+  pointAt: (u: number, v: number) => Vector3,
+  reverseWinding = false,
+): Mesh {
+  const positions: number[] = [];
+  const indices: number[] = [];
+  for (let row = 0; row <= vSegments; row += 1) {
+    const v = vMin + ((vMax - vMin) * row) / vSegments;
+    for (let column = 0; column <= uSegments; column += 1) {
+      const u = uMin + ((uMax - uMin) * column) / uSegments;
+      const point = pointAt(u, v);
+      positions.push(point.x, point.y, point.z);
+    }
+  }
+  for (let row = 0; row < vSegments; row += 1) {
+    for (let column = 0; column < uSegments; column += 1) {
+      const a = row * (uSegments + 1) + column;
+      const b = a + 1;
+      const c = a + uSegments + 1;
+      const d = c + 1;
+      if (reverseWinding) indices.push(a, b, c, b, d, c);
+      else indices.push(a, c, b, b, c, d);
+    }
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const patch = new Mesh(geometry, material);
+  patch.castShadow = false;
+  parent.add(patch);
+  return patch;
+}
+
 /** Shared low-poly camp and field model, with independently animated rotor assemblies. */
 export function createHelicopter(interactiveId?: string, castShadows = false): HelicopterModel {
   const materials = {
@@ -74,6 +119,10 @@ export function createHelicopter(interactiveId?: string, castShadows = false): H
       metalness: 0.16,
       emissive: '#132326',
       flatShading: true,
+      side: DoubleSide,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
     }),
     trim: new MeshStandardMaterial({ color: '#b39a62', roughness: 0.72, metalness: 0.12 }),
     light: new MeshStandardMaterial({
@@ -105,31 +154,50 @@ export function createHelicopter(interactiveId?: string, castShadows = false): H
   nose.scale.set(0.72, 0.43, 0.82);
   if (interactiveId) nose.userData.interactiveId = interactiveId;
 
-  // Broad split windshield with dark framing makes the nose read as a cockpit.
+  // These panes follow the nose shell so their perimeter sits flush instead of floating off it.
   for (const side of [-1, 1]) {
-    const pane = addBox(group, materials.glass, 0.53, 0.38, 0.055, side * 0.27, 0.25, -1.64);
-    pane.rotation.y = side * -0.12;
-    const frame = addBox(group, materials.underside, 0.045, 0.43, 0.09, side * 0.54, 0.245, -1.6);
-    frame.rotation.y = side * -0.12;
-
-    const doorWindowFrame = addBox(
+    addCurvedPatch(
       group,
-      materials.underside,
-      0.055,
-      0.34,
-      0.74,
-      side * 0.87,
-      0.2,
-      0.25,
+      materials.glass,
+      side < 0 ? -0.42 : 0.025,
+      side < 0 ? -0.025 : 0.42,
+      0.07,
+      0.3,
+      8,
+      6,
+      (x, y) => {
+        const normalizedX = x / 0.72;
+        const normalizedY = y / 0.43;
+        const front =
+          -1.02 - 0.82 * Math.sqrt(Math.max(0, 1 - normalizedX ** 2 - normalizedY ** 2));
+        return new Vector3(x, y + 0.05, front - 0.016);
+      },
     );
-    const doorWindow = addBox(group, materials.glass, 0.065, 0.25, 0.63, side * 0.9, 0.21, 0.25);
-    doorWindow.rotation.y = side * 0.035;
-    doorWindowFrame.rotation.y = side * 0.035;
-
-    const rearWindow = addBox(group, materials.glass, 0.055, 0.27, 0.38, side * 0.82, 0.2, 1.0);
-    rearWindow.rotation.y = side * 0.08;
+    addCurvedPatch(
+      group,
+      materials.glass,
+      side < 0 ? -0.95 : 0.55,
+      side < 0 ? -0.35 : 1.15,
+      0.13,
+      0.32,
+      8,
+      5,
+      (z, y) => {
+        const normalizedY = (y - 0.08) / 0.52;
+        const normalizedZ = (z - 0.08) / 1.5;
+        const shellX = 1.03 * Math.sqrt(Math.max(0, 1 - normalizedY ** 2 - normalizedZ ** 2));
+        return new Vector3(side * (shellX + 0.012), y, z);
+      },
+      side < 0,
+    );
     addBox(group, materials.underside, 0.055, 0.045, 0.12, side * 1.0, -0.12, 0.28);
   }
+  addCurvedPatch(group, materials.underside, -0.02, 0.02, 0.07, 0.3, 1, 6, (x, y) => {
+    const normalizedX = x / 0.72;
+    const normalizedY = y / 0.43;
+    const front = -1.02 - 0.82 * Math.sqrt(Math.max(0, 1 - normalizedX ** 2 - normalizedY ** 2));
+    return new Vector3(x, y + 0.05, front - 0.024);
+  });
 
   const lowerNose = addBox(group, materials.underside, 0.7, 0.16, 0.43, 0, -0.25, -1.48);
   lowerNose.rotation.x = -0.08;
@@ -167,9 +235,12 @@ export function createHelicopter(interactiveId?: string, castShadows = false): H
   stabilizer.rotation.x = -0.06;
   addMesh(group, new SphereGeometry(0.12, 8, 6), materials.beacon, 0, 1.05, 0.72);
 
+  const tailRotorMount = new Group();
+  tailRotorMount.position.set(0.23, 0.3, 3.7);
+  tailRotorMount.rotation.y = Math.PI / 2;
   const tailRotor = new Group();
   tailRotor.name = 'Helicopter tail rotor';
-  tailRotor.position.set(0.16, 0.3, 3.7);
+  tailRotorMount.add(tailRotor);
   for (let bladeIndex = 0; bladeIndex < 3; bladeIndex += 1) {
     const blade = new Group();
     blade.rotation.z = (bladeIndex * Math.PI * 2) / 3;
@@ -177,7 +248,7 @@ export function createHelicopter(interactiveId?: string, castShadows = false): H
     addBox(blade, materials.rotor, 0.095, 0.78, 0.09, 0, 0.39, 0);
   }
   addMesh(tailRotor, new SphereGeometry(0.16, 8, 6), materials.trim, 0, 0, 0);
-  group.add(tailRotor);
+  group.add(tailRotorMount);
 
   addMesh(group, new CylinderGeometry(0.09, 0.12, 0.62, 8), materials.rotor, 0, 0.84, 0);
   addMesh(group, new CylinderGeometry(0.34, 0.4, 0.18, 10), materials.bodyLight, 0, 0.58, 0);
@@ -223,5 +294,6 @@ export function createHelicopter(interactiveId?: string, castShadows = false): H
     fuselage.receiveShadow = true;
   }
 
+  group.scale.setScalar(1.12);
   return { group, mainRotor, tailRotor };
 }
