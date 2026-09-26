@@ -6,7 +6,7 @@ Updated: 2026-09-26
 
 Phases 1–7 are **Accepted**; Phase 8 implementation is complete and **Awaiting owner playtest**. The owner approved Phase 7 and authorized Phase 8 on 2026-09-26 (“green lights for next phase”). Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
 
-Phase 8 adds generated 2–4 room interiors for city buildings, interactive doors, room loot and one infected, a return to the same outdoor position, and a pause for the outdoor timer/horde while inside. Implementation commit: `cf41524`. Automated coverage, build, and formatting pass. The browser preview launches, deploys, disembarks, and routes; console error/warning capture is empty. The full door-to-interior-to-exit interaction has not yet been verified in browser, so owner playtest is the next gate.
+Phase 8 adds generated 2–4 room interiors for city buildings, interactive doors, room loot and one infected, a return to the same outdoor position, and a pause for the outdoor timer/horde while inside. Implementation commit: `cf41524`; entry-clearance correction: `e20fa6d`. The owner playtest found the player spawned against the center divider and could not move; the front-divider opening now aligns with the entry/exit point. Owner retest is pending. The earlier automated coverage, build, and formatting passed before this correction; it has not been rerun. Browser console error/warning capture was empty during the earlier smoke, which did not reach the interior flow.
 
 ## Read first
 
@@ -144,6 +144,7 @@ Phase 8 adds generated 2–4 room interiors for city buildings, interactive door
 - Every generated city building with a walkable exterior approach gets a stable entrance ID derived from its placement index. The door mesh and building body resolve to that entrance, so top-down clicks on a roof/body can route to the front door even when the roof occludes the door mesh.
 - An interior layout uses `${worldSeed}:${buildingId}` plus the `interior-v1` generator stream. Room count is 2–4. The selected building and world seed reproduce the same room themes, furnishings, loot, and infected spawn.
 - The interior uses its own 24 m collision/navigation map and a flat floor. Authored furniture pieces are assembled from shared room themes; wall openings and collision boxes come from the same layout data.
+- Owner playtest found that the entry point overlapped the front center divider. Commit `e20fa6d` aligns that divider opening with the entry/exit coordinate, creating a clear passage. Owner retest is pending; checks were not rerun for this correction.
 - Entering stores the current outdoor position, hostiles, camera view/yaw/pitch, and navigation contexts. Exit returns to that outdoor position and restores the outdoor hostile objects. Camera mode and heading persist; the camera snaps to the new scene's follow position to avoid drifting across the map.
 - The outdoor timer and hostiles pause inside. Player health, ammo cooldown, dash/ability cooldowns, and the room encounter continue. Room hostiles and remaining loot persist for the rest of the run; a new run clears that progress.
 - Browser preview launch, deploy/disembark, and top-down route were observed at 639×698 / 1.00× in the Codex in-app browser. Console warning/error capture was empty. The full door/room/exit flow remains unverified in browser and is specifically included in the owner playtest checklist.
@@ -158,7 +159,7 @@ Phase 8 adds generated 2–4 room interiors for city buildings, interactive door
 ## Known limits and next action
 
 - Phase 7 remains owner-accepted, but its regular-run and 10,000-agent reference-hardware profiles were not documented. The reference browser/machine and numeric final limits remain open.
-- Next: owner-playtest Phase 8 door targeting, interior movement/camera, loot/encounter persistence, same-position exit, and outdoor pause/resume. Fix any reported issues and repeat verification before marking Phase 8 Accepted.
+- Next: owner retests Phase 8 entry clearance and movement, then checks door targeting, camera behavior, loot/encounter persistence, same-position exit, and outdoor pause/resume. Repeat verification before marking Phase 8 Accepted.
 - Stress visuals are intentionally simplified low-poly instances; this phase proves tracked simulation and horde behavior, while Phase 7 owns draw-call, memory, frame-time, and reference-hardware targets.
 - Local obstacle steering is a short deflection check rather than full route planning. The owner should flag groups that stall at blocked cells or bunch in narrow spaces.
 - The regular run still caps at seven hostiles and remains separate from the Horde Simulation Lab.
