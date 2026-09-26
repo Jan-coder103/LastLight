@@ -112,6 +112,14 @@ export class CameraRig {
     this.camera.lookAt(this.currentTarget);
   }
 
+  snapTo(playerPosition: Vector3): void {
+    this.transition = undefined;
+    this.setDestination(playerPosition);
+    this.camera.position.copy(this.idealPosition);
+    this.currentTarget.copy(this.idealTarget);
+    this.camera.lookAt(this.currentTarget);
+  }
+
   private setDestination(playerPosition: Vector3): void {
     const terrainY = playerPosition.y;
     if (this.mode === 'top-down') {

@@ -1,16 +1,18 @@
 # Coding handoff
 
-Updated: 2026-09-25
+Updated: 2026-09-26
 
 ## Current position
 
-Phases 1–6 are **Accepted**. Phase 7 rendering and performance work is in progress in commit `f675799`. The owner reported stable 60 FPS (17 ms or less per frame) with 10,000 enemies during the Phase 6 playtest; browser and hardware were not specified. Phase 7 adds runtime profiling and updates only changed horde instance buffers. The first local profile covers idle camp in third-person only; active-run and 10,000-agent profiles in both camera modes remain to be collected on the reference setup.
+Phases 1–7 are **Accepted**; Phase 8 implementation is complete and **Awaiting owner playtest**. The owner approved Phase 7 and authorized Phase 8 on 2026-09-26 (“green lights for next phase”). Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
+
+Phase 8 adds generated 2–4 room interiors for city buildings, interactive doors, room loot and one infected, a return to the same outdoor position, and a pause for the outdoor timer/horde while inside. Automated coverage, build, and formatting pass. The browser preview launches, deploys, disembarks, and routes; console error/warning capture is empty. The full door-to-interior-to-exit interaction has not yet been verified in browser, so owner playtest is the next gate.
 
 ## Read first
 
 1. `plan.md` for the vision, technical direction, phase scope, and acceptance criteria.
 2. `tracker.md` for phase status, verification evidence, decisions, and the owner playtest log.
-3. `README.md` for startup commands, controls, simulation benchmark measurements, and Phase 7 profiling instructions.
+3. `README.md` for startup commands, controls, simulation benchmark measurements, and the Phase 8 playtest checklist.
 
 ## Phase 2 decisions and tuning
 
@@ -135,11 +137,28 @@ Phases 1–6 are **Accepted**. Phase 7 rendering and performance work is in prog
 - Sparse horde transform/color changes are coalesced in sorted index order. When fewer than 30% of instances change and there are at most 64 ranges, Three.js receives partial buffer update ranges; otherwise the attribute falls back to a full upload.
 - Initial steady-state local preview profile: Codex in-app browser, idle camp, third-person, 1280×720 canvas at 1.00×: 60 FPS, 16.7 ms frame-interval p95, 4.40 ms JS-frame p95, 0.00 ms mean fixed-update time per frame (rounded to two decimals), 4.66 ms GPU p95, 468 draw calls, 17,490 triangles, 23 MB JavaScript heap, 111 geometries, 3 textures. This is not an active run or stress profile, and host hardware is not exposed.
 - The final reference machine and final targets remain open. The plan's provisional targets are 60 FPS for normal play and at least 30 FPS in the stress scene; the owner previously observed 60 FPS at 10,000 enemies on an unspecified setup.
+- The owner explicitly approved Phase 7 on 2026-09-26 and authorized Phase 8. This approval is the phase gate; it does not fill in the missing reference-machine measurements above.
+
+## Phase 8 decisions and current evidence
+
+- Every generated city building with a walkable exterior approach gets a stable entrance ID derived from its placement index. The door mesh and building body resolve to that entrance, so top-down clicks on a roof/body can route to the front door even when the roof occludes the door mesh.
+- An interior layout uses `${worldSeed}:${buildingId}` plus the `interior-v1` generator stream. Room count is 2–4. The selected building and world seed reproduce the same room themes, furnishings, loot, and infected spawn.
+- The interior uses its own 24 m collision/navigation map and a flat floor. Authored furniture pieces are assembled from shared room themes; wall openings and collision boxes come from the same layout data.
+- Entering stores the current outdoor position, hostiles, camera view/yaw/pitch, and navigation contexts. Exit returns to that outdoor position and restores the outdoor hostile objects. Camera mode and heading persist; the camera snaps to the new scene's follow position to avoid drifting across the map.
+- The outdoor timer and hostiles pause inside. Player health, ammo cooldown, dash/ability cooldowns, and the room encounter continue. Room hostiles and remaining loot persist for the rest of the run; a new run clears that progress.
+- Browser preview launch, deploy/disembark, and top-down route were observed at 639×698 / 1.00× in the Codex in-app browser. Console warning/error capture was empty. The full door/room/exit flow remains unverified in browser and is specifically included in the owner playtest checklist.
+
+## Verification
+
+- `npm test` — passed: 8 files, 34 tests. Includes deterministic 2–4 room generation, room/loot/encounter route reachability, and walkable exterior entrances in the existing 24-seed regression.
+- `npm run build` — passed; 645.89 kB minified (168.19 kB gzip). Vite still emits its default advisory above 500 kB.
+- `npm run format:check` — passed.
+- Browser preview — game rendered at 60 FPS / 16.7 ms in the 639×698 embedded-browser viewport; deploy, touchdown, disembark, and click-to-move route telemetry worked. The attempted field traversal ended in death before door entry; console error/warning capture was empty. Owner should verify the full new interaction flow.
 
 ## Known limits and next action
 
-- Phase 6 owner playtest passed with no issues reported. The owner observed stable 60 FPS and 17 ms or less per frame at 10,000 enemies. This is owner-reported playtest evidence; the browser and hardware are unspecified, and the earlier fixed-step measurements below exclude rendering.
-- Record a regular active run and 10,000-agent stress scene in both camera modes on the agreed reference setup. Repeat each measurement and stress start/stop cycle; track heap/object counts until they settle. Tune a bottleneck only if the metrics show one, then ask the owner to playtest responsiveness and readability.
+- Phase 7 remains owner-accepted, but its regular-run and 10,000-agent reference-hardware profiles were not documented. The reference browser/machine and numeric final limits remain open.
+- Next: owner-playtest Phase 8 door targeting, interior movement/camera, loot/encounter persistence, same-position exit, and outdoor pause/resume. Fix any reported issues and repeat verification before marking Phase 8 Accepted.
 - Stress visuals are intentionally simplified low-poly instances; this phase proves tracked simulation and horde behavior, while Phase 7 owns draw-call, memory, frame-time, and reference-hardware targets.
 - Local obstacle steering is a short deflection check rather than full route planning. The owner should flag groups that stall at blocked cells or bunch in narrow spaces.
 - The regular run still caps at seven hostiles and remains separate from the Horde Simulation Lab.

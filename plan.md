@@ -184,6 +184,6 @@ Prioritize by playtest value and measured cost: military-base and large-city des
 - Whether the camera switch key should be rebindable; it is Tab in the phase 2 field test.
 - Run duration, extraction countdown, inventory capacity, starter kit, and fuel/economy values, after phase 3 playtests.
 - Final art/audio sources and licenses, before shipping public builds.
-- Whether exterior simulation pauses, slows, or continues during interiors, before phase 8 implementation.
+- Exterior simulation behavior during interiors (resolved in phase 8): pause the outdoor timer and hostiles while inside; keep player health and ability/weapon cooldowns active, and run the interior encounter normally.
 
 These decisions should be recorded in `HANDOFF.md` when made and reflected here if they change the roadmap.

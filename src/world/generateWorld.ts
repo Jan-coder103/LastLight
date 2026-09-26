@@ -1,6 +1,7 @@
 import type { AssetPlacement, Vec3Data } from '../assets/assetTypes';
 import { getAsset } from '../assets/catalog';
 import { createRandom, hashSeed } from '../core/seededRandom';
+import { GridNavigator } from '../navigation/GridNavigator';
 
 export const WORLD_SIZE = 280;
 export const LANDING_CLEARANCE = 18;
@@ -55,6 +56,17 @@ export interface WorldLandmark {
   approachZ: number;
 }
 
+export interface BuildingEntrance {
+  id: string;
+  x: number;
+  z: number;
+  doorX: number;
+  doorZ: number;
+  outwardX: number;
+  outwardZ: number;
+  rotationY: number;
+}
+
 export interface WorldData {
   seed: string;
   rotationQuarterTurns: number;
@@ -63,6 +75,7 @@ export interface WorldData {
   districts: WorldDistrict[];
   lootZones: WorldLootZone[];
   landmarks: WorldLandmark[];
+  entrances: BuildingEntrance[];
   placements: AssetPlacement[];
   colliders: WorldCollider[];
   objectCount: number;
@@ -585,8 +598,7 @@ export function generateWorld(seed: string): WorldData {
     const collider = colliderFor(placement);
     return collider ? [collider] : [];
   });
-
-  return {
+  const generatedWorld: WorldData = {
     seed: resolvedSeed,
     rotationQuarterTurns,
     size: WORLD_SIZE,
@@ -594,11 +606,49 @@ export function generateWorld(seed: string): WorldData {
     districts: rotateDistricts(districts, rotationQuarterTurns),
     lootZones: rotateLootZones(lootZones, rotationQuarterTurns),
     landmarks: rotateLandmarks(landmarks, rotationQuarterTurns),
+    entrances: [],
     placements: rotatedPlacements,
     colliders,
     objectCount: placements.length + roads.length + 1,
     spawn,
   };
+  const entranceNavigator = new GridNavigator(generatedWorld);
+  const entrances = rotatedPlacements.flatMap((placement, index) => {
+    if (placement.assetId !== 'building-shell') return [];
+    const outwardX = Math.sin(placement.rotationY);
+    const outwardZ = Math.cos(placement.rotationY);
+    const doorX = placement.position.x + outwardX * 8.57 * placement.scale;
+    const doorZ = placement.position.z + outwardZ * 8.57 * placement.scale;
+    const sideX = -outwardZ;
+    const sideZ = outwardX;
+    let approach: { x: number; z: number } | undefined;
+    for (const distance of [3.4, 4.4, 5.4, 6.4]) {
+      for (const lateral of [0, -1.4, 1.4, -2.8, 2.8]) {
+        const x = doorX + outwardX * distance + sideX * lateral;
+        const z = doorZ + outwardZ * distance + sideZ * lateral;
+        if (entranceNavigator.isWalkable(x, z)) {
+          approach = { x, z };
+          break;
+        }
+      }
+      if (approach) break;
+    }
+    if (!approach) return [];
+    return [
+      {
+        id: `building-${index}`,
+        x: approach.x,
+        z: approach.z,
+        doorX,
+        doorZ,
+        outwardX,
+        outwardZ,
+        rotationY: placement.rotationY,
+      },
+    ];
+  });
+
+  return { ...generatedWorld, entrances };
 }
 
 function distanceToCollider(x: number, z: number, collider: WorldCollider): number {

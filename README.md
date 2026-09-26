@@ -15,24 +15,26 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. The target 
 
 ## Controls
 
-| Input                          | Third person                        | Top-down                            |
-| ------------------------------ | ----------------------------------- | ----------------------------------- |
-| W / A / S / D or arrow keys    | Move relative to the camera         | —                                   |
-| Right-click                    | —                                   | Move around static obstacles        |
-| Left-click                     | Fire at the cursor                  | Attack with cursor assist           |
-| Drag on the scene              | Orbit camera and aim                | —                                   |
-| Optional **Capture Mouse**     | Continuous look; Escape releases it | Not available                       |
-| Q                              | Dash; 2.5-second cooldown, no cost  | Dash; 2.5-second cooldown, no cost  |
-| 1 / 2 / 3                      | Heal / shock pulse / adrenaline     | —                                   |
-| W / E / R                      | —                                   | Heal / shock pulse / adrenaline     |
-| X                              | Use one carried supply to heal      | Use one carried supply to heal      |
-| F                              | Search, collect, or board nearby    | Search, collect, or board nearby    |
-| Tab or **Change View**         | Switch camera without moving player | Switch camera without moving player |
-| World Seed field + reload icon | Rebuild the map and encounter       | Rebuild the map and encounter       |
+| Input                          | Third person                          | Top-down                              |
+| ------------------------------ | ------------------------------------- | ------------------------------------- |
+| W / A / S / D or arrow keys    | Move relative to the camera           | —                                     |
+| Right-click                    | —                                     | Move around static obstacles          |
+| Left-click                     | Fire at the cursor                    | Attack with cursor assist             |
+| Drag on the scene              | Orbit camera and aim                  | —                                     |
+| Optional **Capture Mouse**     | Continuous look; Escape releases it   | Not available                         |
+| Q                              | Dash; 2.5-second cooldown, no cost    | Dash; 2.5-second cooldown, no cost    |
+| 1 / 2 / 3                      | Heal / shock pulse / adrenaline       | —                                     |
+| W / E / R                      | —                                     | Heal / shock pulse / adrenaline       |
+| X                              | Use one carried supply to heal        | Use one carried supply to heal        |
+| F                              | Interact, enter/exit, or board nearby | Interact, enter/exit, or board nearby |
+| Tab or **Change View**         | Switch camera without moving player   | Switch camera without moving player   |
+| World Seed field + reload icon | Rebuild the map and encounter         | Rebuild the map and encounter         |
 
 Start a run from the camp panel. The chopper arrives in third person; pressing **Disembark** switches to the angled top-down camera. Search a cache with F when close or left-click its crate; collect the revealed pickups with F or by clicking them. Top-down clicks on distant loot set a route. Recover at least one cache item before the chopper clears extraction. Gear, supplies, and fuel use carrying capacity; credits do not. X consumes a carried medical supply to restore up to 35 health. F boards when you are in the landing ring and no hostile is close; hold position for four seconds while the chopper is vulnerable to interruption.
 
 The extraction arrow and distance remain on screen during the run. A radio warning arrives before each small reinforcement wave, leaving time to head back. You can extract at any time. The camp quartermaster sells gear and medical supplies, and can install a one-time cargo harness upgrade. One gear kit and one medical supply are taken from camp at deployment if available. Banked items and shop purchases are saved in browser storage; carried items are lost on death.
+
+Building doors become usable during an active run. Press **F** or click a door, then use **F** or the lit exit marker to return to the same outdoor position. The generated 2–4 room layout, loot, and infected encounter repeat for that building and world seed. Collected interior loot and defeated infected remain cleared for the rest of that run. The outdoor horde and run timer pause while inside; player health and ability cooldowns continue normally.
 
 The Phase 2 camera and combat rules still apply. In top-down view, clicking near a visible hostile keeps firing until you move, dash, click empty space, switch views, or the hostile dies. Q dashes toward the cursor and briefly shows its direction; the player replans the remaining click-to-move route after landing. A dash already in progress keeps its world direction through a camera change. The shock pulse damages and briefly stuns nearby hostiles; adrenaline increases movement speed for five seconds; field dressing restores health when injured.
 
@@ -53,6 +55,7 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 
 - `src/world/generateWorld.ts` builds seeded districts, roads, loot regions, landmarks, placements, collision boxes, chopper spawn, and terrain height without depending on rendering.
 - `src/world/buildWorld.ts` turns generated data into Three.js terrain and scene objects.
+- `src/interiors/interiorLayout.ts` creates reproducible room layouts, loot, encounter positions, and collision data; `src/interiors/buildInterior.ts` assembles the reusable room pieces.
 - `src/assets/` contains authored asset modules and shared versioned metadata.
 - `src/player/PlayerController.ts` owns direct third-person movement, top-down route following, dash movement, and the player visual.
 - `src/navigation/GridNavigator.ts` routes the player around static colliders and refreshed hostile positions; combat pursuers use a separate static navigation map.
@@ -100,6 +103,14 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 3. Watch the near/mid/far counts shift as agents approach. Check nearest-target distance, simulation step time, and player health/attack count; nearby agents should reach and attack the player. Click a visible agent to damage it and confirm its health/identity persists until defeated.
 4. End the scene and repeat the same seed and pattern. Run the 100/1,000/5,000/10,000 benchmark twice and note mean and p95 simulation-step cost for each count.
 5. Report whether the crowd reads as growing pressure, whether tier changes look continuous, and any visible bunching, blocked groups, or unexpected state changes.
+
+## Phase 8 playtest checklist
+
+1. Start a run and approach a city building. Confirm its front door shows the enter prompt; try both **F** and clicking the door from outside interaction range in top-down view.
+2. Enter and verify the interior has 2–4 rooms, clear door openings, visible furniture, loot, and an infected encounter. Move with WASD in third person and route with right-click in top-down view.
+3. Switch camera views indoors and confirm the selected view, player heading, collision, and controls remain predictable. Try a route through each room and around furniture.
+4. Collect an item and clear the infected, then exit. Confirm the scout returns to the same outdoor position and the horde/run clock resume. Re-enter the same building and check that collected loot and defeated infected stay cleared.
+5. Change the world seed from camp and revisit a building. Confirm its interior repeats from that seed and that the run remains playable after leaving it.
 
 The regular encounter is intentionally capped at seven hostiles. For Phase 6, open **Horde Simulation Lab** from camp or the dev telemetry button. Choose 100, 1,000, 5,000, or 10,000 agents; set a spawn seed, layout, and camera; then start the isolated stress scene. WASD movement and top-down click-to-move let the horde pursue the player. The lab shows near/mid/far tier counts, the nearest-agent query, player attacks received, and simulation time. End the scene to return to camp.
 

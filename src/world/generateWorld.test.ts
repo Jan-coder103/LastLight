@@ -157,6 +157,16 @@ describe('generateWorld', () => {
           `${seed} route to ${landmark.id}`,
         ).toBeLessThan(210);
       }
+      expect(world.entrances.length, `${seed} accessible building doors`).toBeGreaterThan(0);
+      for (const entrance of world.entrances) {
+        expect(navigator.isWalkable(entrance.x, entrance.z), `${seed} ${entrance.id} door`).toBe(
+          true,
+        );
+        expect(
+          pathLength(navigator, world.spawn, entrance),
+          `${seed} route to ${entrance.id}`,
+        ).toBeLessThan(260);
+      }
     }
   });
 

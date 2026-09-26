@@ -33,14 +33,28 @@ export class CombatSimulation {
   dashCooldownRemaining = 0;
   adrenalineRemaining = 0;
   lastMessage = 'Three hostiles detected. Stay mobile.';
-  private readonly world: WorldData;
-  private readonly navigator: GridNavigator;
+  private world: WorldData;
+  private navigator: GridNavigator;
+  private surfaceHeight: (x: number, z: number) => number;
   private readonly abilityCooldowns: Record<AbilitySlot, number> = { 1: 0, 2: 0, 3: 0 };
 
   constructor(world: WorldData, navigator: GridNavigator) {
     this.world = world;
     this.navigator = navigator;
+    this.surfaceHeight = (x, z) => terrainHeightAt(world.seed, x, z);
     this.reset();
+  }
+
+  setContext(
+    world: WorldData,
+    navigator: GridNavigator,
+    surfaceHeight: (x: number, z: number) => number,
+    hostiles: readonly ZombieState[],
+  ): void {
+    this.world = world;
+    this.navigator = navigator;
+    this.surfaceHeight = surfaceHeight;
+    this.zombies.splice(0, this.zombies.length, ...hostiles);
   }
 
   reset(): void {
@@ -62,7 +76,7 @@ export class CombatSimulation {
       const point = this.findSpawn(offset.x, offset.z);
       this.zombies.push({
         id: `hostile-${index + 1}`,
-        position: new Vector3(point.x, terrainHeightAt(this.world.seed, point.x, point.z), point.z),
+        position: new Vector3(point.x, this.surfaceHeight(point.x, point.z), point.z),
         health: zombieHealth,
         maxHealth: zombieHealth,
         alive: true,
@@ -95,7 +109,7 @@ export class CombatSimulation {
       );
       const zombie: ZombieState = {
         id: `hostile-${this.zombies.length + 1}`,
-        position: new Vector3(point.x, terrainHeightAt(this.world.seed, point.x, point.z), point.z),
+        position: new Vector3(point.x, this.surfaceHeight(point.x, point.z), point.z),
         health: zombieHealth,
         maxHealth: zombieHealth,
         alive: true,
@@ -244,7 +258,7 @@ export class CombatSimulation {
       const travel = Math.min(distanceToWaypoint, 1.8 * delta);
       zombie.position.x += direction.x * travel;
       zombie.position.z += direction.z * travel;
-      zombie.position.y = terrainHeightAt(this.world.seed, zombie.position.x, zombie.position.z);
+      zombie.position.y = this.surfaceHeight(zombie.position.x, zombie.position.z);
       zombie.facing = Math.atan2(-direction.x, -direction.z);
     }
   }

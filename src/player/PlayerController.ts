@@ -88,6 +88,7 @@ export class PlayerController {
   private readonly path: NavPoint[] = [];
   private readonly cursorWorldPoint = new Vector3();
   private world: WorldData;
+  private surfaceHeight: (x: number, z: number) => number;
   private facing = 0;
   private currentMode: CameraMode = 'third-person';
   private currentCameraYaw = 0;
@@ -111,6 +112,7 @@ export class PlayerController {
     onDashRequest: () => boolean,
   ) {
     this.world = world;
+    this.surfaceHeight = (x, z) => terrainHeightAt(world.seed, x, z);
     this.onViewToggle = onViewToggle;
     this.onAbility = onAbility;
     this.onDashRequest = onDashRequest;
@@ -121,8 +123,9 @@ export class PlayerController {
     document.addEventListener('visibilitychange', this.handleVisibility);
   }
 
-  setWorld(world: WorldData): void {
+  setWorld(world: WorldData, surfaceHeight?: (x: number, z: number) => number): void {
     this.world = world;
+    this.surfaceHeight = surfaceHeight ?? ((x, z) => terrainHeightAt(world.seed, x, z));
     this.clearInput();
     this.path.length = 0;
     this.blockedRouteTime = 0;
@@ -294,12 +297,12 @@ export class PlayerController {
   }
 
   setPosition(x: number, z: number): void {
-    this.position.set(x, terrainHeightAt(this.world.seed, x, z), z);
+    this.position.set(x, this.surfaceHeight(x, z), z);
     this.visual.position.copy(this.position);
   }
 
   terrainHeight = (x: number, z: number): number => {
-    return terrainHeightAt(this.world.seed, x, z);
+    return this.surfaceHeight(x, z);
   };
 
   get cameraFocus(): Vector3 {

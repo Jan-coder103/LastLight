@@ -50,9 +50,16 @@ import {
 } from './game/saveData';
 import { createZombieVisual, syncZombieVisual } from './game/zombieVisual';
 import { GridNavigator, type NavPoint } from './navigation/GridNavigator';
+import { buildInterior } from './interiors/buildInterior';
+import { generateInterior, interiorWorld, type InteriorLayout } from './interiors/interiorLayout';
 import { PlayerController } from './player/PlayerController';
 import { buildWorld } from './world/buildWorld';
-import { generateWorld, terrainHeightAt, type WorldData } from './world/generateWorld';
+import {
+  generateWorld,
+  terrainHeightAt,
+  type BuildingEntrance,
+  type WorldData,
+} from './world/generateWorld';
 import './style.css';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene');
@@ -197,16 +204,17 @@ let player!: PlayerController;
 
 type GamePhase =
   'base' | 'arrival' | 'disembarking' | 'active' | 'extracting' | 'takeoff' | 'result';
-type InteractiveKind = 'cache' | 'drop' | 'extraction';
+type InteractiveKind = 'cache' | 'drop' | 'extraction' | 'building-door';
 
 interface InteractiveView {
   id: string;
   kind: InteractiveKind;
   x: number;
   z: number;
-  object: Group;
+  object: Object3D;
   cache?: CacheSite;
   drop?: LootDrop;
+  entrance?: BuildingEntrance;
 }
 
 interface NavigationTask {
@@ -215,6 +223,22 @@ interface NavigationTask {
   range: number;
   interactionId?: string;
   stuckReplans: number;
+}
+
+interface InteriorSession {
+  entrance: BuildingEntrance;
+  layout: InteriorLayout;
+  world: WorldData;
+  navigator: GridNavigator;
+  group: Group;
+  lootGroup: Group;
+  views: Map<string, InteractiveView>;
+  returnPosition: Vector3;
+  outdoorNavigator: GridNavigator;
+  outdoorCombatNavigator: GridNavigator;
+  outdoorHostiles: ZombieState[];
+  outdoorZombieGroup: Group;
+  outdoorZombieViews: Map<string, Group>;
 }
 
 let gamePhase: GamePhase = 'base';
@@ -243,6 +267,9 @@ let lootGroup = new Group();
 lootGroup.name = 'Run loot';
 scene.add(lootGroup);
 const interactiveViews = new Map<string, InteractiveView>();
+let interiorSession: InteriorSession | undefined;
+const interiorHostiles = new Map<string, ZombieState[]>();
+const interiorLootRemaining = new Map<string, number>();
 let cacheSites: CacheSite[] = [];
 let openedCacheIds = new Set<string>();
 let lootDrops: LootDrop[] = [];
@@ -352,7 +379,7 @@ function renderControls(): void {
           row('2', 'Shock pulse'),
           row('3', 'Adrenaline'),
           row('X', 'Use carried supply'),
-          row('F', 'Interact / board'),
+          row('F', 'Interact / enter / exit'),
           row('TAB', 'Switch camera'),
         ]
       : [
@@ -367,7 +394,7 @@ function renderControls(): void {
           row('E', 'Shock pulse'),
           row('R', 'Adrenaline'),
           row('X', 'Use carried supply'),
-          row('F', 'Interact / board'),
+          row('F', 'Interact / enter / exit'),
           row('TAB', 'Switch camera'),
         ];
   elements.controlsContent!.innerHTML = rows.join('');
@@ -1033,6 +1060,14 @@ function createDropVisual(drop: LootDrop): Group {
   return group;
 }
 
+function findObjectWithInteractiveId(root: Object3D, id: string): Object3D | undefined {
+  let match: Object3D | undefined;
+  root.traverse((object) => {
+    if (!match && object.userData.interactiveId === id) match = object;
+  });
+  return match;
+}
+
 function createRunLoot(): void {
   scene.remove(lootGroup);
   disposeTree(lootGroup);
@@ -1054,7 +1089,220 @@ function createRunLoot(): void {
       cache: site,
     });
   }
+  for (const entrance of world.entrances) {
+    const object = findObjectWithInteractiveId(worldGroup, entrance.id);
+    if (!object) continue;
+    interactiveViews.set(entrance.id, {
+      id: entrance.id,
+      kind: 'building-door',
+      x: entrance.x,
+      z: entrance.z,
+      object,
+      entrance,
+    });
+  }
   scene.add(lootGroup);
+}
+
+function activeInteractiveViews(): Map<string, InteractiveView> {
+  return interiorSession?.views ?? interactiveViews;
+}
+
+function activeWorldVisual(): Group {
+  return interiorSession?.group ?? worldGroup;
+}
+
+function activeLootVisual(): Group {
+  return interiorSession?.lootGroup ?? lootGroup;
+}
+
+function createInteriorLootVisual(drop: LootDrop): Group {
+  const colors: Record<ResourceKind, string> = {
+    gear: '#c6a96f',
+    supplies: '#93a778',
+    money: '#d4c47c',
+    fuel: '#b87e54',
+  };
+  const group = new Group();
+  group.position.set(drop.x, 0, drop.z);
+  group.name = `Interior ${drop.kind} pickup`;
+  group.userData.interactiveId = drop.id;
+  const token = new Mesh(
+    new BoxGeometry(0.48, 0.48, 0.48),
+    new MeshStandardMaterial({ color: colors[drop.kind], roughness: 0.8, flatShading: true }),
+  );
+  token.position.y = 0.42;
+  token.rotation.y = Math.PI / 4;
+  token.castShadow = true;
+  token.userData.interactiveId = drop.id;
+  const marker = new Mesh(
+    new RingGeometry(0.42, 0.54, 20),
+    new MeshBasicMaterial({ color: colors[drop.kind], transparent: true, opacity: 0.58 }),
+  );
+  marker.rotation.x = -Math.PI / 2;
+  marker.position.y = 0.04;
+  marker.userData.interactiveId = drop.id;
+  group.add(token, marker);
+  return group;
+}
+
+function createInteriorHostile(id: string, x: number, z: number): ZombieState {
+  return {
+    id,
+    position: new Vector3(x, 0, z),
+    health: 100,
+    maxHealth: 100,
+    alive: true,
+    stunRemaining: 0,
+    attackCooldown: 0.55,
+    repathRemaining: 0,
+    path: [],
+    facing: 0,
+  };
+}
+
+function enterBuilding(entrance: BuildingEntrance): void {
+  if (gamePhase !== 'active' || interiorSession || stressActive) return;
+  clearNavigation('IDLE');
+  clearRoute();
+  autoAttackTargetId = undefined;
+  releaseMouseCapture();
+  releaseLookDrag();
+
+  const layout = generateInterior(`${world.seed}:${entrance.id}`);
+  const roomWorld = interiorWorld(layout, world);
+  const roomGroup = buildInterior(layout, world);
+  const roomNavigator = new GridNavigator(roomWorld);
+  const roomLootGroup = new Group();
+  roomLootGroup.name = `Interior loot ${entrance.id}`;
+  const views = new Map<string, InteractiveView>();
+  for (const item of layout.loot) {
+    if (interiorLootRemaining.get(item.id) === 0) continue;
+    const drop: LootDrop = {
+      id: item.id,
+      cacheId: entrance.id,
+      kind: item.kind,
+      amount: interiorLootRemaining.get(item.id) ?? item.amount,
+      x: item.x,
+      z: item.z,
+      collected: false,
+    };
+    const object = createInteriorLootVisual(drop);
+    roomLootGroup.add(object);
+    views.set(drop.id, { id: drop.id, kind: 'drop', x: drop.x, z: drop.z, object, drop });
+  }
+  const exitObject = findObjectWithInteractiveId(roomGroup, 'interior-exit');
+  if (exitObject) {
+    views.set('interior-exit', {
+      id: 'interior-exit',
+      kind: 'building-door',
+      x: layout.exit.x,
+      z: layout.exit.z,
+      object: exitObject,
+    });
+  }
+
+  const savedRoomHostiles = interiorHostiles.get(entrance.id) ?? [
+    createInteriorHostile(layout.encounter.id, layout.encounter.x, layout.encounter.z),
+  ];
+  interiorHostiles.set(entrance.id, savedRoomHostiles);
+  const savedZombieGroup = zombieGroup;
+  const savedZombieViews = new Map(zombieViews);
+  scene.remove(savedZombieGroup);
+  zombieGroup = new Group();
+  zombieGroup.name = `Interior hostiles ${entrance.id}`;
+  zombieViews.clear();
+  for (const hostile of savedRoomHostiles) {
+    const visual = createZombieVisual(hostile);
+    zombieViews.set(hostile.id, visual);
+    zombieGroup.add(visual);
+  }
+  scene.add(roomGroup, roomLootGroup, zombieGroup);
+  worldGroup.visible = false;
+  lootGroup.visible = false;
+  if (chopper) chopper.visible = false;
+  if (extractionMarker) extractionMarker.visible = false;
+  if (extractionGuideArrow) extractionGuideArrow.visible = false;
+
+  interiorSession = {
+    entrance,
+    layout,
+    world: roomWorld,
+    navigator: roomNavigator,
+    group: roomGroup,
+    lootGroup: roomLootGroup,
+    views,
+    returnPosition: player.position.clone(),
+    outdoorNavigator: navigator,
+    outdoorCombatNavigator: combatNavigator,
+    outdoorHostiles: combat.zombies.slice(),
+    outdoorZombieGroup: savedZombieGroup,
+    outdoorZombieViews: savedZombieViews,
+  };
+  navigator = roomNavigator;
+  combatNavigator = roomNavigator;
+  combat.setContext(roomWorld, roomNavigator, () => 0, savedRoomHostiles);
+  player.setWorld(roomWorld, () => 0);
+  player.setPosition(layout.entry.x, layout.entry.z);
+  player.setEnabled(true);
+  cameraRig.setWorld(roomWorld);
+  cameraRig.snapTo(player.position);
+  gamePhase = 'active';
+  elements.extractionGuide!.setAttribute('hidden', '');
+  elements.zoneStatus!.textContent = 'INSIDE';
+  elements.seedHint!.textContent = `${layout.rooms.length} room interior · outdoor activity paused. Find the lit exit marker to leave.`;
+  combat.lastMessage = 'Interior entered. Clear the infected and search the rooms.';
+  updateModeUi();
+  updateCombatUi();
+  updateNearbyAction();
+  canvas?.focus({ preventScroll: true });
+}
+
+function leaveBuilding(resumePlayer = true): void {
+  const session = interiorSession;
+  if (!session) return;
+  interiorHostiles.set(session.entrance.id, combat.zombies.slice());
+  scene.remove(session.group, session.lootGroup, zombieGroup);
+  disposeTree(session.group);
+  disposeTree(session.lootGroup);
+  disposeTree(zombieGroup);
+  zombieGroup = session.outdoorZombieGroup;
+  zombieViews.clear();
+  for (const [id, view] of session.outdoorZombieViews) zombieViews.set(id, view);
+  scene.add(zombieGroup);
+  worldGroup.visible = true;
+  lootGroup.visible = true;
+  if (chopper) chopper.visible = true;
+  if (extractionMarker) extractionMarker.visible = true;
+  if (extractionGuideArrow) extractionGuideArrow.visible = true;
+  navigator = session.outdoorNavigator;
+  combatNavigator = session.outdoorCombatNavigator;
+  navigator.setDynamicObstacles([]);
+  combat.setContext(
+    world,
+    combatNavigator,
+    (x, z) => terrainHeightAt(world.seed, x, z),
+    session.outdoorHostiles,
+  );
+  player.setWorld(world, (x, z) => terrainHeightAt(world.seed, x, z));
+  player.setPosition(session.returnPosition.x, session.returnPosition.z);
+  player.setEnabled(resumePlayer && gamePhase === 'active' && combat.alive);
+  cameraRig.setWorld(world);
+  cameraRig.snapTo(player.position);
+  interiorSession = undefined;
+  navigationTask = undefined;
+  autoAttackTargetId = undefined;
+  setNavigationStatus('IDLE');
+  clearRoute();
+  elements.extractionGuide!.removeAttribute('hidden');
+  elements.zoneStatus!.textContent = 'ACTIVE';
+  elements.seedHint!.textContent = 'Back outside. The run and horde timer resume now.';
+  combat.lastMessage = combat.alive
+    ? 'Back outside. The horde resumes its approach.'
+    : combat.lastMessage;
+  updateModeUi();
+  updateCombatUi();
+  updateNearbyAction();
 }
 
 function addPickup(drop: LootDrop): void {
@@ -1072,7 +1320,8 @@ function addPickup(drop: LootDrop): void {
 }
 
 function openLoot(view: InteractiveView): void {
-  if (view.kind !== 'cache' || !view.cache || openedCacheIds.has(view.id)) return;
+  if (interiorSession || view.kind !== 'cache' || !view.cache || openedCacheIds.has(view.id))
+    return;
   openedCacheIds.add(view.id);
   lootGroup.remove(view.object);
   disposeTree(view.object);
@@ -1092,17 +1341,45 @@ function collectLoot(view: InteractiveView): void {
   }
   view.drop.amount -= accepted;
   runLootCollected += accepted;
+  if (interiorSession) interiorLootRemaining.set(view.id, view.drop.amount);
   combat.lastMessage = `Collected ${accepted} ${resourceNames[view.drop.kind]}.`;
   if (view.drop.amount <= 0) {
     view.drop.collected = true;
-    lootGroup.remove(view.object);
+    activeLootVisual().remove(view.object);
     disposeTree(view.object);
-    interactiveViews.delete(view.id);
+    activeInteractiveViews().delete(view.id);
+    if (interiorSession) interiorLootRemaining.set(view.id, 0);
   }
   updateCombatUi();
 }
 
 function interactWith(view: InteractiveView, allowApproach = true): void {
+  if (view.kind === 'building-door') {
+    if (interiorSession) {
+      if (Math.hypot(view.x - player.position.x, view.z - player.position.z) <= 2.8) {
+        leaveBuilding();
+        return;
+      }
+      if (allowApproach && cameraRig.mode === 'top-down') {
+        moveToInteractive(view);
+        return;
+      }
+      combat.lastMessage = 'Move closer to the marked exit.';
+      updateCombatUi();
+      return;
+    }
+    if (!view.entrance) return;
+    if (Math.hypot(view.x - player.position.x, view.z - player.position.z) > 3.6) {
+      if (allowApproach && cameraRig.mode === 'top-down') moveToInteractive(view);
+      else {
+        combat.lastMessage = 'Move closer to the building door.';
+        updateCombatUi();
+      }
+      return;
+    }
+    enterBuilding(view.entrance);
+    return;
+  }
   if (view.kind === 'extraction') {
     if (Math.hypot(view.x - player.position.x, view.z - player.position.z) > 6.5) {
       if (allowApproach && cameraRig.mode === 'top-down') {
@@ -1130,9 +1407,10 @@ function interactWith(view: InteractiveView, allowApproach = true): void {
 }
 
 function closestInteractive(): InteractiveView | undefined {
+  const views = activeInteractiveViews();
   let closest: InteractiveView | undefined;
   let distance = Infinity;
-  for (const view of interactiveViews.values()) {
+  for (const view of views.values()) {
     const candidate = Math.hypot(view.x - player.position.x, view.z - player.position.z);
     if (candidate < distance) {
       closest = view;
@@ -1153,7 +1431,7 @@ function interactNearest(): void {
     interactWith(nearby, false);
     return;
   }
-  const extraction = interactiveViews.get('extraction');
+  const extraction = activeInteractiveViews().get('extraction');
   if (
     extraction &&
     Math.hypot(extraction.x - player.position.x, extraction.z - player.position.z) <= 6.5
@@ -1177,19 +1455,27 @@ function updateNearbyAction(): void {
   if (nearby) {
     const distance = Math.hypot(nearby.x - player.position.x, nearby.z - player.position.z);
     const text =
-      nearby.kind === 'extraction'
-        ? distance <= 6.5
-          ? runLootCollected > 0
-            ? 'F  BOARD THE CHOPPER'
-            : 'SCAVENGE BEFORE EXTRACTION'
-          : 'EXTRACTION ZONE'
-        : nearby.kind === 'cache'
-          ? distance <= 3.6
-            ? 'F  SEARCH CACHE'
-            : 'CLICK TO APPROACH CACHE'
+      nearby.kind === 'building-door'
+        ? interiorSession
+          ? distance <= 2.8
+            ? 'F  EXIT BUILDING'
+            : 'CLICK TO APPROACH EXIT'
           : distance <= 3.6
-            ? 'F  COLLECT PICKUP'
-            : 'CLICK TO APPROACH PICKUP';
+            ? 'F  ENTER BUILDING'
+            : 'CLICK TO APPROACH DOOR'
+        : nearby.kind === 'extraction'
+          ? distance <= 6.5
+            ? runLootCollected > 0
+              ? 'F  BOARD THE CHOPPER'
+              : 'SCAVENGE BEFORE EXTRACTION'
+            : 'EXTRACTION ZONE'
+          : nearby.kind === 'cache'
+            ? distance <= 3.6
+              ? 'F  SEARCH CACHE'
+              : 'CLICK TO APPROACH CACHE'
+            : distance <= 3.6
+              ? 'F  COLLECT PICKUP'
+              : 'CLICK TO APPROACH PICKUP';
     elements.nearbyAction!.textContent = text;
     elements.nearbyAction!.removeAttribute('hidden');
     return;
@@ -1267,7 +1553,8 @@ function moveToLocation(x: number, z: number): void {
 function moveToInteractive(view: InteractiveView): void {
   if (cameraRig.mode !== 'top-down' || gamePhase !== 'active') return;
   autoAttackTargetId = undefined;
-  const interactionRange = view.kind === 'extraction' ? 6.5 : 3.6;
+  const interactionRange =
+    view.kind === 'extraction' ? 6.5 : interiorSession && view.kind === 'building-door' ? 2.8 : 3.6;
   const distance = Math.hypot(view.x - player.position.x, view.z - player.position.z);
   if (distance <= interactionRange) {
     clearNavigation('ARRIVED');
@@ -1298,6 +1585,10 @@ function moveToInteractive(view: InteractiveView): void {
   routeRefresh = 1;
   updateRouteLine(true);
   combat.lastMessage = `Moving into reach of ${view.kind === 'cache' ? 'the cache' : view.kind === 'drop' ? 'the pickup' : 'the chopper'}.`;
+  if (view.kind === 'building-door')
+    combat.lastMessage = interiorSession
+      ? 'Moving toward the marked exit.'
+      : 'Moving toward the building door.';
   updateCombatUi();
 }
 
@@ -1350,7 +1641,7 @@ function finishNavigationTask(task: NavigationTask): void {
   setNavigationStatus('ARRIVED');
   updateRouteLine(true);
   if (task.interactionId) {
-    const view = interactiveViews.get(task.interactionId);
+    const view = activeInteractiveViews().get(task.interactionId);
     if (view) interactWith(view, false);
   }
 }
@@ -1371,8 +1662,13 @@ function replanNavigationTask(): void {
     return;
   }
   if (task.interactionId) {
-    const view = interactiveViews.get(task.interactionId);
-    const useRange = view?.kind === 'extraction' ? 6.5 : 3.6;
+    const view = activeInteractiveViews().get(task.interactionId);
+    const useRange =
+      view?.kind === 'extraction'
+        ? 6.5
+        : interiorSession && view?.kind === 'building-door'
+          ? 2.8
+          : 3.6;
     if (view && Math.hypot(view.x - player.position.x, view.z - player.position.z) <= useRange) {
       finishNavigationTask(task);
       return;
@@ -1414,6 +1710,7 @@ function updateNavigationProgress(): void {
 }
 
 function clearRunScene(): void {
+  if (interiorSession) leaveBuilding(false);
   if (chopper) {
     scene.remove(chopper);
     disposeTree(chopper);
@@ -1439,6 +1736,8 @@ function clearRunScene(): void {
   cacheSites = [];
   lootDrops = [];
   openedCacheIds = new Set();
+  interiorHostiles.clear();
+  interiorLootRemaining.clear();
 }
 
 function startRun(): void {
@@ -1795,11 +2094,19 @@ function pointToNdc(event: PointerEvent | MouseEvent): Vector2 {
 }
 
 function terrainPointAt(clientX: number, clientY: number): Vector3 | undefined {
-  const terrain = worldGroup.getObjectByName('Seeded terrain');
-  if (!(terrain instanceof Mesh)) return undefined;
+  const floors: Mesh[] = [];
+  if (interiorSession) {
+    activeWorldVisual().traverse((object) => {
+      if (object instanceof Mesh && object.userData.walkableFloor) floors.push(object);
+    });
+  } else {
+    const floor = activeWorldVisual().getObjectByName('Seeded terrain');
+    if (floor instanceof Mesh) floors.push(floor);
+  }
+  if (floors.length === 0) return undefined;
   const raycaster = new Raycaster();
   raycaster.setFromCamera(pointerNdc(clientX, clientY), camera);
-  return raycaster.intersectObject(terrain, false)[0]?.point;
+  return raycaster.intersectObjects(floors, false)[0]?.point;
 }
 
 function updateTopDownDashAim(clientX: number, clientY: number): void {
@@ -1821,16 +2128,19 @@ function findInteractiveId(object: Object3D | undefined): string | undefined {
   let current = object;
   while (current) {
     if (typeof current.userData.interactiveId === 'string') return current.userData.interactiveId;
+    if (typeof current.userData.buildingId === 'string') return current.userData.buildingId;
     current = current.parent ?? undefined;
   }
   return undefined;
 }
 
 function firstWorldOrLivingHit(raycaster: Raycaster) {
-  return raycaster.intersectObjects([worldGroup, lootGroup, zombieGroup], true).find((hit) => {
-    const zombieId = findZombieId(hit.object);
-    return !zombieId || combat.zombies.some((zombie) => zombie.id === zombieId && zombie.alive);
-  });
+  return raycaster
+    .intersectObjects([activeWorldVisual(), activeLootVisual(), zombieGroup], true)
+    .find((hit) => {
+      const zombieId = findZombieId(hit.object);
+      return !zombieId || combat.zombies.some((zombie) => zombie.id === zombieId && zombie.alive);
+    });
 }
 
 function canSeeZombie(zombie: ZombieState): boolean {
@@ -1941,7 +2251,7 @@ function fireAt(event: PointerEvent): void {
   viewRay.setFromCamera(ndc, camera);
   const aimHit = firstWorldOrLivingHit(viewRay);
   const interactiveId = findInteractiveId(aimHit?.object);
-  const interactive = interactiveId ? interactiveViews.get(interactiveId) : undefined;
+  const interactive = interactiveId ? activeInteractiveViews().get(interactiveId) : undefined;
   if (interactive) {
     interactWith(interactive);
     return;
@@ -2156,10 +2466,11 @@ function animate(now: number): void {
       updateNavigationProgress();
     } else if (gamePhase === 'active' || gamePhase === 'extracting') {
       if (gamePhase === 'active') {
-        runElapsed += fixedStep;
+        if (!interiorSession) runElapsed += fixedStep;
         const warningTimes = [50, 110];
         const spawnTimes = [90, 150];
         if (
+          !interiorSession &&
           reinforcementIndex < 2 &&
           runElapsed >= warningTimes[reinforcementIndex] &&
           !waveWarningShown
@@ -2167,7 +2478,11 @@ function animate(now: number): void {
           waveWarningShown = true;
           combat.lastMessage = `Horde movement detected. Reinforcements may reach this area in ${spawnTimes[reinforcementIndex] - warningTimes[reinforcementIndex]} seconds. Extract while the route is clear.`;
         }
-        if (reinforcementIndex < 2 && runElapsed >= spawnTimes[reinforcementIndex]) {
+        if (
+          !interiorSession &&
+          reinforcementIndex < 2 &&
+          runElapsed >= spawnTimes[reinforcementIndex]
+        ) {
           const added = combat.addReinforcements(2, player.position);
           for (const zombie of added) {
             const visual = createZombieVisual(zombie);
@@ -2180,7 +2495,8 @@ function animate(now: number): void {
       }
       if (player.isDashing && !observedDash && cameraRig.mode === 'top-down') addDashIndicator();
       const wasDashing = player.isDashing;
-      if (gamePhase === 'extracting' || runElapsed >= 12) combat.tick(fixedStep, player.position);
+      if (gamePhase === 'extracting' || interiorSession || runElapsed >= 12)
+        combat.tick(fixedStep, player.position);
       if (!combat.alive) {
         simulationAccumulator = 0;
         break;
@@ -2239,19 +2555,30 @@ function animate(now: number): void {
   }
   animateEffects(delta);
   if (gamePhase === 'active' || gamePhase === 'extracting') {
-    updateExtractionGuide();
+    if (!interiorSession) updateExtractionGuide();
     nearbyRefresh += delta;
     if (nearbyRefresh >= 0.12) {
       nearbyRefresh = 0;
       updateNearbyAction();
     }
-    lootDrops.forEach((drop, index) => {
-      if (drop.collected) return;
-      const view = interactiveViews.get(drop.id);
-      if (view)
-        view.object.position.y =
-          terrainHeightAt(world.seed, drop.x, drop.z) + 0.48 + Math.sin(now * 0.003 + index) * 0.08;
-    });
+    if (!interiorSession) {
+      lootDrops.forEach((drop, index) => {
+        if (drop.collected) return;
+        const view = interactiveViews.get(drop.id);
+        if (view)
+          view.object.position.y =
+            terrainHeightAt(world.seed, drop.x, drop.z) +
+            0.48 +
+            Math.sin(now * 0.003 + index) * 0.08;
+      });
+    } else {
+      let index = 0;
+      for (const view of interiorSession.views.values()) {
+        if (view.kind !== 'drop') continue;
+        view.object.position.y = 0.03 + Math.sin(now * 0.003 + index) * 0.045;
+        index += 1;
+      }
+    }
   }
   routeRefresh += delta;
   updateRouteLine();

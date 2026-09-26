@@ -119,7 +119,7 @@ export function buildWorld(world: WorldData): Group {
   }
 
   const prototypes = new Map<string, Group>();
-  for (const placement of world.placements) {
+  for (const [placementIndex, placement] of world.placements.entries()) {
     const key = `${placement.assetId}:${placement.variant}`;
     let prototype = prototypes.get(key);
     if (!prototype) {
@@ -134,6 +134,11 @@ export function buildWorld(world: WorldData): Group {
       if (object instanceof Mesh) object.receiveShadow = true;
     });
     visual.name = `${placement.assetId} instance`;
+    if (placement.assetId === 'building-shell') {
+      const door = visual.children[2];
+      if (door) door.userData.interactiveId = `building-${placementIndex}`;
+      visual.userData.buildingId = `building-${placementIndex}`;
+    }
     root.add(visual);
   }
 
