@@ -30,6 +30,8 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. The target 
 | Tab or **Change View**         | Switch camera without moving player   | Switch camera without moving player   |
 | World Seed field + reload icon | Rebuild the map and encounter         | Rebuild the map and encounter         |
 
+Press **O** or choose **Atmosphere** to open lighting, weather, and accessibility options. Lighting is seeded per run by default, with low sun and high moon alternatives. Weather is also seeded by default, with clear, mist, and rain options. Changing these presets affects your next deployment; the current run's sky stays fixed. Reduce motion/camera shake, reduce flashes, hide rain particles, disable audio cues, or adjust impact-shake intensity at any time. Accessibility options apply immediately and persist separately from camp inventory.
+
 At camp, use **W/A/S/D** to walk, right-click in top-down view to route, **F** at a marked service or building, **M** for the camp terminal, and **Tab** to change camera. The terminal can also be opened by clicking its world panel.
 
 Depart from the operations board, camp terminal, or chopper. The chopper arrives in third person; pressing **Disembark** switches to the angled top-down camera. Search a cache with F when close or left-click its crate; collect the revealed pickups with F or by clicking them. Top-down clicks on distant loot set a route. Recover at least one cache item before the chopper clears extraction. Gear, supplies, and fuel use carrying capacity; credits do not. X consumes a carried medical supply to restore up to 35 health. F boards when you are in the landing ring and no hostile is close; hold position for four seconds while the chopper is vulnerable to interruption.
@@ -69,6 +71,7 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 - `src/game/saveData.ts` validates versioned camp saves, cargo capacity, and banking rules.
 - `src/input/controlMap.ts` defines the view-specific keyboard actions.
 - `src/camera/CameraRig.ts` owns both camera views and their transition.
+- `src/atmosphere/` manages seeded lighting/weather, accessibility preferences, rain and particle rendering, and synthesized audio feedback.
 - `src/main.ts` assembles the scene, UI, renderer, and diagnostics.
 
 ## Asset Bench
@@ -137,6 +140,21 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 3. Enter and leave the barracks and clinic. Check that the interior is navigable in both views and returning to camp preserves the view and position without starting or advancing a field run.
 4. Buy field gear and supplies, sell carried items, and install the cargo harness. Confirm prices and affordability messages, one-time upgrade behavior, stock display, and saved credits/stock after a reload.
 5. Deploy through the board or chopper. Confirm Greywood remains free, the starting kit follows saved camp stock, extraction banks returned cargo, and death loses carried cargo while stored camp resources remain safe.
+
+## Phase 11 playtest checklist
+
+1. At camp, press **O**. Check that seeded lighting and weather are selected by default, then choose **Low sun** and **Clear** and deploy. Note the scene's orientation/readability and confirm the displayed sky preset stays fixed during the run.
+2. Return to camp, choose **High moon** and **Mist**, deploy again, then repeat with **Rain & distant thunder**. Check the map remains readable, rain stays outdoors, and thunder is distant and restrained.
+3. In a regular encounter, fire the rifle and use dash, shock pulse, and other abilities. Check the muzzle/hit/ability particles, reticle and damage feedback, and camera shake. Try the same actions after enabling reduced motion and reduced flashes.
+4. Toggle rain particles and audio cues separately during an active run. Confirm each option takes effect immediately. Set a new lighting/weather preset during that run; it should not change until the next deployment.
+5. Adjust impact shake from 0% to a comfortable value. Reload the page and confirm options persist; if the operating system requests reduced motion and no saved choice exists, confirm the reduced-motion default is respected.
+6. Open **Horde Simulation Lab**, start 10,000 agents, and inspect weather/effects with diagnostics visible. Record browser, viewport, camera, frame-time p95, JS/GPU timing, draw calls, triangles, heap, and active effects. Compare stress and normal scenes; report stutter, visual obstruction, discomfort, or audio issues.
+
+## Combined Phase 10 + 11 owner playtest (deferred by owner)
+
+The owner asked to defer Phase 10's playtest and combine it with Phase 11. Both phases remain **Awaiting owner playtest**, not accepted. Complete the two checklists above in one review, then record one owner result for each phase in `tracker.md`.
+
+For the camp/economy portion, explore the hub in both camera views; visit each service and enter/exit both camp buildings; verify the quick terminal and locked destinations; buy and resell gear/supplies; and install the one-time cargo harness when funds allow. Reload and verify stock, credits, upgrade state, and atmosphere options. Then deploy to Greywood, play and extract once, and confirm banked cargo survives while a later death loses only carried cargo. Finish with the Phase 11 preset/accessibility/audio/effect checks above. Phase 7's reference hardware remains unspecified, so report the browser and machine with performance observations.
 
 The regular encounter is intentionally capped at seven hostiles. For Phase 6, open **Horde Simulation Lab** from camp or the dev telemetry button. Choose 100, 1,000, 5,000, or 10,000 agents; set a spawn seed, layout, and camera; then start the isolated stress scene. WASD movement and top-down click-to-move let the horde pursue the player. The lab shows near/mid/far tier counts, the nearest-agent query, player attacks received, and simulation time. End the scene to return to camp.
 
