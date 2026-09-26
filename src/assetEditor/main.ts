@@ -225,6 +225,14 @@ function renderInspector(): void {
       <p class="field-note">Colors and surface response update the shared game materials.</p>
       ${materialCards}
     </section>`;
+  inspector!
+    .querySelectorAll<HTMLInputElement>('input[data-material-field="color"]')
+    .forEach((input) => {
+      // Color pickers can dispatch their final native-picker events differently across browsers.
+      // Bind directly to each control so the committed OS picker value is always read from it.
+      input.addEventListener('input', updateMaterialColor);
+      input.addEventListener('change', updateMaterialColor);
+    });
   inspector!.scrollTop = scrollTop;
 }
 
@@ -360,16 +368,34 @@ function updateNumberInput(target: HTMLInputElement): void {
   }
 }
 
+function setMaterialColor(target: HTMLInputElement): void {
+  const material = selectedDocument.asset.materials[Number(target.dataset.materialIndex)];
+  if (material) material.color = target.value;
+}
+
+function updateMaterialColor(event: Event): void {
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLInputElement)) return;
+  setMaterialColor(target);
+  const valid = validateCurrent();
+  if (valid) {
+    syncHeader();
+    renderVisual();
+    message!.textContent =
+      'Definition valid. Save a portable JSON file or try this asset in a generated run.';
+  } else
+    message!.textContent =
+      'Fix the highlighted definition issue before saving or using this asset.';
+}
+
 function previewInspectorInput(event: Event): void {
   const target = event.target;
   if (!(target instanceof HTMLInputElement)) return;
+  if (target.dataset.materialField === 'color') return;
   if (target.type === 'number') updateNumberInput(target);
   else if (target.dataset.pointField === 'label') {
     const point = selectedDocument.asset.interactionPoints[Number(target.dataset.pointIndex)];
     if (point) point.label = target.value;
-  } else if (target.dataset.materialField === 'color') {
-    const material = selectedDocument.asset.materials[Number(target.dataset.materialIndex)];
-    if (material) material.color = target.value;
   } else return;
 
   const valid = validateCurrent();
@@ -386,6 +412,7 @@ function previewInspectorInput(event: Event): void {
 function editInspector(event: Event): void {
   const target = event.target;
   if (!(target instanceof HTMLInputElement || target instanceof HTMLButtonElement)) return;
+  if (target instanceof HTMLInputElement && target.dataset.materialField === 'color') return;
   const button = target instanceof HTMLButtonElement ? target : undefined;
   if (button?.hasAttribute('data-add-point')) {
     const usedIds = new Set(selectedDocument.asset.interactionPoints.map((point) => point.id));
@@ -408,9 +435,6 @@ function editInspector(event: Event): void {
   } else if (target instanceof HTMLInputElement && target.dataset.pointField === 'label') {
     const point = selectedDocument.asset.interactionPoints[Number(target.dataset.pointIndex)];
     if (point) point.label = target.value;
-  } else if (target instanceof HTMLInputElement && target.dataset.materialField === 'color') {
-    const material = selectedDocument.asset.materials[Number(target.dataset.materialIndex)];
-    if (material) material.color = target.value;
   } else if (target instanceof HTMLInputElement && target.type === 'number') {
     updateNumberInput(target);
   }

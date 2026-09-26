@@ -1,9 +1,9 @@
 # Development tracker
 
 Last updated: 2026-09-26  
-Current gate: Phases 1–8 are accepted. Phase 9 Asset Bench is implemented and awaiting owner playtest.
+Current gate: Phases 1–8 are accepted. Phase 9 Asset Bench is awaiting owner retest after a native color-picker correction.
 
-Next authorized work: Owner playtests the Asset Bench edit/save/reopen/use-in-run workflow. Phase 7 was explicitly approved by the owner on 2026-09-26; the outstanding reference-machine profiles remain undocumented because no reference setup was supplied.
+Next authorized work: Owner retests OS color-picker selection and the Asset Bench edit/save/reopen/use-in-run workflow. Phase 10 remains behind Phase 9 acceptance. Phase 7 was explicitly approved by the owner on 2026-09-26; the outstanding reference-machine profiles remain undocumented because no reference setup was supplied.
 
 ## Phase status
 
@@ -17,7 +17,7 @@ Next authorized work: Owner playtests the Asset Bench edit/save/reopen/use-in-ru
 | 6     | 10,000-agent simulation                                           | Accepted                | Accepted       | Owner playtest was good; reported stable 60 FPS and 17 ms or less per frame with 10,000 enemies on 2026-09-25. Environment unspecified. |
 | 7     | Performance and LOD                                               | Accepted                | Accepted       | Owner approved Phase 7 and authorized the next phase on 2026-09-26. Active/stress reference profiles remain undocumented.               |
 | 8     | Enterable buildings                                               | Accepted                | Accepted       | Owner reported the Phase 8 playtest succeeded on 2026-09-26 after the entry-clearance fix.                                              |
-| 9     | Separate asset editor                                             | Awaiting owner playtest | Pending        | Separate Asset Bench page edits shared assets and exports versioned JSON; game loading is integrated.                                   |
+| 9     | Separate asset editor                                             | Awaiting owner playtest | Retest pending | Owner reported that the OS color picker's Select action did not update the editor. Direct color-control input/change handling is implemented; owner retest remains open. |
 | 10    | Walkable base camp                                                | Not started             | Pending        | Hub, shops, upgrades, destinations.                                                                                                     |
 | 11    | Weather, lighting, effects                                        | Not started             | Pending        | Preserve performance.                                                                                                                   |
 
@@ -264,7 +264,7 @@ Owner approval is recorded as the phase gate. The reference-machine normal/stres
 - [x] Provide a direct Asset Bench action to apply the current document and enter the game.
 - [x] Automated coverage passes: 9 files, 37 tests; production build and formatting pass.
 - [x] Local browser smoke imported an asset JSON document, applied the boulder material edit, opened Last Light, and started a generated run; console warning/error capture was empty.
-- [ ] Owner playtests editing, invalid-value feedback, save/reopen, and the generated-run workflow.
+- [ ] Owner retests the OS color picker and confirms the swatch and preview update, then checks invalid-value feedback, save/reopen, and the generated-run workflow.
 
 ## Evidence and playtest log
 
@@ -293,6 +293,7 @@ Owner approval is recorded as the phase gate. The reference-machine normal/stres
 | 2026-09-26 | 8 revision   | `e20fa6d`          | Owner playtest found that entry placed the player inside the center divider and blocked movement. The front-divider opening now aligns with the entry/exit position, creating a clear passage. Automated and browser checks were not rerun for this correction.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Awaiting owner retest of spawn clearance and interior movement.                                          |
 | 2026-09-26 | 8 acceptance | Owner approval     | Owner reported “Playtest was successful” and authorized the next phase (“start with the next phase”). Phase 8 accepted; no additional issue reported.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Phase 8 accepted; Phase 9 authorized.                                                                    |
 | 2026-09-26 | 9            | `3825cb5`          | Added a separate editor for the shared five-asset catalog; editable dimensions, collision, interaction points, and materials; versioned JSON import/export and validation; orbit/zoom and near/far previews; and a direct game handoff. `npm test` passed (9 files, 37 tests); build and format checks passed. Browser smoke imported the boulder JSON, applied it to the game, started a generated run, and had no console warnings/errors.                                                                                                                                                                                                                                                                                     | Awaiting owner playtest of the Asset Bench workflow.                                                     |
+| 2026-09-26 | 9 revision  | Fix committed      | Owner reported that choosing a color in the OS picker and pressing Select did not update the editor. Color controls now handle `input` and `change` directly and refresh the preview without rebuilding the inspector. Production build passed; browser interaction changed the bark swatch to `#ca9d4f`, then source defaults were restored. The OS picker flow still needs owner retest.                                                                                                                                                                                                                | Awaiting owner retest of color selection and the Phase 9 workflow before acceptance.                     |
 
 ## Open issues and revisions
 

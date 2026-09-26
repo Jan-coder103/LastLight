@@ -122,7 +122,7 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 ## Phase 9 playtest checklist
 
 1. Open **Asset Bench** from camp. Select the building shell and a prop; orbit each preview, zoom with the wheel, and compare **Near** and **Far** camera views.
-2. Edit a material color and collision size, then adjust a building interaction point. Confirm the preview and inspector reflect the changes.
+2. Choose a new material color in the OS color picker and press **Select**. Confirm the color swatch and 3D preview update. Then edit collision size and a building interaction point.
 3. Set a dimension outside the allowed range and confirm the validation message appears and JSON save/game actions are disabled. Restore a valid value.
 4. Save the asset JSON, reopen that file, and confirm the edited values return. Use **Try in Game**, start a run, and check the selected asset in the generated field.
 5. Use **Restore Source**, reload the game, and confirm the test override is cleared.
