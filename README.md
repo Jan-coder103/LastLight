@@ -32,7 +32,7 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. The target 
 
 Press **O** or choose **Atmosphere** to open lighting, weather, and accessibility options. Lighting is seeded per run by default, with low sun and high moon alternatives. Weather is also seeded by default, with clear, mist, and rain options. Changing these presets affects your next deployment; the current run's sky stays fixed. Reduce motion/camera shake, reduce flashes, hide rain particles, disable audio cues, or adjust impact-shake intensity at any time. Accessibility options apply immediately and persist separately from camp inventory.
 
-At camp, use **W/A/S/D** to walk, right-click in top-down view to route, **F** at a marked service or building, **M** for the camp terminal, and **Tab** to change camera. The terminal can also be opened by clicking its world panel.
+At camp, use **W/A/S/D** to walk, right-click in top-down view to route, **F** at a marked service or building, **M** for the camp terminal, and **Tab** to change camera. The quartermaster opens its trade menu, camp storage opens a read-only inventory view, and the operations board opens destination selection. **M** keeps the combined terminal available from anywhere in camp.
 
 Depart from the operations board, camp terminal, or chopper. The chopper arrives in third person; pressing **Disembark** switches to the angled top-down camera. Search a cache with F when close or left-click its crate; collect the revealed pickups with F or by clicking them. Top-down clicks on distant loot set a route. Recover at least one cache item before the chopper clears extraction. Gear, supplies, and fuel use carrying capacity; credits do not. X consumes a carried medical supply to restore up to 35 health. F boards when you are in the landing ring and no hostile is close; hold position for four seconds while the chopper is vulnerable to interruption.
 
@@ -61,7 +61,7 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 - `src/world/buildWorld.ts` turns generated data into Three.js terrain and scene objects.
 - `src/camp/` defines the walkable camp, its navigation/services, and quartermaster transaction rules.
 - `src/interiors/interiorLayout.ts` creates reproducible room layouts, loot, encounter positions, and collision data; `src/interiors/buildInterior.ts` assembles the reusable room pieces.
-- `src/assets/` contains authored asset modules and shared versioned metadata.
+- `src/assets/` contains authored asset modules and shared versioned metadata; `helicopter.ts` builds the shared detailed camp/deployment helicopter.
 - `asset-editor.html` and `src/assetEditor/` provide the separate Asset Bench for reviewing and adjusting the same authored definitions.
 - `src/player/PlayerController.ts` owns direct third-person movement, top-down route following, dash movement, and the player visual.
 - `src/navigation/GridNavigator.ts` routes the player around static colliders and refreshed hostile positions; combat pursuers use a separate static navigation map.
@@ -135,11 +135,12 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 
 ## Phase 10 playtest checklist
 
-1. Explore Wayfarer Camp in both camera views. Walk with WASD and use right-click routes in top-down view; check the gate, fence, guards, service markers, and that paths reach the quartermaster, storage, operations board, and chopper.
-2. Use **F** at the quartermaster, storage, operations board, and chopper. Open **M** and confirm the quick terminal remains available. Greywood should be selectable; Military Base and Large City should be visibly unavailable.
-3. Enter and leave the barracks and clinic. Check that the interior is navigable in both views and returning to camp preserves the view and position without starting or advancing a field run.
-4. Buy field gear and supplies, sell carried items, and install the cargo harness. Confirm prices and affordability messages, one-time upgrade behavior, stock display, and saved credits/stock after a reload.
-5. Deploy through the board or chopper. Confirm Greywood remains free, the starting kit follows saved camp stock, extraction banks returned cargo, and death loses carried cargo while stored camp resources remain safe.
+1. Explore Wayfarer Camp in both camera views. Walk with WASD and use right-click routes in top-down view; check the gate, fence, guards, service markers, and that paths reach the quartermaster, storage, operations board, and chopper. Confirm the operations board lines up with its northern interaction marker and the tower ladder rungs follow the tilted backplate.
+2. Use **F** at the quartermaster, storage, and operations board. Confirm each opens its own trade, inventory, or destination menu. Open **M** and confirm the combined quick terminal remains available. Greywood should be selectable; Military Base and Large City should be visibly unavailable.
+3. Inspect the parked and deployed helicopter from both camera views; check the cockpit, tail, skids, and moving rotors remain legible at camp and field distances.
+4. Enter and leave the barracks and clinic. Check that the interior is navigable in both views and returning to camp preserves the view and position without starting or advancing a field run.
+5. Buy field gear and supplies, sell carried items, and install the cargo harness. Confirm prices and affordability messages, one-time upgrade behavior, stock display, and saved credits/stock after a reload.
+6. Deploy through the board or chopper. Confirm Greywood remains free, the starting kit follows saved camp stock, extraction banks returned cargo, and death loses carried cargo while stored camp resources remain safe.
 
 ## Phase 11 playtest checklist
 

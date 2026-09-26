@@ -1,16 +1,16 @@
 # Coding handoff
 
-Updated: 2026-09-26
+Updated: 2026-09-27
 
 ## Current position
 
-Phases 1–9 are **Accepted**. Phases 10 and 11 are implemented and **Awaiting one combined owner playtest**. The owner asked to defer the Phase 10 playtest and combine it with Phase 11, while authorizing implementation to continue. Neither Phase 10 nor Phase 11 is accepted yet. Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
+Phases 1–9 are **Accepted**. Phases 10 and 11 are implemented and **Revisions needed** after the owner began their combined playtest and reported initial hub/model issues on 2026-09-27. The first revisions are implemented and await the owner's retest while their combined playtest continues. Neither Phase 10 nor Phase 11 is accepted yet. Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
 
 Phase 8 adds generated 2–4 room interiors for city buildings, interactive doors, room loot and one infected, a return to the same outdoor position, and a pause for the outdoor timer/horde while inside. Implementation commit: `cf41524`; entry-clearance correction: `e20fa6d`. The owner reported the retest succeeded and accepted Phase 8.
 
 Phase 9 adds a separate Asset Bench at `/asset-editor.html`, using the game’s shared five-asset catalog. It previews asset variants with orbit/zoom and near/far cameras; edits dimensions, collision, interaction points, and named material color/roughness/metalness; validates and imports/exports versioned JSON; and applies the active document to the game before world generation. Implementation commit: `3825cb5`. The owner found that the OS color picker’s Select action did not update the editor; commit `5042f7e` added direct `input` and `change` handling and preview updates without rebuilding the inspector. The owner retested and confirmed it works, accepting Phase 9 on 2026-09-26.
 
-Phase 10 adds a separate walkable camp scene with a gate, perimeter fence, towers/guards, friendly NPCs, physical service stations, barracks and clinic interiors, a map/mission board, and a chopper pad. M opens the quick camp terminal; F uses nearby services and doors. Quartermaster buy/sell and the one-time cargo harness update existing saved camp data. Greywood is available at no fuel cost; Military Base and Large City are disabled. Camp buildings reuse the Phase 8 room/interior system. Implementation commit: `00bb345`. The owner playtest is deferred to the combined Phase 10/11 review.
+Phase 10 adds a separate walkable camp scene with a gate, perimeter fence, towers/guards, friendly NPCs, physical service stations, barracks and clinic interiors, a map/mission board, and a chopper pad. M opens the quick camp terminal; F uses nearby services and doors. Quartermaster buy/sell and the one-time cargo harness update existing saved camp data. Greywood is available at no fuel cost; Military Base and Large City are disabled. Camp buildings reuse the Phase 8 room/interior system. Implementation commit: `00bb345`. Initial playtest feedback aligned the operations board with its north-side service point, corrected the slanted tower ladder rungs, requested a more detailed helicopter, and requested separate quartermaster/storage menus. The revisions are implemented; owner retest remains pending.
 
 Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain presets, persistent accessibility options, instanced rain and hit particles, distant thunder, bounded camera shake, damage feedback, and synthesized action/weather audio cues. **O** opens Atmosphere & Accessibility. Presets take effect on the next deployment; accessibility options apply immediately. Implementation commit: `f4a1252`. The complete Phase 11 scope and combined owner checklist are in `README.md`.
 
@@ -181,7 +181,15 @@ Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain preset
 - Local preview smoke at 639×698 / 1× covered options open/close, preset lock during a deployment, immediate rain/accessibility toggles, a normal high-moon/rain field run, and the 10,000-agent high-moon/rain stress scene. The browser reported no console warnings or errors. The returned preview is reset to camp with seeded presets and default accessibility values.
 - Normal field sample, top-down after disembark: 59 FPS, 16.8 ms frame-interval p95, 4.70 ms JavaScript frame p95, 0.02 ms simulation/frame, 1.75 ms GPU p95, 451 draw calls, 20,454 triangles, 30 MB heap, 250 geometries, 3 textures, and one active effect. Conditions: Codex in-app browser, 639×698 at 1×, seed `RAVEN-07`, three hostiles, rain enabled.
 - Stress sample, third-person with 10,000 living agents: 60 FPS, 16.7 ms frame-interval p95, 9.20 ms JavaScript frame p95, 1.27 ms simulation/frame, 2.84 ms GPU p95, 409 draw calls, 256,946 triangles, 32 MB heap, 195 geometries, 3 textures, and one active effect. Conditions: Codex in-app browser, 639×698 at 1×; these are preview observations, not reference-hardware claims.
-- The owner requested that the Phase 11 visual comfort, mood, audio, and accessibility review happen together with the deferred Phase 10 camp/economy/persistence/deployment playtest. Both phases remain unaccepted until then.
+- The owner requested that the Phase 11 visual comfort, mood, audio, and accessibility review happen together with the Phase 10 camp/economy/persistence/deployment playtest. That combined playtest is now active; neither phase is accepted yet.
+
+## Combined Phase 10/11 playtest revisions (2026-09-27)
+
+- Moved the operations board visual to the same north-side coordinates as its service marker.
+- Grouped each tower's ladder backing and rungs so the rungs inherit the backing's slight tilt.
+- Replaced the blocky camp and field helicopters with a shared low-poly model featuring cockpit framing/glazing, a shaped fuselage and tail boom, side windows and access details, tail rotor, lights, tubular skids, and separately animated main/tail rotors. The camp rotors turn slowly while parked; the field rotors spin during deployment/extraction.
+- Split service menus: F at the quartermaster opens trade actions; camp storage opens a banked-inventory view; the operations board opens destination selection. M still opens the combined terminal.
+- `npm run build`, `npm run format:check`, and `git diff --check` passed after these changes. Automated tests and browser playtest were not rerun; the owner is continuing the combined playtest and will provide further feedback.
 
 ## Verification
 
@@ -198,6 +206,7 @@ Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain preset
 
 - Phase 7 remains owner-accepted, but its regular-run and 10,000-agent reference-hardware profiles were not documented. The reference browser/machine and numeric final limits remain open.
 - Next: owner completes the combined Phase 10/11 checklist in `README.md` and records feedback. Do not mark either phase accepted before explicit owner approval.
+- Current follow-up: owner retests the 2026-09-27 hub/menu/model revisions while continuing the combined checklist; capture later findings as additional feedback without accepting either phase early.
 - Stress visuals are intentionally simplified low-poly instances; this phase proves tracked simulation and horde behavior, while Phase 7 owns draw-call, memory, frame-time, and reference-hardware targets.
 - Local obstacle steering is a short deflection check rather than full route planning. The owner should flag groups that stall at blocked cells or bunch in narrow spaces.
 - The regular run still caps at seven hostiles and remains separate from the Horde Simulation Lab.

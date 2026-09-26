@@ -188,6 +188,7 @@
         class="base-overlay"
         id="base-overlay"
         aria-label="Camp terminal"
+        aria-labelledby="base-title"
         role="dialog"
         aria-modal="true"
         hidden
@@ -195,8 +196,8 @@
         <div class="base-panel">
           <div class="base-heading">
             <div>
-              <span class="eyebrow">SAFE ZONE / GREYWOOD PERIMETER</span>
-              <h2>WAYFARER CAMP</h2>
+              <span id="base-kicker" class="eyebrow">SAFE ZONE / GREYWOOD PERIMETER</span>
+              <h2 id="base-title">WAYFARER CAMP</h2>
               <p id="base-message">Your stored supplies are safe between runs.</p>
             </div>
             <div class="base-run-count">
@@ -211,14 +212,38 @@
               ×
             </button>
           </div>
-          <div class="base-ledger" aria-label="Camp storage">
+          <div
+            class="base-ledger"
+            data-base-menu="terminal quartermaster operations"
+            aria-label="Camp inventory summary"
+          >
             <div><span>GEAR</span><strong id="bank-gear">0</strong></div>
             <div><span>SUPPLIES</span><strong id="bank-supplies">0</strong></div>
             <div><span>CREDITS</span><strong id="bank-money">0</strong></div>
             <div><span>FUEL</span><strong id="bank-fuel">0</strong></div>
           </div>
-          <div class="base-actions">
-            <div class="camp-shop">
+          <section class="storage-inventory" data-base-menu="storage" aria-label="Stored inventory">
+            <div class="storage-stock-grid">
+              <div class="storage-stock-row">
+                <span>FIELD GEAR KITS</span><strong id="storage-gear">0</strong>
+                <small>One kit is issued automatically when you deploy.</small>
+              </div>
+              <div class="storage-stock-row">
+                <span>MEDICAL SUPPLIES</span><strong id="storage-supplies">0</strong>
+                <small>One supply is issued automatically when you deploy.</small>
+              </div>
+              <div class="storage-stock-row">
+                <span>CREDITS</span><strong id="storage-money">0</strong>
+                <small>Used for quartermaster purchases and upgrades.</small>
+              </div>
+              <div class="storage-stock-row">
+                <span>FUEL</span><strong id="storage-fuel">0</strong>
+                <small>Held for future destinations with a fuel cost.</small>
+              </div>
+            </div>
+          </section>
+          <div class="base-actions" data-base-menu="terminal quartermaster operations">
+            <div class="camp-shop" data-base-menu="terminal quartermaster">
               <span class="eyebrow">QUARTERMASTER</span>
               <button id="buy-gear-button" type="button">
                 BUY FIELD GEAR KIT <span>50 CR</span>
@@ -237,7 +262,7 @@
               </button>
               <small id="harness-status">Cargo capacity: 10 units</small>
             </div>
-            <div class="deploy-card">
+            <div class="deploy-card" data-base-menu="terminal operations">
               <span class="eyebrow">OPERATIONS / DEPARTURE</span>
               <p>Choose a destination. Greywood is open and uses no fuel.</p>
               <button id="start-run-button" type="button">
@@ -257,7 +282,7 @@
               </a>
             </div>
           </div>
-          <p class="base-footnote">
+          <p id="base-footnote" class="base-footnote">
             Loot secured at camp survives a failed run. Everything still carried is lost if you go
             down.
           </p>

@@ -10,6 +10,7 @@ import {
   SphereGeometry,
   type BufferGeometry,
 } from 'three';
+import { createHelicopter } from '../assets/helicopter';
 import { campEntrances, campServices, type CampService } from './campWorld';
 
 const materials = {
@@ -161,10 +162,15 @@ function addTower(parent: Group, x: number, z: number, guard = true): void {
   box(tower, 3.45, 0.16, 3.45, materials.timber, 0, 5.35, 0);
   const towerRoof = box(tower, 3.65, 0.22, 3.65, materials.roof, 0, 6.1, 0);
   towerRoof.castShadow = true;
-  const ladder = box(tower, 0.12, 3.7, 0.9, materials.darkMetal, -1.55, 2.0, 0.2);
+  const ladder = new Group();
+  ladder.position.set(-1.55, 2, 0.2);
   ladder.rotation.z = -0.12;
-  for (let rung = 0; rung < 6; rung += 1)
-    box(tower, 0.15, 0.09, 1.0, materials.trim, -1.45, 0.55 + rung * 0.58, 0.2);
+  box(ladder, 0.12, 3.7, 0.9, materials.darkMetal, 0, 0, 0);
+  for (let rung = 0; rung < 6; rung += 1) {
+    const rungBar = box(ladder, 0.15, 0.09, 1.0, materials.trim, 0, -1.45 + rung * 0.58, 0);
+    rungBar.castShadow = true;
+  }
+  tower.add(ladder);
   if (guard) addPerson(tower, 0.15, 5.5, -0.2, true);
   parent.add(tower);
 }
@@ -254,6 +260,8 @@ function addStorehouse(parent: Group): void {
 
 function addOperationsBoard(parent: Group): void {
   const board = new Group();
+  const service = campServices.find(({ id }) => id === 'camp-operations');
+  if (service) board.position.set(service.x, 0, service.z);
   board.userData.interactiveId = 'camp-operations';
   box(board, 3.1, 2.45, 0.18, materials.timber, 0, 1.32, 0);
   box(board, 2.7, 1.7, 0.12, materials.darkMetal, 0, 1.55, -0.11);
@@ -283,27 +291,12 @@ function addDeparturePad(parent: Group): void {
   landingH.userData.interactiveId = 'camp-departure';
   box(pad, 0.46, 0.1, 2.3, materials.trim, 0, 0.12, -0.08);
 
-  const helicopter = new Group();
-  helicopter.position.set(0.8, 1.55, 0.2);
-  box(helicopter, 2.5, 0.95, 1.75, materials.jacket, 0, 0, 0);
-  const cockpit = mesh(
-    new SphereGeometry(0.77, 10, 7),
-    materials.glass,
-    0,
-    0.03,
-    -0.81,
-    helicopter,
-  );
-  cockpit.scale.set(0.9, 0.62, 0.9);
-  box(helicopter, 0.22, 0.22, 3.3, materials.darkMetal, 0, 0.12, 2.35);
-  box(helicopter, 0.2, 0.92, 0.62, materials.jacket, 0, 0.46, 3.67);
-  box(helicopter, 6.4, 0.08, 0.18, materials.darkMetal, 0, 0.84, 0);
-  box(helicopter, 0.16, 0.08, 6.4, materials.darkMetal, 0, 0.84, 0);
-  for (const side of [-1, 1]) {
-    box(helicopter, 0.12, 0.12, 3.2, materials.darkMetal, side * 0.98, -0.63, 0.25);
-    box(helicopter, 0.12, 0.72, 0.12, materials.darkMetal, side * 0.98, -0.32, 0.25);
-  }
-  pad.add(helicopter);
+  const helicopter = createHelicopter('camp-departure');
+  helicopter.group.name = 'Camp departure helicopter';
+  helicopter.group.position.set(0.8, 1.4, 0.2);
+  helicopter.mainRotor.name = 'Camp helicopter main rotor';
+  helicopter.tailRotor.name = 'Camp helicopter tail rotor';
+  pad.add(helicopter.group);
   parent.add(pad);
 }
 

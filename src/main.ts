@@ -33,6 +33,7 @@ import {
 import type { AbilitySlot } from './input/controlMap';
 import { installAssetDocumentOverride } from './assets/catalog';
 import { readStoredAssetDocument, type AssetDocument } from './assets/assetDocument';
+import { createHelicopter } from './assets/helicopter';
 import { AtmosphereRuntime } from './atmosphere/AtmosphereRuntime';
 import { AudioFeedback } from './atmosphere/AudioFeedback';
 import { ParticleBursts } from './atmosphere/ParticleBursts';
@@ -217,11 +218,18 @@ const elements = {
   baseCloseButton: document.querySelector<HTMLButtonElement>('#base-close-button'),
   baseMenuButton: document.querySelector<HTMLButtonElement>('#base-menu-button'),
   baseMessage: document.querySelector<HTMLElement>('#base-message'),
+  baseTitle: document.querySelector<HTMLElement>('#base-title'),
+  baseKicker: document.querySelector<HTMLElement>('#base-kicker'),
+  baseFootnote: document.querySelector<HTMLElement>('#base-footnote'),
   runCount: document.querySelector<HTMLElement>('#run-count'),
   bankGear: document.querySelector<HTMLElement>('#bank-gear'),
   bankSupplies: document.querySelector<HTMLElement>('#bank-supplies'),
   bankMoney: document.querySelector<HTMLElement>('#bank-money'),
   bankFuel: document.querySelector<HTMLElement>('#bank-fuel'),
+  storageGear: document.querySelector<HTMLElement>('#storage-gear'),
+  storageSupplies: document.querySelector<HTMLElement>('#storage-supplies'),
+  storageMoney: document.querySelector<HTMLElement>('#storage-money'),
+  storageFuel: document.querySelector<HTMLElement>('#storage-fuel'),
   harnessStatus: document.querySelector<HTMLElement>('#harness-status'),
   buySuppliesButton: document.querySelector<HTMLButtonElement>('#buy-supplies-button'),
   buyGearButton: document.querySelector<HTMLButtonElement>('#buy-gear-button'),
@@ -264,6 +272,8 @@ worldGroup.visible = false;
 const campWorld = createCampWorld();
 const campGroup = buildCamp();
 scene.add(campGroup);
+const campChopperRotor = campGroup.getObjectByName('Camp helicopter main rotor');
+const campChopperTailRotor = campGroup.getObjectByName('Camp helicopter tail rotor');
 const campNavigator = new GridNavigator(campWorld);
 let fieldNavigator = new GridNavigator(world);
 let navigator = campNavigator;
@@ -278,6 +288,7 @@ let player!: PlayerController;
 
 type GamePhase =
   'base' | 'arrival' | 'disembarking' | 'active' | 'extracting' | 'takeoff' | 'result';
+type CampMenuMode = 'terminal' | 'quartermaster' | 'storage' | 'operations';
 type InteractiveKind =
   | 'cache'
   | 'drop'
@@ -369,6 +380,7 @@ let openedCacheIds = new Set<string>();
 let lootDrops: LootDrop[] = [];
 let chopper: Group | undefined;
 let chopperRotor: Group | undefined;
+let chopperTailRotor: Group | undefined;
 let extractionMarker: Group | undefined;
 let extractionGuideArrow: ArrowHelper | undefined;
 const extractionPoint = new Vector3();
@@ -679,6 +691,10 @@ function updateBaseUi(): void {
   elements.bankSupplies!.textContent = String(saveData.base.supplies);
   elements.bankMoney!.textContent = String(saveData.base.money);
   elements.bankFuel!.textContent = String(saveData.base.fuel);
+  elements.storageGear!.textContent = String(saveData.base.gear);
+  elements.storageSupplies!.textContent = String(saveData.base.supplies);
+  elements.storageMoney!.textContent = String(saveData.base.money);
+  elements.storageFuel!.textContent = String(saveData.base.fuel);
   elements.runCount!.textContent = String(saveData.completedRuns);
   elements.harnessStatus!.textContent = saveData.cargoUpgrade
     ? `Cargo capacity: ${cargoCapacity(saveData)} units · upgraded`
@@ -1163,64 +1179,11 @@ async function runHordeBenchmark(): Promise<void> {
 }
 
 function createChopper(): Group {
-  const group = new Group();
+  const helicopter = createHelicopter('extraction', true);
+  const group = helicopter.group;
   group.name = 'Extraction helicopter';
-  group.userData.interactiveId = 'extraction';
-  const bodyMaterial = new MeshStandardMaterial({
-    color: '#455047',
-    roughness: 0.78,
-    flatShading: true,
-  });
-  const glassMaterial = new MeshStandardMaterial({
-    color: '#52666a',
-    roughness: 0.34,
-    metalness: 0.16,
-    emissive: '#182426',
-  });
-  const rotorMaterial = new MeshStandardMaterial({ color: '#252a25', roughness: 0.82 });
-  const body = new Mesh(new BoxGeometry(2.35, 1.03, 1.45), bodyMaterial);
-  body.userData.interactiveId = 'extraction';
-  body.castShadow = true;
-  body.receiveShadow = true;
-  group.add(body);
-  const cockpit = new Mesh(new SphereGeometry(0.76, 10, 7), glassMaterial);
-  cockpit.scale.set(0.9, 0.58, 0.82);
-  cockpit.position.set(0, 0.14, -0.83);
-  group.add(cockpit);
-  const tail = new Mesh(new BoxGeometry(0.22, 0.22, 3.45), bodyMaterial);
-  tail.position.set(0, 0.12, 2.08);
-  group.add(tail);
-  const tailFin = new Mesh(new BoxGeometry(0.16, 0.9, 0.68), bodyMaterial);
-  tailFin.position.set(0, 0.42, 3.52);
-  group.add(tailFin);
-  const tailRotor = new Group();
-  tailRotor.position.set(0, 0.18, 3.7);
-  const tailBladeA = new Mesh(new BoxGeometry(0.12, 1.2, 0.11), rotorMaterial);
-  const tailBladeB = new Mesh(new BoxGeometry(1.2, 0.12, 0.11), rotorMaterial);
-  tailRotor.add(tailBladeA, tailBladeB);
-  group.add(tailRotor);
-  const mast = new Mesh(new CylinderGeometry(0.1, 0.12, 0.82, 8), rotorMaterial);
-  mast.position.y = 0.88;
-  group.add(mast);
-  chopperRotor = new Group();
-  chopperRotor.position.y = 1.36;
-  const bladeA = new Mesh(new BoxGeometry(7.8, 0.09, 0.26), rotorMaterial);
-  const bladeB = new Mesh(new BoxGeometry(7.8, 0.09, 0.26), rotorMaterial);
-  bladeB.rotation.y = Math.PI / 2;
-  chopperRotor.add(bladeA, bladeB);
-  group.add(chopperRotor);
-  const skidLeft = new Mesh(new BoxGeometry(0.12, 0.12, 3.35), rotorMaterial);
-  skidLeft.position.set(-0.94, -0.92, 0.15);
-  const skidRight = skidLeft.clone();
-  skidRight.position.x = 0.94;
-  const strutLeft = new Mesh(new BoxGeometry(0.11, 0.9, 0.12), rotorMaterial);
-  strutLeft.position.set(-0.75, -0.53, 0.1);
-  const strutRight = strutLeft.clone();
-  strutRight.position.x = 0.75;
-  group.add(skidLeft, skidRight, strutLeft, strutRight);
-  group.traverse((object) => {
-    if (object instanceof Mesh) object.castShadow = true;
-  });
+  chopperRotor = helicopter.mainRotor;
+  chopperTailRotor = helicopter.tailRotor;
   const groundY = terrainHeightAt(world.seed, world.spawn.x, world.spawn.z);
   group.position.set(world.spawn.x - 18, groundY + 15, world.spawn.z + 18);
   scene.add(group);
@@ -1678,11 +1641,50 @@ function collectLoot(view: InteractiveView): void {
   updateCombatUi();
 }
 
-function openBaseTerminal(
-  message = 'Camp ledger, quartermaster, and mission board are ready.',
-): void {
+const campMenuCopy: Record<
+  CampMenuMode,
+  { title: string; kicker: string; message: string; footnote: string }
+> = {
+  terminal: {
+    title: 'WAYFARER CAMP',
+    kicker: 'SAFE ZONE / GREYWOOD PERIMETER',
+    message: 'Camp ledger, quartermaster, and mission board are ready.',
+    footnote:
+      'Loot secured at camp survives a failed run. Everything still carried is lost if you go down.',
+  },
+  quartermaster: {
+    title: 'QUARTERMASTER',
+    kicker: 'CAMP SERVICES / SUPPLY COUNTER',
+    message: 'Buy field gear, medical supplies, or a cargo harness; sell spare stock for credits.',
+    footnote: 'Trades update your saved camp inventory immediately.',
+  },
+  storage: {
+    title: 'CAMP STORAGE',
+    kicker: 'SAFE ZONE / BANKED INVENTORY',
+    message: 'Review the resources secured at camp between deployments.',
+    footnote:
+      'Stored stock is protected. One gear kit and one medical supply are issued at deployment when available.',
+  },
+  operations: {
+    title: 'OPERATIONS BOARD',
+    kicker: 'CAMP SERVICES / DESTINATIONS',
+    message: 'Choose a destination. Greywood is open and uses no fuel.',
+    footnote: 'Military Base and Large City will unlock when their maps are ready.',
+  },
+};
+
+function openBaseTerminal(mode: CampMenuMode = 'terminal'): void {
   if (gamePhase !== 'base' || stressActive) return;
-  elements.baseMessage!.textContent = message;
+  const copy = campMenuCopy[mode];
+  elements.baseOverlay!.dataset.menu = mode;
+  elements.baseOverlay!.setAttribute('aria-label', copy.title);
+  elements.baseTitle!.textContent = copy.title;
+  elements.baseKicker!.textContent = copy.kicker;
+  elements.baseMessage!.textContent = copy.message;
+  elements.baseFootnote!.textContent = copy.footnote;
+  for (const section of elements.baseOverlay!.querySelectorAll<HTMLElement>('[data-base-menu]')) {
+    section.hidden = !section.dataset.baseMenu?.split(/\s+/).includes(mode);
+  }
   elements.baseOverlay!.removeAttribute('hidden');
   player.setEnabled(false);
   updateBaseUi();
@@ -1798,15 +1800,11 @@ function interactWithCamp(view: InteractiveView, allowApproach: boolean): void {
   if (view.kind === 'camp-departure') {
     startRun();
   } else if (view.kind === 'camp-shop') {
-    openBaseTerminal(
-      'Quartermaster · buy field gear, medical supplies, or the cargo harness; sell spare stock for credits.',
-    );
+    openBaseTerminal('quartermaster');
   } else if (view.kind === 'camp-storage') {
-    openBaseTerminal('Camp storage · these banked resources stay safe between deployments.');
+    openBaseTerminal('storage');
   } else if (view.kind === 'camp-operations') {
-    openBaseTerminal(
-      'Operations board · Greywood is open. Other destinations will unlock when their maps are ready.',
-    );
+    openBaseTerminal('operations');
   }
 }
 
@@ -2239,6 +2237,7 @@ function clearRunScene(): void {
   }
   chopper = undefined;
   chopperRotor = undefined;
+  chopperTailRotor = undefined;
   if (extractionMarker) {
     scene.remove(extractionMarker);
     disposeTree(extractionMarker);
@@ -3117,6 +3116,9 @@ function animate(now: number): void {
   previousTime = now;
   frameCount += 1;
   if (chopperRotor) chopperRotor.rotation.y += delta * 19;
+  if (chopperTailRotor) chopperTailRotor.rotation.z += delta * 24;
+  if (campChopperRotor) campChopperRotor.rotation.y += delta * 2.2;
+  if (campChopperTailRotor) campChopperTailRotor.rotation.z += delta * 2.8;
   if (gamePhase === 'arrival') {
     arrivalElapsed += delta;
     const groundY = terrainHeightAt(world.seed, world.spawn.x, world.spawn.z);
