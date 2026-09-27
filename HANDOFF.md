@@ -198,6 +198,7 @@ Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain preset
 - Added mouse-wheel zoom to both field camera views.
 - Replaced player-following fog spheres with animated, irregular world-space fog banks that drift slowly over the map and respond to scene lights; restored distance-based haze to soften distant scenery. Rain now places about twice as many road puddles with more varied sizes.
 - `npm test` passed (14 files, 50 tests); `npm run build` passed and emits the 163.46 kB game chunk and existing 562.77 kB asset-document chunk (Vite's advisory above 500 kB); `npm run format:check` and `git diff --check` passed. A browser playtest was not repeated for this combined revision; the owner is continuing the combined playtest.
+- Implementation commit: `9ec8283`.
 
 ## Verification
 
