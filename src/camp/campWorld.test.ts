@@ -32,4 +32,18 @@ describe('Wayfarer Camp layout', () => {
     expect(navigator.isWalkable(0, 31)).toBe(true);
     expect(navigator.isWalkable(0, 34)).toBe(false);
   });
+
+  it('keeps both overlapping scrap piles clear of the chopper landing ring', () => {
+    const camp = createCampWorld();
+    const piles = camp.colliders.filter((collider) => collider.id.startsWith('scrap-pile'));
+    expect(piles).toHaveLength(2);
+    for (const pile of piles) {
+      const nearestX = Math.max(pile.minX, Math.min(17, pile.maxX));
+      const nearestZ = Math.max(pile.minZ, Math.min(17, pile.maxZ));
+      expect(Math.hypot(nearestX - 17, nearestZ - 17)).toBeGreaterThan(10);
+    }
+    expect(piles[0]!.maxX).toBeGreaterThan(piles[1]!.minX);
+    expect(piles[0]!.maxZ).toBeGreaterThan(piles[1]!.minZ);
+    expect(piles[0]!.maxX - piles[0]!.minX).toBeGreaterThan(6);
+  });
 });

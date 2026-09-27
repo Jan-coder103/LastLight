@@ -18,7 +18,7 @@ export const campServices: readonly CampService[] = [
   { id: 'camp-storage', kind: 'camp-storage', x: -18, z: 8 },
   { id: 'camp-operations', kind: 'camp-operations', x: 0, z: -23 },
   { id: 'camp-departure', kind: 'camp-departure', x: 17, z: 17 },
-  { id: 'camp-scrap', kind: 'camp-scrap', x: 9, z: 9 },
+  { id: 'camp-scrap', kind: 'camp-scrap', x: 18, z: -4.5 },
   { id: 'camp-food', kind: 'camp-food', x: -8, z: 8 },
 ];
 
@@ -79,6 +79,9 @@ export function createCampWorld(): WorldData {
       collider('clinic-shell', 9.5, 20.5, -17.5, -8.5, 0, 4.8),
       collider('storehouse-shell', -24, -12, 10, 20, 0, 4.2),
       collider('quartermaster-counter', -10.7, -3.3, -0.2, 0.7, 0, 1.3),
+      collider('scrap-hut', 21.1, 24.9, -6.4, -3.6, 0, 2.8),
+      collider('scrap-pile-large', 18, 24.5, -2.8, 2.8, 0, 2.7),
+      collider('scrap-pile-small', 22.7, 27.7, -1.5, 3.1, 0, 2.1),
     ],
     objectCount: 35,
     spawn: { x: 0, y: 0, z: 21 },

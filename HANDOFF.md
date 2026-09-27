@@ -2,11 +2,15 @@
 
 Updated: 2026-09-27
 
+## Inventory and scrap-yard follow-up
+
+The hub and mission inventory now share one grid and retain the same item positions on deployment. There is no mission-only rifle/grenade injection. New saves and saves from before this fix receive a starter rifle and three grenades once; after a death, the carried backpack is lost and that starter kit is reissued in camp. A successful extraction saves the updated backpack. Banked resources and the camp reserve remain safe. The scrap service marker, worker, and hut moved to the east side of camp at approximately `(18, -4.5)` and `(23, -5)`; two irregular, enlarged piles overlap near `(21, 0)` and `(25, 1)`, well north of the chopper landing ring. Navigation colliders follow the new geometry. Build and 55 tests pass; browser checks showed the same rifle and grenades in the camp and field menus, including after dropping a grenade in camp, and a reachable scrap vendor beside the larger piles. Owner playtest remains open.
+
 ## Current position
 
 Phases 1–9 are **Accepted**. Phases 10 and 11 are implemented and **Revisions needed** during the owner's combined playtest. The hub, chopper arrival/extraction, camera zoom, NPC movement, operations boards, rain puddles, and volumetric/distance fog revisions are implemented and await retest. Neither Phase 10 nor Phase 11 is accepted yet. Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
 
-The requested shaped-item inventory extension is implemented and awaits owner playtest. **I** opens an 8×6 backpack with scout silhouette, item glyphs, drag placement, and a ground-drop arrow. The existing 90-credit cargo harness also expands the backpack to 8×8. Field caches yield one seeded shaped item each; extraction banks scavenged items, while death loses carried items. Previously banked items stay at camp, and items recovered beyond the camp grid wait in a safe reserve list. Firearms can be equipped from the grid; grenades occupy cells and are consumed by G. The camp now has a scrap hut, two piles, and a worker who converts scrap items to weightless scrap currency and trades five scrap for ten credits. A food stand buys and sells eight food items. Saved version-1 games load with empty shaped storage and zero scrap if those fields are absent. Build, 54 automated tests, and formatting checks pass; a local browser smoke showed the camp inventory, terminal upgrade label, deployed rifle and grenades, and both reachable vendor menus. The owner should check drag/drop, field pickup, vendor transactions, and extraction/death persistence in the combined playtest.
+The shaped-item inventory extension is implemented and awaits owner playtest. **I** opens an 8×6 backpack with scout silhouette, item glyphs, drag placement, and a ground-drop arrow. The existing 90-credit cargo harness also expands it to 8×8. Field caches yield one seeded shaped item each. The same backpack is carried from camp into the field; extraction saves its changes, while death loses carried items and restores a basic rifle and three grenades. Camp resources and the safe reserve list stay protected. Firearms can be equipped from the grid; grenades occupy cells and are consumed by G. The camp has an east-side scrap hut, two enlarged intersecting piles, and a worker who converts scrap items to weightless scrap currency and trades five scrap for ten credits. A food stand buys and sells eight food items. Saved version-1 games migrate to the starter backpack once when needed. The owner should check drag/drop, field pickup, vendor transactions, and extraction/death persistence in the combined playtest.
 
 Phase 8 adds generated 2–4 room interiors for city buildings, interactive doors, room loot and one infected, a return to the same outdoor position, and a pause for the outdoor timer/horde while inside. Implementation commit: `cf41524`; entry-clearance correction: `e20fa6d`. The owner reported the retest succeeded and accepted Phase 8.
 
@@ -40,7 +44,7 @@ Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain preset
 ## What changed
 
 - Added the view-specific input map and a visible control panel that changes with camera mode.
-- Replaced the field dressing and shock pulse key actions with a hold-to-place auto turret and cursor-aimed artillery; shortened the dash cooldown to two seconds; added three carried grenades per deployment on G; and updated the field controls and playtest checklist.
+- Replaced the field dressing and shock pulse key actions with a hold-to-place auto turret and cursor-aimed artillery; shortened the dash cooldown to two seconds; initially added three carried grenades per deployment on G (later superseded by the shared backpack); and updated the field controls and playtest checklist.
 - Added player dash, top-down click-to-move, direct third-person movement, collision checks, and the visible rifle.
 - Added `CombatSimulation` for health, rifle fire rate, abilities, hostile damage, pursuit, stun, death, and restart state.
 - Added three low-poly zombies, obstacle-aware pursuit, and combat feedback HUD/effects.

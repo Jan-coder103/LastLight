@@ -250,6 +250,13 @@ export function emptyItemGrid(): ItemGrid {
   return { items: [], nextUid: 1 };
 }
 
+export function createStarterBackpack(rows = 6): ItemGrid {
+  const grid = emptyItemGrid();
+  addItem(grid, 'rifle', rows);
+  for (let index = 0; index < 3; index += 1) addItem(grid, 'grenade', rows);
+  return grid;
+}
+
 export function canPlace(
   grid: ItemGrid,
   id: ItemId,
@@ -302,23 +309,6 @@ export function moveItem(grid: ItemGrid, uid: string, x: number, y: number, rows
 export function removeItem(grid: ItemGrid, uid: string): PlacedItem | undefined {
   const index = grid.items.findIndex((item) => item.uid === uid);
   return index < 0 ? undefined : grid.items.splice(index, 1)[0];
-}
-
-/** Bank only loot recovered during a run; issued field gear is expendable. */
-export function bankScavengedItems(
-  carried: ItemGrid,
-  banked: ItemGrid,
-  reserve: ItemId[],
-  issuedUids: ReadonlySet<string>,
-  rows: number,
-): number {
-  let recovered = 0;
-  for (const item of carried.items) {
-    if (issuedUids.has(item.uid)) continue;
-    if (!addItem(banked, item.id, rows)) reserve.push(item.id);
-    recovered += 1;
-  }
-  return recovered;
 }
 
 export function parseItemGrid(value: unknown, rows: number): ItemGrid {

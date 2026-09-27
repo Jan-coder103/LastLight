@@ -400,20 +400,112 @@ function addQuartermaster(parent: Group): void {
   parent.add(stall);
 }
 
-function addScrapYard(parent: Group): void {
-  const hut = new Group();
-  hut.userData.interactiveId = 'camp-scrap';
-  box(hut, 3.5, 2.3, 2.6, materials.timber, 10.8, 1.15, 11.2);
-  const roof = box(hut, 4.2, 0.28, 3.3, materials.roof, 10.8, 2.48, 11.2);
-  roof.rotation.z = 0.12;
-  box(hut, 1.6, 1.25, 0.16, materials.darkMetal, 10.8, 0.63, 9.84);
-  for (const x of [6.5, 14.4]) {
-    box(hut, 1.7, 0.5, 1.6, materials.darkMetal, x, 0.25, 12.7);
-    box(hut, 1.15, 0.4, 1.2, materials.fence, x - 0.12, 0.68, 12.7);
-    box(hut, 0.9, 0.45, 0.9, materials.trim, x + 0.24, 0.92, 12.5);
+function addScrapPile(
+  parent: Group,
+  x: number,
+  z: number,
+  width: number,
+  depth: number,
+  height: number,
+  phase: number,
+): void {
+  const pile = new Group();
+  pile.position.set(x, 0, z);
+  // Low, overlapping layers make each mound irregular instead of a neat crate stack.
+  box(
+    pile,
+    width * 0.82,
+    height * 0.38,
+    depth * 0.78,
+    materials.darkMetal,
+    -0.15,
+    height * 0.19,
+    0,
+  );
+  const upper = box(
+    pile,
+    width * 0.58,
+    height * 0.42,
+    depth * 0.6,
+    materials.fence,
+    0.24,
+    height * 0.53,
+    -0.1,
+  );
+  upper.rotation.y = 0.19;
+  box(
+    pile,
+    width * 0.42,
+    height * 0.28,
+    depth * 0.38,
+    materials.timber,
+    -width * 0.13,
+    height * 0.79,
+    depth * 0.06,
+  ).rotation.y = -0.32;
+  const scrapMaterials = [
+    materials.darkMetal,
+    materials.fence,
+    materials.trim,
+    materials.timber,
+    materials.red,
+  ];
+  for (let index = 0; index < 26; index += 1) {
+    const angle = index * 2.39996 + phase;
+    const radius = Math.sqrt((index + 0.6) / 27);
+    const pieceWidth = 0.35 + ((index * 7) % 6) * 0.16;
+    const pieceDepth = 0.32 + ((index * 5) % 7) * 0.14;
+    const piece = box(
+      pile,
+      pieceWidth,
+      0.18 + (index % 4) * 0.09,
+      pieceDepth,
+      scrapMaterials[index % scrapMaterials.length]!,
+      Math.cos(angle) * radius * width * 0.39,
+      0.4 + (1 - radius) * height * 0.8 + (index % 3) * 0.16,
+      Math.sin(angle) * radius * depth * 0.39,
+    );
+    piece.rotation.set((index % 5) * 0.11, angle, ((index % 7) - 3) * 0.11);
   }
-  addPerson(hut, 9, 0, 10.2, false, 1);
-  parent.add(hut);
+  for (const [wheelX, wheelZ, tilt] of [
+    [-width * 0.27, depth * 0.18, 0.24],
+    [width * 0.23, -depth * 0.22, -0.31],
+  ]) {
+    const wheel = mesh(
+      new CylinderGeometry(0.65, 0.65, 0.28, 10),
+      materials.darkMetal,
+      wheelX,
+      0.88,
+      wheelZ,
+      pile,
+    );
+    wheel.rotation.z = Math.PI / 2 + tilt;
+    const hub = mesh(
+      new CylinderGeometry(0.25, 0.25, 0.3, 8),
+      materials.trim,
+      wheelX,
+      0.88,
+      wheelZ,
+      pile,
+    );
+    hub.rotation.z = wheel.rotation.z;
+  }
+  parent.add(pile);
+}
+
+function addScrapYard(parent: Group): void {
+  const yard = new Group();
+  yard.userData.interactiveId = 'camp-scrap';
+  box(yard, 3.6, 2.45, 2.7, materials.timber, 23, 1.22, -5);
+  const roof = box(yard, 4.4, 0.3, 3.35, materials.roof, 23, 2.6, -5);
+  roof.rotation.z = 0.12;
+  box(yard, 1.55, 1.35, 0.17, materials.darkMetal, 23, 0.68, -3.6);
+  box(yard, 2.6, 0.28, 0.18, materials.trim, 23, 2.08, -3.49);
+  addPerson(yard, 19.8, 0, -4.1, false, 1);
+  // These piles overlap slightly and sit along the east wall, away from the landing pad.
+  addScrapPile(yard, 21.2, 0, 6.3, 5.2, 2.65, 0.2);
+  addScrapPile(yard, 25.2, 0.8, 4.7, 4.2, 2.05, 1.4);
+  parent.add(yard);
 }
 
 function addFoodStand(parent: Group): void {

@@ -2,6 +2,8 @@
 
 Last updated: 2026-09-27
 
+Inventory follow-up: the camp and field now show the same backpack grid with no new items added during deployment. Extraction keeps its contents and layout; death replaces carried contents with the starter kit while banked resources stay safe. The scrap hut and worker moved to the east edge, with two much larger intersecting piles and updated navigation obstacles outside the chopper pad. Build, 55 tests, and a browser check of both inventory screens, a dropped grenade carried through deployment, and the relocated vendor pass. Awaiting owner retest.
+
 Current gate: Phases 1–9 are accepted. Phases 10 and 11 are implemented; the combined owner playtest is active. Camp, helicopter arrival/extraction, camera zoom, NPC, operations-board, puddle, and fog revisions are implemented and await owner retest. Both phases remain unaccepted.
 
 Inventory extension: implemented shaped 8×6/8×8 backpack, field item pickups and ground drops, equipped firearms and cell-based grenades, bank/loss persistence with safe camp reserve, scrap hut with two piles and scrap-to-credit trade, and a food buy/sell stand. Build and 54 tests pass; local browser smoke confirmed the inventory layout, starting field items, and both reachable vendor menus. Owner playtest remains open for item dragging, vendor transactions, pickup/drop, extraction, and death loss.

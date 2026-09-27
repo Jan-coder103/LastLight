@@ -1,5 +1,5 @@
 import {
-  emptyItemGrid,
+  createStarterBackpack,
   gridRows,
   itemDefinitions,
   parseItemGrid,
@@ -19,6 +19,7 @@ export interface SaveData {
   scrap: number;
   storedItems: ItemGrid;
   storedReserve: ItemId[];
+  backpackInitialized: boolean;
 }
 
 export const cargoCapacityBase = 10;
@@ -35,8 +36,9 @@ export function createDefaultSave(): SaveData {
     cargoUpgrade: false,
     completedRuns: 0,
     scrap: 0,
-    storedItems: emptyItemGrid(),
+    storedItems: createStarterBackpack(),
     storedReserve: [],
+    backpackInitialized: true,
   };
 }
 
@@ -55,6 +57,12 @@ export function parseSave(raw: string | null): SaveData {
     if (record.version !== 1 || !record.base || typeof record.base !== 'object')
       return createDefaultSave();
     const base = record.base as Record<string, unknown>;
+    const storedItems = parseItemGrid(record.storedItems, gridRows(record.cargoUpgrade === true));
+    if (record.backpackInitialized !== true && storedItems.items.length === 0) {
+      const starter = createStarterBackpack(gridRows(record.cargoUpgrade === true));
+      storedItems.items = starter.items;
+      storedItems.nextUid = starter.nextUid;
+    }
     return {
       version: 1,
       base: {
@@ -66,7 +74,7 @@ export function parseSave(raw: string | null): SaveData {
       cargoUpgrade: record.cargoUpgrade === true,
       completedRuns: validCount(record.completedRuns),
       scrap: validCount(record.scrap),
-      storedItems: parseItemGrid(record.storedItems, gridRows(record.cargoUpgrade === true)),
+      storedItems,
       storedReserve: Array.isArray(record.storedReserve)
         ? record.storedReserve
             .filter(
@@ -74,10 +82,16 @@ export function parseSave(raw: string | null): SaveData {
             )
             .slice(0, 256)
         : [],
+      backpackInitialized: true,
     };
   } catch {
     return createDefaultSave();
   }
+}
+
+export function resetBackpackAfterDeath(save: SaveData): ItemGrid {
+  save.storedItems = createStarterBackpack(gridRows(save.cargoUpgrade));
+  return save.storedItems;
 }
 
 export function loadSave(storage?: Storage): SaveData {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   addItem,
-  bankScavengedItems,
   canPlace,
   emptyItemGrid,
   gridRows,
@@ -10,7 +9,7 @@ import {
   parseItemGrid,
   removeItem,
 } from './itemInventory';
-import { createDefaultSave, parseSave } from './saveData';
+import { createDefaultSave, parseSave, resetBackpackAfterDeath } from './saveData';
 
 describe('shaped backpack', () => {
   it('respects connected footprints, overlap, and the upgrade boundary', () => {
@@ -43,7 +42,13 @@ describe('shaped backpack', () => {
     const record = JSON.parse(JSON.stringify(old));
     delete record.storedItems;
     delete record.scrap;
-    expect(parseSave(JSON.stringify(record)).storedItems.items).toEqual([]);
+    delete record.backpackInitialized;
+    expect(parseSave(JSON.stringify(record)).storedItems.items.map((item) => item.id)).toEqual([
+      'rifle',
+      'grenade',
+      'grenade',
+      'grenade',
+    ]);
     expect(parseSave(JSON.stringify(record)).scrap).toBe(0);
     const grid = parseItemGrid(
       {
@@ -60,20 +65,17 @@ describe('shaped backpack', () => {
     expect(grid.items.map((item) => item.id)).toEqual(['rifle', 'water']);
   });
 
-  it('keeps banked camp items safe and reserves recovered overflow', () => {
+  it('keeps the same backpack through camp and a mission, then resets it after death', () => {
     const save = createDefaultSave();
-    addItem(save.storedItems, 'water', 6);
-    const carried = emptyItemGrid();
-    const issued = addItem(carried, 'rifle', 6)!;
-    addItem(carried, 'tire', 8);
-    expect(
-      bankScavengedItems(carried, save.storedItems, save.storedReserve, new Set([issued.uid]), 6),
-    ).toBe(1);
-    expect(save.storedItems.items.map((item) => item.id)).toEqual(['water', 'tire']);
-    expect(save.storedReserve).toEqual([]);
-    expect(
-      bankScavengedItems(carried, save.storedItems, save.storedReserve, new Set([issued.uid]), 6),
-    ).toBe(1);
-    expect(save.storedReserve).toEqual(['tire']);
+    const missionBackpack = save.storedItems;
+    expect(missionBackpack).toBe(save.storedItems);
+    const starting = missionBackpack.items.map((item) => ({ ...item }));
+    const pickedUp = addItem(missionBackpack, 'water', 6)!;
+    expect(save.storedItems.items).toContain(pickedUp);
+    const recovered = parseSave(JSON.stringify(save));
+    expect(recovered.storedItems.items).toEqual([...starting, pickedUp]);
+    const reset = resetBackpackAfterDeath(save);
+    expect(reset).toBe(save.storedItems);
+    expect(reset.items.map((item) => item.id)).toEqual(['rifle', 'grenade', 'grenade', 'grenade']);
   });
 });

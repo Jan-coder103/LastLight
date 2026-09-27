@@ -63,8 +63,6 @@ import { openCache, placeLootCaches, type CacheSite, type LootDrop } from './gam
 import { InventoryPanel } from './game/InventoryPanel';
 import {
   addItem,
-  bankScavengedItems,
-  emptyItemGrid,
   gridRows,
   itemDefinitions,
   removeItem,
@@ -77,6 +75,7 @@ import {
   cargoWeight,
   emptyInventory,
   loadSave,
+  resetBackpackAfterDeath,
   resolveRunOutcome,
   storeSave,
   type ResourceKind,
@@ -386,13 +385,12 @@ let hordeSyncMs = 0;
 let hordeSyncCount = 0;
 let saveData: SaveData = loadSave();
 let cargo = emptyInventory();
-let runItems: ItemGrid = emptyItemGrid();
-let issuedItemUids = new Set<string>();
+let runItems: ItemGrid = saveData.storedItems;
 let equippedWeapon: ItemId = 'rifle';
 let droppedItemNumber = 0;
 let inventoryPanel: InventoryPanel;
 function activeItems(): ItemGrid {
-  return gamePhase === 'base' ? saveData.storedItems : runItems;
+  return runItems;
 }
 function syncGrenades(): void {
   grenadeCount = runItems.items.filter((item) => item.id === 'grenade').length;
@@ -2517,15 +2515,6 @@ function startRun(): void {
   navigator.setDynamicObstacles([]);
   dynamicNavigationRefresh = 0;
   cargo = emptyInventory();
-  runItems = emptyItemGrid();
-  issuedItemUids = new Set();
-  const issuedRifle = addItem(runItems, 'rifle', gridRows(saveData.cargoUpgrade));
-  if (issuedRifle) issuedItemUids.add(issuedRifle.uid);
-  for (let index = 0; index < 3; index += 1) {
-    const issuedGrenade = addItem(runItems, 'grenade', gridRows(saveData.cargoUpgrade));
-    if (issuedGrenade) issuedItemUids.add(issuedGrenade.uid);
-  }
-  equippedWeapon = 'rifle';
   syncGrenades();
   grenadeCooldownRemaining = 0;
   if (saveData.base.gear > 0) {
@@ -2644,14 +2633,6 @@ function beginTakeoff(): void {
   player.visual.visible = true;
   createRappelRope();
   resolveRunOutcome(saveData, cargo, true);
-  bankScavengedItems(
-    runItems,
-    saveData.storedItems,
-    saveData.storedReserve,
-    issuedItemUids,
-    gridRows(saveData.cargoUpgrade),
-  );
-  runItems = emptyItemGrid();
   const saved = storeSave(saveData);
   elements.baseMessage!.textContent = saved
     ? 'Recovered cargo is secured in storage.'
@@ -2666,14 +2647,17 @@ function beginTakeoff(): void {
 
 function finishDeath(): void {
   gamePhase = 'result';
-  runItems = emptyItemGrid();
+  const lostItems = runItems.items.length;
+  runItems = resetBackpackAfterDeath(saveData);
+  syncGrenades();
+  storeSave(saveData);
   player.setEnabled(false);
   elements.extractionGuide!.setAttribute('hidden', '');
   elements.resultEyebrow!.textContent = 'RUN LOST';
   elements.resultTitle!.textContent = 'SCOUT DOWN';
   const lost = cargo.gear + cargo.supplies + cargo.fuel;
   const lostMoney = cargo.money;
-  elements.deathMessage!.textContent = `Carried cargo lost: ${lost} stored item(s) and ${lostMoney} credits. Items already at camp are safe.`;
+  elements.deathMessage!.textContent = `Carried cargo lost: ${lost} resource unit(s), ${lostItems} backpack item(s), and ${lostMoney} credits. Camp resources remain safe; a basic rifle and three grenades are reissued.`;
   elements.restartButton!.textContent = 'RETURN TO BASE';
   elements.deathOverlay!.removeAttribute('hidden');
   elements.zoneStatus!.textContent = 'LOST';
@@ -3357,6 +3341,7 @@ applyAccessibilityOptions();
 setCampAtmosphere();
 createZombieViews();
 zombieGroup.visible = false;
+syncGrenades();
 updateBaseUi();
 updateCombatUi();
 if (activeAssetDocument) {
