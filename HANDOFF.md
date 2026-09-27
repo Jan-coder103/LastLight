@@ -4,7 +4,7 @@ Updated: 2026-09-27
 
 ## Current position
 
-Phases 1–9 are **Accepted**. Phases 10 and 11 are implemented and **Revisions needed** after the owner began their combined playtest and reported initial hub/model issues on 2026-09-27. The first revisions are implemented and await the owner's retest while their combined playtest continues. Neither Phase 10 nor Phase 11 is accepted yet. Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
+Phases 1–9 are **Accepted**. Phases 10 and 11 are implemented and **Revisions needed** during the owner's combined playtest. The hub, chopper arrival/extraction, camera zoom, NPC movement, operations boards, rain puddles, and volumetric/distance fog revisions are implemented and await retest. Neither Phase 10 nor Phase 11 is accepted yet. Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
 
 Phase 8 adds generated 2–4 room interiors for city buildings, interactive doors, room loot and one infected, a return to the same outdoor position, and a pause for the outdoor timer/horde while inside. Implementation commit: `cf41524`; entry-clearance correction: `e20fa6d`. The owner reported the retest succeeded and accepted Phase 8.
 
@@ -192,7 +192,12 @@ Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain preset
 - After the next scale review, increased the whole model again and opened troop-door apertures on both sides, with visible longitudinal bench seats and floor space for disembarking. Removed the side glazing and door panels that covered the openings.
 - The owner's next screenshot showed the openings still too small beside the character and the longitudinal benches crowding the doorway. Increased the model from 1.35 to 1.85 scale (about a 13.3 m main-rotor diameter), changed the seats to transverse benches at the front/rear of the cabin, and enlarged the open side aperture to roughly 2.2 m high by 2.3 m long so a character can fit through.
 - Split service menus: F at the quartermaster opens trade actions; camp storage opens a banked-inventory view; the operations board opens destination selection. M still opens the combined terminal.
-- `npm run build`, `npm run format:check`, and `git diff --check` passed for the open-door scale revision. Verification of the larger transverse-seat revision is pending; automated tests and browser playtest have not been rerun. The owner is continuing the combined playtest.
+- Improved the tower silhouettes and guard placement so the guard stands on the platform clear of the roof; refreshed friendly NPC shapes and gave selected camp NPCs slow routes around the hub.
+- Returned both operations boards to their north-side interaction point, corrected their facing, and placed a companion board beside the map board with a hand-drawn map, notes, pins, and arrows.
+- Reworked field arrival so the camera follows the incoming chopper, holds during the hover, shows a quick rappel, and gives movement control on touchdown without an arrival menu. Extraction now removes the rope and boards the scout before takeoff.
+- Added mouse-wheel zoom to both field camera views.
+- Replaced player-following fog spheres with animated, irregular world-space fog banks that drift slowly over the map and respond to scene lights; restored distance-based haze to soften distant scenery. Rain now places about twice as many road puddles with more varied sizes.
+- `npm test` passed (14 files, 50 tests); `npm run build` passed and emits the 163.46 kB game chunk and existing 562.77 kB asset-document chunk (Vite's advisory above 500 kB); `npm run format:check` and `git diff --check` passed. A browser playtest was not repeated for this combined revision; the owner is continuing the combined playtest.
 
 ## Verification
 
@@ -209,7 +214,7 @@ Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain preset
 
 - Phase 7 remains owner-accepted, but its regular-run and 10,000-agent reference-hardware profiles were not documented. The reference browser/machine and numeric final limits remain open.
 - Next: owner completes the combined Phase 10/11 checklist in `README.md` and records feedback. Do not mark either phase accepted before explicit owner approval.
-- Current follow-up: owner retests the 2026-09-27 hub/menu/model revisions while continuing the combined checklist; capture later findings as additional feedback without accepting either phase early.
+- Current follow-up: owner retests the 2026-09-27 camp, arrival/extraction, camera, NPC, operations-board, puddle, and fog revisions while continuing the combined checklist; capture later findings as additional feedback without accepting either phase early.
 - Stress visuals are intentionally simplified low-poly instances; this phase proves tracked simulation and horde behavior, while Phase 7 owns draw-call, memory, frame-time, and reference-hardware targets.
 - Local obstacle steering is a short deflection check rather than full route planning. The owner should flag groups that stall at blocked cells or bunch in narrow spaces.
 - The regular run still caps at seven hostiles and remains separate from the Horde Simulation Lab.

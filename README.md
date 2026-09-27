@@ -21,6 +21,7 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. The target 
 | Right-click                    | —                                     | Move around static obstacles          |
 | Left-click                     | Fire at the cursor                    | Attack with cursor assist             |
 | Drag on the scene              | Orbit camera and aim                  | —                                     |
+| Mouse wheel                    | Zoom camera in or out                 | Zoom camera in or out                 |
 | Optional **Capture Mouse**     | Continuous look; Escape releases it   | Not available                         |
 | Q                              | Dash; 2.5-second cooldown, no cost    | Dash; 2.5-second cooldown, no cost    |
 | 1 / 2 / 3                      | Heal / shock pulse / adrenaline       | —                                     |
@@ -30,11 +31,11 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. The target 
 | Tab or **Change View**         | Switch camera without moving player   | Switch camera without moving player   |
 | World Seed field + reload icon | Rebuild the map and encounter         | Rebuild the map and encounter         |
 
-Press **O** or choose **Atmosphere** to open lighting, weather, and accessibility options. Lighting is seeded per run by default, with low sun and high moon alternatives. Weather is also seeded by default, with clear, mist, and rain options. Changing these presets affects your next deployment; the current run's sky stays fixed. Reduce motion/camera shake, reduce flashes, hide rain particles, disable audio cues, or adjust impact-shake intensity at any time. Accessibility options apply immediately and persist separately from camp inventory.
+Press **O** or choose **Atmosphere** to open lighting, weather, and accessibility options. Lighting is seeded per run by default, with low sun and high moon alternatives. Weather is also seeded by default, with clear, mist, and rain options. Mist adds slowly drifting, irregular volumetric fog banks, light scattering, and denser distance haze; rain adds a lighter haze and reflective puddles of varied sizes along roads. Changing these presets affects your next deployment; the current run's sky stays fixed. Reduce motion/camera shake, reduce flashes, hide rain particles, disable audio cues, or adjust impact-shake intensity at any time. Accessibility options apply immediately and persist separately from camp inventory.
 
 At camp, use **W/A/S/D** to walk, right-click in top-down view to route, **F** at a marked service or building, **M** for the camp terminal, and **Tab** to change camera. The quartermaster opens its trade menu, camp storage opens a read-only inventory view, and the operations board opens destination selection. **M** keeps the combined terminal available from anywhere in camp.
 
-Depart from the operations board, camp terminal, or chopper. The chopper arrives in third person; pressing **Disembark** switches to the angled top-down camera. Search a cache with F when close or left-click its crate; collect the revealed pickups with F or by clicking them. Top-down clicks on distant loot set a route. Recover at least one cache item before the chopper clears extraction. Gear, supplies, and fuel use carrying capacity; credits do not. X consumes a carried medical supply to restore up to 35 health. F boards when you are in the landing ring and no hostile is close; hold position for four seconds while the chopper is vulnerable to interruption.
+Depart from the operations board, camp terminal, or chopper. The camera follows the inbound chopper; after it hovers, the scout rappels down automatically and controls unlock on landing. The chopper lowers a rope again for extraction, lifts the scout aboard, and flies out. Search a cache with F when close or left-click its crate; collect the revealed pickups with F or by clicking them. Top-down clicks on distant loot set a route. Recover at least one cache item before the chopper clears extraction. Gear, supplies, and fuel use carrying capacity; credits do not. X consumes a carried medical supply to restore up to 35 health. F boards when you are in the landing ring and no hostile is close; hold position for four seconds while the chopper is vulnerable to interruption.
 
 The extraction arrow and distance remain on screen during the run. A radio warning arrives before each small reinforcement wave, leaving time to head back. You can extract at any time. The camp quartermaster sells gear and medical supplies, and can install a one-time cargo harness upgrade. One gear kit and one medical supply are taken from camp at deployment if available. Banked items and shop purchases are saved in browser storage; carried items are lost on death.
 
@@ -87,7 +88,7 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 ## Phase 3 playtest checklist
 
 1. Run `npm run dev`; confirm the camp panel shows stored gear, supplies, credits, fuel, and the deployment button.
-2. Start a run. Confirm the chopper descends, the disembark button enables, and leaving the chopper transitions smoothly from third person to top-down.
+2. Start a run. Confirm the camera follows the chopper in, it hovers, the rope drops, and the scout reaches the ground before controls unlock. The camera should transition smoothly to the on-foot view without a blocking arrival menu.
 3. Follow the extraction arrow, search a cache, collect pickups, and check that the cargo counter changes. Fill capacity and confirm further weighted pickups remain available; credits should not use capacity. Use X while injured and verify a carried supply is consumed.
 4. Return to the chopper and press F. Confirm boarding requires the landing ring and nearby hostiles interrupt it. Complete the four-second boarding and takeoff; check that cargo is banked at camp.
 5. Start another run and let a hostile kill the scout. Confirm carried loot is lost, prior camp resources remain, and returning to camp enables another deployment.
@@ -135,7 +136,7 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 
 ## Phase 10 playtest checklist
 
-1. Explore Wayfarer Camp in both camera views. Walk with WASD and use right-click routes in top-down view; check the gate, fence, guards, service markers, and that paths reach the quartermaster, storage, operations board, and chopper. Confirm the operations board lines up with its northern interaction marker and the tower ladder rungs follow the tilted backplate.
+1. Explore Wayfarer Camp in both camera views. Walk with WASD and use right-click routes in top-down view; check the gate, fence, guards, service markers, and that paths reach the quartermaster, storage, operations boards, and chopper. Confirm the paired map/notes boards face the approach at their northern interaction point, the tower guard stands clear of the roof, ladder rungs follow the tilted backplate, and some friendly NPCs wander around camp.
 2. Use **F** at the quartermaster, storage, and operations board. Confirm each opens its own trade, inventory, or destination menu. Open **M** and confirm the combined quick terminal remains available. Greywood should be selectable; Military Base and Large City should be visibly unavailable.
 3. Inspect the parked and deployed helicopter from both camera views; check its scale beside characters, confirm a character fits through either open troop door, and verify the transverse benches leave a clear jump-out path. Also check the flush cockpit glazing, side-facing animated tail rotor, skids, and moving main rotor at camp and field distances.
 4. Enter and leave the barracks and clinic. Check that the interior is navigable in both views and returning to camp preserves the view and position without starting or advancing a field run.
@@ -145,7 +146,7 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 ## Phase 11 playtest checklist
 
 1. At camp, press **O**. Check that seeded lighting and weather are selected by default, then choose **Low sun** and **Clear** and deploy. Note the scene's orientation/readability and confirm the displayed sky preset stays fixed during the run.
-2. Return to camp, choose **High moon** and **Mist**, deploy again, then repeat with **Rain & distant thunder**. Check the map remains readable, rain stays outdoors, and thunder is distant and restrained.
+2. Return to camp, choose **High moon** and **Mist**, deploy again, then repeat with **Rain & distant thunder**. Check the map remains readable, irregular world-space fog banks drift slowly across the map without visible sphere boundaries, distant haze softens the horizon, fog scatters light, varied rain puddles catch highlights, rain stays outdoors, and thunder is distant and restrained.
 3. In a regular encounter, fire the rifle and use dash, shock pulse, and other abilities. Check the muzzle/hit/ability particles, reticle and damage feedback, and camera shake. Try the same actions after enabling reduced motion and reduced flashes.
 4. Toggle rain particles and audio cues separately during an active run. Confirm each option takes effect immediately. Set a new lighting/weather preset during that run; it should not change until the next deployment.
 5. Adjust impact shake from 0% to a comfortable value. Reload the page and confirm options persist; if the operating system requests reduced motion and no saved choice exists, confirm the reduced-motion default is respected.

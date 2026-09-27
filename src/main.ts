@@ -8,6 +8,7 @@ import {
   CircleGeometry,
   Color,
   CylinderGeometry,
+  DepthTexture,
   DirectionalLight,
   DynamicDrawUsage,
   Fog,
@@ -30,6 +31,9 @@ import {
   Object3D,
   type Material,
 } from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import type { AbilitySlot } from './input/controlMap';
 import { installAssetDocumentOverride } from './assets/catalog';
 import { readStoredAssetDocument, type AssetDocument } from './assets/assetDocument';
@@ -37,6 +41,7 @@ import { createHelicopter } from './assets/helicopter';
 import { AtmosphereRuntime } from './atmosphere/AtmosphereRuntime';
 import { AudioFeedback } from './atmosphere/AudioFeedback';
 import { ParticleBursts } from './atmosphere/ParticleBursts';
+import { VolumetricFogPass } from './atmosphere/VolumetricFogPass';
 import {
   loadAtmosphereSettings,
   resolveRunAtmosphere,
@@ -44,7 +49,7 @@ import {
   type AtmosphereSettings,
   type RunAtmosphere,
 } from './atmosphere/settings';
-import { buildCamp } from './camp/buildCamp';
+import { buildCamp, updateCampWalkers } from './camp/buildCamp';
 import { buyCampItem, campPrices, sellCampItem } from './camp/campEconomy';
 import { campEntrances, campServices, createCampWorld } from './camp/campWorld';
 import { CameraRig } from './camera/CameraRig';
@@ -131,6 +136,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = PCFShadowMap;
 renderer.toneMapping = ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.04;
+renderer.info.autoReset = false;
 
 const skyLight = new AmbientLight('#ded9bd', 1.15);
 scene.add(skyLight);
@@ -147,6 +153,19 @@ sun.shadow.camera.bottom = -155;
 sun.shadow.bias = -0.00025;
 sun.target.position.set(0, 0, 0);
 scene.add(sun, sun.target);
+const volumetricFogPass = new VolumetricFogPass(scene, camera, sun);
+const composer = new EffectComposer(renderer);
+composer.renderTarget1.depthTexture = new DepthTexture(
+  renderer.domElement.width,
+  renderer.domElement.height,
+);
+composer.renderTarget2.depthTexture = new DepthTexture(
+  renderer.domElement.width,
+  renderer.domElement.height,
+);
+composer.addPass(new RenderPass(scene, camera));
+composer.addPass(volumetricFogPass);
+composer.addPass(new OutputPass());
 const audioFeedback = new AudioFeedback();
 const atmosphereRuntime = new AtmosphereRuntime(
   scene,
@@ -157,6 +176,7 @@ const atmosphereRuntime = new AtmosphereRuntime(
   (exposure) => {
     renderer.toneMappingExposure = exposure;
   },
+  volumetricFogPass,
 );
 const particleBursts = new ParticleBursts(scene);
 
@@ -237,9 +257,6 @@ const elements = {
   sellGearButton: document.querySelector<HTMLButtonElement>('#sell-gear-button'),
   buyCargoButton: document.querySelector<HTMLButtonElement>('#buy-cargo-button'),
   startRunButton: document.querySelector<HTMLButtonElement>('#start-run-button'),
-  arrivalOverlay: document.querySelector<HTMLElement>('#arrival-overlay'),
-  arrivalMessage: document.querySelector<HTMLElement>('#arrival-message'),
-  disembarkButton: document.querySelector<HTMLButtonElement>('#disembark-button'),
   zoneStatus: document.querySelector<HTMLElement>('#zone-status'),
   openHordeLab: document.querySelector<HTMLButtonElement>('#open-horde-lab'),
   hordeLabToggle: document.querySelector<HTMLButtonElement>('#horde-lab-toggle'),
@@ -359,9 +376,14 @@ let saveData: SaveData = loadSave();
 let cargo = emptyInventory();
 let runElapsed = 0;
 let arrivalElapsed = 0;
+let hoverElapsed = 0;
 let disembarkElapsed = 0;
 let extractingRemaining = 0;
-let takeoffRemaining = 0;
+let takeoffElapsed = 0;
+const rappelDuration = 0.9;
+const extractionApproachDuration = 0.55;
+const extractionHoistDuration = 0.95;
+const extractionDepartureDuration = 1.1;
 let reinforcementIndex = 0;
 let waveWarningShown = false;
 let runLootCollected = 0;
@@ -386,6 +408,12 @@ let extractionGuideArrow: ArrowHelper | undefined;
 const extractionPoint = new Vector3();
 const disembarkStart = new Vector3();
 const disembarkEnd = new Vector3();
+const extractionHelicopterStart = new Vector3();
+const extractionHelicopterTarget = new Vector3();
+const extractionPlayerStart = new Vector3();
+const extractionGroundPosition = new Vector3();
+const cameraFollowTarget = new Vector3();
+let rappelRope: Mesh | undefined;
 const resourceNames: Record<ResourceKind, string> = {
   gear: 'gear',
   supplies: 'supplies',
@@ -478,7 +506,7 @@ function updateSettingsControls(): void {
 
 function applyRunAtmosphere(seed: string): void {
   currentRunAtmosphere = resolveRunAtmosphere(seed, atmosphereSettings);
-  atmosphereRuntime.setRun(currentRunAtmosphere, seed);
+  atmosphereRuntime.setRun(currentRunAtmosphere, seed, world);
   audioFeedback.setOptions(atmosphereSettings.audioCues, currentRunAtmosphere.weather);
   updateAtmosphereStatus();
   updateSettingsControls();
@@ -820,7 +848,6 @@ function setSeed(seed: string): void {
   createZombieViews();
   zombieGroup.visible = false;
   elements.deathOverlay!.setAttribute('hidden', '');
-  elements.arrivalOverlay!.setAttribute('hidden', '');
   elements.extractionGuide!.setAttribute('hidden', '');
   elements.seedHint!.textContent =
     'Field map regenerated. Camp storage and upgrades are unchanged.';
@@ -836,6 +863,7 @@ function setSeed(seed: string): void {
 
 function setCampContext(position = campWorld.spawn, resetCamera = true): void {
   campGroup.visible = true;
+  player.visual.visible = true;
   worldGroup.visible = false;
   setCampAtmosphere();
   if (zombieGroup) zombieGroup.visible = false;
@@ -1185,9 +1213,35 @@ function createChopper(): Group {
   chopperRotor = helicopter.mainRotor;
   chopperTailRotor = helicopter.tailRotor;
   const groundY = terrainHeightAt(world.seed, world.spawn.x, world.spawn.z);
-  group.position.set(world.spawn.x - 18, groundY + 15, world.spawn.z + 18);
+  group.position.set(world.spawn.x - 22, groundY + 18, world.spawn.z + 22);
   scene.add(group);
   return group;
+}
+
+function createRappelRope(): void {
+  removeRappelRope();
+  rappelRope = new Mesh(
+    new CylinderGeometry(0.035, 0.035, 1, 6),
+    new MeshStandardMaterial({ color: '#343a35', roughness: 1, flatShading: true }),
+  );
+  rappelRope.name = 'Insertion and extraction rope';
+  rappelRope.castShadow = false;
+  rappelRope.receiveShadow = false;
+  scene.add(rappelRope);
+}
+
+function updateRappelRope(x: number, z: number, topY: number, bottomY: number): void {
+  if (!rappelRope) return;
+  const length = Math.max(0.08, topY - bottomY);
+  rappelRope.position.set(x, bottomY + length / 2, z);
+  rappelRope.scale.y = length;
+}
+
+function removeRappelRope(): void {
+  if (!rappelRope) return;
+  scene.remove(rappelRope);
+  disposeTree(rappelRope);
+  rappelRope = undefined;
 }
 
 function createExtractionMarker(): Group {
@@ -2231,6 +2285,7 @@ function updateNavigationProgress(): void {
 
 function clearRunScene(): void {
   if (interiorSession) leaveBuilding(false);
+  removeRappelRope();
   if (chopper) {
     scene.remove(chopper);
     disposeTree(chopper);
@@ -2284,9 +2339,10 @@ function startRun(): void {
   storeSave(saveData);
   runElapsed = 0;
   arrivalElapsed = 0;
+  hoverElapsed = 0;
   disembarkElapsed = 0;
   extractingRemaining = 0;
-  takeoffRemaining = 0;
+  takeoffElapsed = 0;
   reinforcementIndex = 0;
   waveWarningShown = false;
   runLootCollected = 0;
@@ -2296,11 +2352,15 @@ function startRun(): void {
   player.setWorld(world, (x, z) => terrainHeightAt(world.seed, x, z));
   player.setPosition(world.spawn.x, world.spawn.z);
   player.setEnabled(false);
+  player.visual.visible = false;
   player.cancelNavigation();
   cameraRig.setWorld(world);
-  cameraRig.reset(player.position);
   createRunLoot();
   chopper = createChopper();
+  cameraRig.reset(chopper.position);
+  cameraRig.yaw = Math.PI / 4;
+  cameraRig.pitch = 0.18;
+  cameraRig.snapTo(chopper.position);
   extractionMarker = createExtractionMarker();
   const initialDirection = new Vector3(0, 0, -1);
   extractionGuideArrow = new ArrowHelper(
@@ -2311,6 +2371,7 @@ function startRun(): void {
     0.9,
     0.55,
   );
+  extractionGuideArrow.visible = false;
   scene.add(extractionGuideArrow);
   gamePhase = 'arrival';
   updateAtmosphereStatus();
@@ -2324,34 +2385,38 @@ function startRun(): void {
   lastFeedbackHealth = combat.health;
   elements.baseOverlay!.setAttribute('hidden', '');
   elements.deathOverlay!.setAttribute('hidden', '');
-  elements.arrivalOverlay!.removeAttribute('hidden');
-  elements.arrivalMessage!.textContent = 'Pilot is lining up the drop zone.';
-  elements.disembarkButton!.disabled = true;
   elements.extractionGuide!.setAttribute('hidden', '');
   elements.zoneStatus!.textContent = 'ARRIVAL';
   const mapName = document.querySelector('.map-label strong');
   if (mapName) mapName.textContent = 'City–Forest Perimeter';
-  elements.seedHint!.textContent = 'Chopper inbound over the extraction zone.';
+  elements.seedHint!.textContent = 'Following the inbound chopper. Prepare for automatic rappel.';
   updateModeUi();
   updateCombatUi();
 }
 
-function disembark(): void {
-  if (gamePhase !== 'arrival' || elements.disembarkButton!.disabled) return;
-  const offset = navigator.isWalkable(world.spawn.x + 14, world.spawn.z) ? 14 : 9;
-  disembarkStart.copy(player.position);
-  disembarkEnd.set(world.spawn.x + offset, 0, world.spawn.z);
+function beginRappel(): void {
+  if (gamePhase !== 'arrival' || !chopper) return;
+  const offset = [2.4, -2.4, 4.2, -4.2].find((candidate) =>
+    navigator.isWalkable(world.spawn.x + candidate, world.spawn.z),
+  );
+  const dropX = world.spawn.x + (offset ?? 4.2);
+  const groundY = terrainHeightAt(world.seed, dropX, world.spawn.z);
+  disembarkEnd.set(dropX, groundY, world.spawn.z);
+  const ropeTopY = chopper.position.y - 0.25;
+  disembarkStart.set(dropX, Math.max(groundY + 2, ropeTopY - 2.2), world.spawn.z);
+  player.position.copy(disembarkStart);
+  player.visual.position.copy(disembarkStart);
+  player.visual.visible = true;
   disembarkElapsed = 0;
   gamePhase = 'disembarking';
   player.setEnabled(false);
-  cameraRig.switchMode(player.position);
+  cameraRig.transitionFocus(player.position);
+  createRappelRope();
   autoAttackTargetId = undefined;
-  elements.arrivalOverlay!.setAttribute('hidden', '');
   elements.extractionGuide!.setAttribute('hidden', '');
-  elements.zoneStatus!.textContent = 'DISEMBARKING';
-  elements.seedHint!.textContent =
-    'Leaving the aircraft. The hostile movement delay starts on touchdown.';
-  combat.lastMessage = 'Moving clear of the rotor wash…';
+  elements.zoneStatus!.textContent = 'RAPPEL';
+  elements.seedHint!.textContent = 'Scout descending. Controls unlock on landing.';
+  combat.lastMessage = 'Rope down. Scout rappelling to the ground…';
   updateModeUi();
   updateCombatUi();
   canvas!.focus({ preventScroll: true });
@@ -2360,8 +2425,24 @@ function disembark(): void {
 function beginTakeoff(): void {
   if (gamePhase !== 'extracting') return;
   gamePhase = 'takeoff';
-  takeoffRemaining = 2.5;
+  takeoffElapsed = 0;
   player.setEnabled(false);
+  extractionGroundPosition.set(
+    player.position.x,
+    terrainHeightAt(world.seed, player.position.x, player.position.z),
+    player.position.z,
+  );
+  extractionPlayerStart.copy(extractionGroundPosition);
+  if (chopper) {
+    extractionHelicopterStart.copy(chopper.position);
+    extractionHelicopterTarget.set(
+      extractionGroundPosition.x - 2.4,
+      extractionGroundPosition.y + 10.5,
+      extractionGroundPosition.z - 0.25,
+    );
+  }
+  player.visual.visible = true;
+  createRappelRope();
   resolveRunOutcome(saveData, cargo, true);
   const saved = storeSave(saveData);
   elements.baseMessage!.textContent = saved
@@ -2370,6 +2451,7 @@ function beginTakeoff(): void {
   elements.zoneStatus!.textContent = 'TAKEOFF';
   elements.nearbyAction!.setAttribute('hidden', '');
   elements.extractionGuide!.setAttribute('hidden', '');
+  if (extractionGuideArrow) extractionGuideArrow.visible = false;
   combat.lastMessage = 'Boarding complete. Chopper taking off with your cargo.';
   updateCombatUi();
 }
@@ -2392,6 +2474,11 @@ function finishDeath(): void {
 
 function finishSuccess(): void {
   gamePhase = 'result';
+  removeRappelRope();
+  player.visual.visible = false;
+  player.setPosition(extractionGroundPosition.x, extractionGroundPosition.z);
+  if (chopper) chopper.visible = false;
+  if (extractionMarker) extractionMarker.visible = false;
   elements.extractionGuide!.setAttribute('hidden', '');
   const recoveredWeight = cargo.gear + cargo.supplies + cargo.fuel;
   elements.resultEyebrow!.textContent = 'RUN COMPLETE / CARGO BANKED';
@@ -2421,7 +2508,6 @@ function returnToBase(): void {
   autoAttackTargetId = undefined;
   wasAlive = true;
   elements.deathOverlay!.setAttribute('hidden', '');
-  elements.arrivalOverlay!.setAttribute('hidden', '');
   elements.extractionGuide!.setAttribute('hidden', '');
   elements.baseOverlay!.setAttribute('hidden', '');
   elements.seedHint!.textContent =
@@ -2634,7 +2720,6 @@ elements.restartButton!.addEventListener('click', returnToBase);
 elements.baseMenuButton!.addEventListener('click', () => openBaseTerminal());
 elements.baseCloseButton!.addEventListener('click', closeBaseTerminal);
 elements.startRunButton!.addEventListener('click', startRun);
-elements.disembarkButton!.addEventListener('click', disembark);
 elements.buySuppliesButton!.addEventListener('click', () => {
   if (gamePhase !== 'base' || !buyCampItem(saveData, 'supplies')) return;
   const saved = storeSave(saveData);
@@ -3014,6 +3099,21 @@ canvas.addEventListener('contextmenu', (event) => {
   event.preventDefault();
   moveToPointer(event);
 });
+canvas.addEventListener(
+  'wheel',
+  (event) => {
+    if (event.ctrlKey) return;
+    event.preventDefault();
+    const delta =
+      event.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? event.deltaY * 16
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? event.deltaY * window.innerHeight
+          : event.deltaY;
+    cameraRig.zoomBy(delta);
+  },
+  { passive: false },
+);
 document.addEventListener('pointerlockchange', updatePointerUi);
 document.addEventListener('pointerlockerror', () => {
   elements.seedHint!.textContent =
@@ -3098,6 +3198,7 @@ function resize(): void {
   camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(width, height, false);
+  composer.setSize(width, height);
 }
 window.addEventListener('resize', resize);
 
@@ -3115,6 +3216,7 @@ function animate(now: number): void {
   frameIntervals.add(frameIntervalMs);
   previousTime = now;
   frameCount += 1;
+  if (gamePhase === 'base' && !campInteriorSession) updateCampWalkers(campGroup, delta);
   if (chopperRotor) chopperRotor.rotation.y += delta * 19;
   if (chopperTailRotor) chopperTailRotor.rotation.z += delta * 24;
   if (campChopperRotor) campChopperRotor.rotation.y += delta * 2.2;
@@ -3122,35 +3224,50 @@ function animate(now: number): void {
   if (gamePhase === 'arrival') {
     arrivalElapsed += delta;
     const groundY = terrainHeightAt(world.seed, world.spawn.x, world.spawn.z);
-    const approach = Math.min(1, arrivalElapsed / 2.8);
+    const approach = Math.min(1, arrivalElapsed / 3.2);
     const easedApproach = 1 - (1 - approach) ** 3;
     if (chopper) {
       chopper.position.set(
-        world.spawn.x - 18 * (1 - easedApproach),
-        groundY + 15 - 11.6 * easedApproach,
-        world.spawn.z + 18 * (1 - easedApproach),
+        world.spawn.x - 22 * (1 - easedApproach),
+        groundY + 18 - 7.5 * easedApproach,
+        world.spawn.z + 22 * (1 - easedApproach),
       );
     }
-    if (arrivalElapsed >= 2.8 && elements.disembarkButton!.disabled) {
-      elements.disembarkButton!.disabled = false;
-      elements.arrivalMessage!.textContent = 'Touchdown confirmed. Disembark when ready.';
-      elements.seedHint!.textContent =
-        'Touchdown confirmed. Press the button to leave the chopper.';
+    if (approach >= 1) {
+      hoverElapsed += delta;
+      if (hoverElapsed >= 0.4) beginRappel();
     }
   }
   if (gamePhase === 'disembarking') {
     disembarkElapsed += delta;
-    const progress = Math.min(1, disembarkElapsed / 1.6);
-    const easedProgress = progress * progress * (3 - 2 * progress);
-    player.setPosition(
-      disembarkStart.x + (disembarkEnd.x - disembarkStart.x) * easedProgress,
-      disembarkStart.z + (disembarkEnd.z - disembarkStart.z) * easedProgress,
+    const progress = Math.min(1, disembarkElapsed / rappelDuration);
+    const easedProgress = 1 - (1 - progress) ** 3;
+    const groundY = disembarkEnd.y;
+    player.position.set(
+      disembarkEnd.x,
+      disembarkStart.y + (groundY - disembarkStart.y) * easedProgress,
+      disembarkEnd.z,
     );
+    player.visual.position.copy(player.position);
+    if (chopper) {
+      const settle = Math.max(0, Math.min(1, (progress - 0.2) / 0.8));
+      chopper.position.y = groundY + 10.5 - 7.1 * settle;
+      updateRappelRope(
+        disembarkEnd.x,
+        disembarkEnd.z,
+        chopper.position.y - 0.25,
+        player.position.y + 1.15,
+      );
+    }
     if (progress >= 1) {
+      player.setPosition(disembarkEnd.x, disembarkEnd.z);
       gamePhase = 'active';
       runElapsed = 0;
       player.setEnabled(true);
+      cameraRig.switchMode(player.position);
+      removeRappelRope();
       zombieGroup.visible = true;
+      if (extractionGuideArrow) extractionGuideArrow.visible = true;
       elements.extractionGuide!.removeAttribute('hidden');
       elements.zoneStatus!.textContent = 'ACTIVE';
       elements.seedHint!.textContent = 'Find a cache, then return to the landing ring.';
@@ -3160,10 +3277,46 @@ function animate(now: number): void {
     }
   }
   if (gamePhase === 'takeoff') {
-    takeoffRemaining -= delta;
-    const groundY = terrainHeightAt(world.seed, world.spawn.x, world.spawn.z);
-    if (chopper) chopper.position.y = groundY + 3.4 + (2.5 - Math.max(0, takeoffRemaining)) * 3.4;
-    if (takeoffRemaining <= 0) finishSuccess();
+    takeoffElapsed += delta;
+    const groundY = extractionGroundPosition.y;
+    const approachEnd = extractionApproachDuration;
+    const hoistEnd = approachEnd + extractionHoistDuration;
+    const takeoffEnd = hoistEnd + extractionDepartureDuration;
+    if (chopper && takeoffElapsed < approachEnd) {
+      const progress = takeoffElapsed / approachEnd;
+      const eased = progress * progress * (3 - 2 * progress);
+      chopper.position.lerpVectors(extractionHelicopterStart, extractionHelicopterTarget, eased);
+      player.position.copy(extractionPlayerStart);
+      player.visual.position.copy(player.position);
+      updateRappelRope(
+        chopper.position.x + 2.4,
+        chopper.position.z + 0.25,
+        chopper.position.y - 0.25,
+        groundY + 0.12,
+      );
+    } else if (chopper && takeoffElapsed < hoistEnd) {
+      const progress = Math.min(1, (takeoffElapsed - approachEnd) / extractionHoistDuration);
+      const eased = 1 - (1 - progress) ** 3;
+      const ropeX = chopper.position.x + 2.4;
+      const ropeZ = chopper.position.z + 0.25;
+      const ropeTop = chopper.position.y - 0.25;
+      player.position.set(ropeX, groundY + (ropeTop - 2.2 - groundY) * eased, ropeZ);
+      player.visual.position.copy(player.position);
+      updateRappelRope(ropeX, ropeZ, ropeTop, player.position.y + 1.15);
+    } else {
+      removeRappelRope();
+      player.visual.visible = false;
+      if (chopper) {
+        const progress = Math.min(1, (takeoffElapsed - hoistEnd) / extractionDepartureDuration);
+        const eased = progress * progress * (3 - 2 * progress);
+        chopper.position.set(
+          extractionHelicopterTarget.x + 22 * eased,
+          extractionHelicopterTarget.y + 18 * eased,
+          extractionHelicopterTarget.z - 22 * eased,
+        );
+      }
+    }
+    if (takeoffElapsed >= takeoffEnd) finishSuccess();
   }
   const simulationStartedAt = performance.now();
   simulationAccumulator = Math.min(simulationAccumulator + delta, fixedStep * 8);
@@ -3261,7 +3414,10 @@ function animate(now: number): void {
     stressActive && hordeSimulation ? hordeSimulation.playerHealth : combat.health;
   if (visibleHealth < lastFeedbackHealth) flashDamageFeedback();
   lastFeedbackHealth = visibleHealth;
-  cameraRig.update(delta, player.position);
+  cameraFollowTarget.copy(player.position);
+  if (chopper && (gamePhase === 'arrival' || gamePhase === 'takeoff'))
+    cameraFollowTarget.copy(chopper.position);
+  cameraRig.update(delta, cameraFollowTarget);
   const rainCanRender =
     stressActive || (gamePhase !== 'base' && !interiorSession && !campInteriorSession);
   atmosphereRuntime.update(
@@ -3270,6 +3426,7 @@ function animate(now: number): void {
     cameraRig.mode === 'top-down',
     rainCanRender && atmosphereSettings.rainVisuals,
     atmosphereSettings.reduceFlashes,
+    rainCanRender,
   );
   particleBursts.update(delta);
   if (cameraRig.mode === 'third-person') {
@@ -3317,8 +3474,9 @@ function animate(now: number): void {
     }
   }
   pollGpuFrameQueries();
+  renderer.info.reset();
   const gpuQuery = beginGpuFrameQuery();
-  renderer.render(scene, camera);
+  composer.render(delta);
   finishGpuFrameQuery(gpuQuery);
 
   sampleTime += delta;

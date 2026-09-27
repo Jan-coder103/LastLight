@@ -598,7 +598,6 @@ kbd {
 .death-overlay[hidden] {
   display: none;
 }
-.arrival-overlay,
 .base-overlay {
   position: absolute;
   z-index: 6;
@@ -623,12 +622,10 @@ kbd {
   padding: 20px;
   background: rgba(12, 15, 13, 0.76);
 }
-.arrival-overlay[hidden],
 .base-overlay[hidden],
 .settings-overlay[hidden] {
   display: none;
 }
-.arrival-panel,
 .base-panel,
 .settings-panel {
   width: min(520px, calc(100vw - 32px));
@@ -638,24 +635,17 @@ kbd {
   background: rgba(21, 25, 21, 0.96);
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.46);
 }
-.arrival-panel {
-  width: min(410px, calc(100vw - 32px));
-  text-align: center;
-}
-.arrival-panel h2,
 .base-panel h2 {
   margin: 8px 0 10px;
   color: #f0eddf;
   font: 700 26px/1 var(--condensed);
   letter-spacing: 0.09em;
 }
-.arrival-panel p,
 .base-panel p {
   color: #b7b5a6;
   font-size: 12px;
   line-height: 1.5;
 }
-.arrival-panel button,
 .base-panel button {
   min-height: 40px;
   padding: 0 15px;
@@ -667,11 +657,9 @@ kbd {
   letter-spacing: 0.07em;
   cursor: pointer;
 }
-.arrival-panel button:hover,
 .base-panel button:hover:not(:disabled) {
   background: rgba(211, 181, 110, 0.23);
 }
-.arrival-panel button:disabled,
 .base-panel button:disabled {
   opacity: 0.46;
   cursor: default;

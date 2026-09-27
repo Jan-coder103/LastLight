@@ -2,16 +2,23 @@ import {
   AmbientLight,
   BufferAttribute,
   BufferGeometry,
+  CircleGeometry,
   Color,
   DirectionalLight,
   DynamicDrawUsage,
   Fog,
+  FogExp2,
+  Group,
   LineBasicMaterial,
   LineSegments,
+  Mesh,
+  MeshPhysicalMaterial,
   Scene,
   Vector3,
 } from 'three';
 import type { RunAtmosphere, Weather } from './settings';
+import type { WorldData } from '../world/generateWorld';
+import type { VolumetricFogPass } from './VolumetricFogPass';
 
 interface RainDrop {
   x: number;
@@ -25,9 +32,7 @@ const rainDropCount = 150;
 /** Applies one seeded lighting/weather preset and keeps rain to a single draw call. */
 export class AtmosphereRuntime {
   private readonly campBackground: Color;
-  private readonly campFog: Color;
-  private readonly campFogNear: number;
-  private readonly campFogFar: number;
+  private readonly campFog: Fog | FogExp2;
   private readonly campSkyColor: Color;
   private readonly campSkyIntensity: number;
   private readonly campFillColor: Color;
@@ -39,6 +44,9 @@ export class AtmosphereRuntime {
   private readonly rainPositions = new Float32Array(rainDropCount * 6);
   private readonly rainDrops: RainDrop[] = [];
   private readonly rainLines: LineSegments<BufferGeometry, LineBasicMaterial>;
+  private readonly puddleGroup = new Group();
+  private readonly puddleGeometry: CircleGeometry;
+  private readonly puddleMaterial: MeshPhysicalMaterial;
   private rainAccumulator = 0;
   private thunderRemaining = 0;
   private flashRemaining = 0;
@@ -53,12 +61,10 @@ export class AtmosphereRuntime {
     private readonly sun: DirectionalLight,
     private readonly onThunder: () => void,
     private readonly setExposure: (value: number) => void,
+    private readonly volumetricFog?: VolumetricFogPass,
   ) {
     this.campBackground = (scene.background as Color).clone();
-    const fog = scene.fog as Fog;
-    this.campFog = fog.color.clone();
-    this.campFogNear = fog.near;
-    this.campFogFar = fog.far;
+    this.campFog = (scene.fog as Fog | FogExp2).clone();
     this.campSkyColor = skyLight.color.clone();
     this.campSkyIntensity = skyLight.intensity;
     this.campFillColor = fillLight.color.clone();
@@ -85,6 +91,21 @@ export class AtmosphereRuntime {
     this.rainLines.frustumCulled = false;
     this.rainLines.visible = false;
     this.scene.add(this.rainLines);
+    this.puddleGroup.name = 'Rain puddles';
+    this.puddleGroup.visible = false;
+    this.puddleGeometry = new CircleGeometry(1, 10);
+    this.puddleGeometry.rotateX(-Math.PI / 2);
+    this.puddleMaterial = new MeshPhysicalMaterial({
+      color: '#66716d',
+      roughness: 0.16,
+      metalness: 0.06,
+      clearcoat: 0.72,
+      clearcoatRoughness: 0.13,
+      transparent: true,
+      opacity: 0.66,
+      depthWrite: false,
+    });
+    this.scene.add(this.puddleGroup);
   }
 
   get time(): RunAtmosphere['time'] {
@@ -103,12 +124,11 @@ export class AtmosphereRuntime {
     this.campActive = true;
     this.active = { time: 'low-sun', weather: 'clear' };
     this.rainLines.visible = false;
+    this.puddleGroup.visible = false;
+    this.volumetricFog?.setWeatherVisible(false);
     this.flashRemaining = 0;
     this.scene.background = this.campBackground.clone();
-    const fog = this.scene.fog as Fog;
-    fog.color.copy(this.campFog);
-    fog.near = this.campFogNear;
-    fog.far = this.campFogFar;
+    this.scene.fog = this.campFog.clone();
     this.skyLight.color.copy(this.campSkyColor);
     this.skyLight.intensity = this.campSkyIntensity;
     this.fillLight.color.copy(this.campFillColor);
@@ -119,16 +139,18 @@ export class AtmosphereRuntime {
     this.setExposure(1.04);
   }
 
-  setRun(preset: RunAtmosphere, seed: string): void {
+  setRun(preset: RunAtmosphere, seed: string, world?: WorldData): void {
     this.campActive = false;
     this.active = preset;
     this.flashRemaining = 0;
     const palette = this.palette(preset.time, preset.weather);
     this.scene.background = new Color(palette.sky);
-    const fog = this.scene.fog as Fog;
-    fog.color.set(palette.fog);
-    fog.near = preset.weather === 'clear' ? 175 : preset.weather === 'mist' ? 32 : 58;
-    fog.far = preset.weather === 'clear' ? 390 : preset.weather === 'mist' ? 145 : 205;
+    const distanceFogDensity =
+      preset.weather === 'clear' ? 0.0016 : preset.weather === 'mist' ? 0.007 : 0.003;
+    this.scene.fog = new FogExp2(palette.fog, distanceFogDensity);
+    this.volumetricFog?.setWeather(preset.weather, new Color(palette.fog), seed);
+    this.puddleGroup.visible = preset.weather === 'rain';
+    this.buildPuddles(preset.weather === 'rain' ? world : undefined, seed);
 
     if (preset.time === 'low-sun') {
       this.skyLight.color.set('#ded9bd');
@@ -160,10 +182,13 @@ export class AtmosphereRuntime {
     topDown: boolean,
     rainVisible: boolean,
     reduceFlashes: boolean,
+    weatherVisible = true,
   ): void {
     if (this.campActive) return;
+    this.puddleGroup.visible = weatherVisible && this.active.weather === 'rain';
+    this.volumetricFog?.setWeatherVisible(weatherVisible);
     if (reduceFlashes) this.flashRemaining = 0;
-    const activeRain = this.active.weather === 'rain' && rainVisible;
+    const activeRain = this.active.weather === 'rain' && rainVisible && weatherVisible;
     this.rainLines.visible = activeRain;
     if (activeRain) this.updateRain(deltaSeconds, playerPosition, topDown);
 
@@ -182,6 +207,33 @@ export class AtmosphereRuntime {
       this.sun.intensity = (this.active.weather === 'rain' ? 1.25 : 2.05) + flash;
     } else {
       this.sun.intensity = (this.active.weather === 'rain' ? 0.56 : 0.82) + flash;
+    }
+  }
+
+  private buildPuddles(world: WorldData | undefined, seed: string): void {
+    this.puddleGroup.clear();
+    if (!world || world.roads.length === 0) return;
+
+    let state = this.seedValue(`${seed}:puddles`);
+    const random = (): number => {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      return state / 0x100000000;
+    };
+    const puddleCount = Math.min(168, Math.max(72, world.roads.length * 14));
+    for (let index = 0; index < puddleCount; index++) {
+      const road = world.roads[Math.floor(random() * world.roads.length)]!;
+      const runsAlongX = road.sizeX >= road.sizeZ;
+      const along = (random() - 0.5) * Math.max(1, (runsAlongX ? road.sizeX : road.sizeZ) - 2);
+      const across = (random() - 0.5) * Math.max(0.5, (runsAlongX ? road.sizeZ : road.sizeX) - 1.1);
+      const x = road.centerX + (runsAlongX ? along : across);
+      const z = road.centerZ + (runsAlongX ? across : along);
+      const puddle = new Mesh(this.puddleGeometry, this.puddleMaterial);
+      puddle.position.set(x, 0.078, z);
+      puddle.scale.set(0.22 + random() * 1.08, 0.12 + random() * 0.72, 1);
+      puddle.rotation.y = random() * Math.PI;
+      puddle.receiveShadow = true;
+      puddle.renderOrder = 1;
+      this.puddleGroup.add(puddle);
     }
   }
 

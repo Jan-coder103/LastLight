@@ -40,6 +40,7 @@ export class CameraRig {
   mode: CameraMode = 'third-person';
   yaw = 0;
   pitch = 0.2;
+  zoomScale = 1;
   currentTarget = new Vector3();
   private world: WorldData;
   private readonly canvas: HTMLCanvasElement;
@@ -93,6 +94,11 @@ export class CameraRig {
     this.pitch = Math.max(-0.62, Math.min(0.95, this.pitch + deltaY * 0.0022));
   }
 
+  zoomBy(deltaY: number): void {
+    if (!Number.isFinite(deltaY) || deltaY === 0) return;
+    this.zoomScale = Math.max(0.62, Math.min(1.8, this.zoomScale * Math.exp(deltaY * 0.001)));
+  }
+
   update(deltaSeconds: number, playerPosition: Vector3): void {
     const delta = Math.min(deltaSeconds, 0.05);
     this.setDestination(playerPosition);
@@ -130,6 +136,7 @@ export class CameraRig {
     this.mode = 'third-person';
     this.yaw = 0;
     this.pitch = 0.2;
+    this.zoomScale = 1;
     this.setDestination(playerPosition);
     this.camera.position.copy(this.idealPosition);
     this.currentTarget.copy(this.idealTarget);
@@ -144,14 +151,27 @@ export class CameraRig {
     this.camera.lookAt(this.currentTarget);
   }
 
+  transitionFocus(playerPosition: Vector3): void {
+    this.transition = {
+      elapsed: 0,
+      startPosition: this.camera.position.clone(),
+      startTarget: this.currentTarget.clone(),
+    };
+    this.setDestination(playerPosition);
+  }
+
   private setDestination(playerPosition: Vector3): void {
     const terrainY = playerPosition.y;
     if (this.mode === 'top-down') {
       this.idealTarget.set(playerPosition.x, terrainY + 1.35, playerPosition.z);
-      this.idealPosition.set(playerPosition.x, terrainY + 48, playerPosition.z + 28);
+      this.idealPosition.set(
+        playerPosition.x,
+        terrainY + 48 * this.zoomScale,
+        playerPosition.z + 28 * this.zoomScale,
+      );
       return;
     }
-    const distance = 9.3;
+    const distance = 9.3 * this.zoomScale;
     const pivotHeight = 1.75;
     const minimumCameraHeight = 0.65;
     const shoulderAngle = Math.atan2(0.95, distance);
