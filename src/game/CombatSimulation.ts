@@ -22,7 +22,7 @@ const zombieAttackDamage = 8;
 const zombieAttackInterval = 1.3;
 const weaponDamage = 50;
 const weaponCooldown = 0.24;
-const dashCooldown = 2.5;
+const dashCooldown = 2;
 
 export class CombatSimulation {
   readonly zombies: ZombieState[] = [];
@@ -98,6 +98,16 @@ export class CombatSimulation {
     return this.abilityCooldowns;
   }
 
+  canUseAbility(slot: AbilitySlot): boolean {
+    return this.alive && this.abilityCooldowns[slot] <= 0;
+  }
+
+  startAbilityCooldown(slot: AbilitySlot, seconds: number): boolean {
+    if (!this.canUseAbility(slot)) return false;
+    this.abilityCooldowns[slot] = seconds;
+    return true;
+  }
+
   addReinforcements(count: number, center: Vector3): ZombieState[] {
     const added: ZombieState[] = [];
     for (let index = 0; index < count; index += 1) {
@@ -164,8 +174,8 @@ export class CombatSimulation {
     return true;
   }
 
-  activateAbility(slot: AbilitySlot, playerPosition: Vector3): boolean {
-    if (!this.alive || this.abilityCooldowns[slot] > 0) return false;
+  activateAbility(slot: AbilitySlot, playerPosition?: Vector3): boolean {
+    if (!this.canUseAbility(slot)) return false;
     if (slot === 1) {
       if (this.health >= maxPlayerHealth) {
         this.lastMessage = 'Field dressing works when injured.';
@@ -177,6 +187,7 @@ export class CombatSimulation {
       return true;
     }
     if (slot === 2) {
+      if (!playerPosition) return false;
       this.abilityCooldowns[2] = 9;
       let affected = 0;
       for (const zombie of this.zombies) {
@@ -198,13 +209,41 @@ export class CombatSimulation {
     return true;
   }
 
+  damageHostile(id: string, amount: number): boolean {
+    const zombie = this.zombies.find((candidate) => candidate.id === id && candidate.alive);
+    if (!zombie || amount <= 0) return false;
+    zombie.health = Math.max(0, zombie.health - amount);
+    if (zombie.health === 0) zombie.alive = false;
+    return true;
+  }
+
+  damageHostilesInRadius(center: Vector3, radius: number, amount: number): number {
+    let affected = 0;
+    for (const zombie of this.zombies) {
+      if (!zombie.alive || zombie.position.distanceTo(center) > radius) continue;
+      this.damageHostile(zombie.id, amount);
+      affected += 1;
+    }
+    return affected;
+  }
+
   tick(deltaSeconds: number, playerPosition: Vector3): void {
+    const delta = Math.max(0, Math.min(deltaSeconds, 0.1));
+    this.tickCooldowns(delta);
+    this.tickHostiles(delta, playerPosition);
+  }
+
+  tickCooldowns(deltaSeconds: number): void {
     const delta = Math.max(0, Math.min(deltaSeconds, 0.1));
     this.fireCooldownRemaining = Math.max(0, this.fireCooldownRemaining - delta);
     this.dashCooldownRemaining = Math.max(0, this.dashCooldownRemaining - delta);
     this.adrenalineRemaining = Math.max(0, this.adrenalineRemaining - delta);
     for (const slot of [1, 2, 3] as const)
       this.abilityCooldowns[slot] = Math.max(0, this.abilityCooldowns[slot] - delta);
+  }
+
+  tickHostiles(deltaSeconds: number, playerPosition: Vector3): void {
+    const delta = Math.max(0, Math.min(deltaSeconds, 0.1));
     if (!this.alive) return;
 
     for (const zombie of this.zombies) {

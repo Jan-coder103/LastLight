@@ -24,6 +24,8 @@ import {
   Raycaster,
   RingGeometry,
   Scene,
+  Shape,
+  ShapeGeometry,
   SphereGeometry,
   Vector2,
   Vector3,
@@ -294,7 +296,8 @@ const campChopperTailRotor = campGroup.getObjectByName('Camp helicopter tail rot
 const campNavigator = new GridNavigator(campWorld);
 let fieldNavigator = new GridNavigator(world);
 let navigator = campNavigator;
-let combatNavigator = fieldNavigator;
+// Player routes add moving-hostile blockers; pursuit paths need their own static grid.
+let combatNavigator = new GridNavigator(world);
 let combat = new CombatSimulation(world, combatNavigator);
 let zombieGroup = new Group();
 zombieGroup.name = 'Hostiles';
@@ -424,8 +427,39 @@ const resourceNames: Record<ResourceKind, string> = {
 interface TimedEffect {
   object: Object3D;
   remaining: number;
+  duration?: number;
+  onUpdate?: (progress: number) => void;
+  onExpire?: () => void;
 }
 const timedEffects: TimedEffect[] = [];
+interface ActiveTurret {
+  object: Group;
+  gun: Group;
+  x: number;
+  z: number;
+  activeRemaining: number;
+  fireRemaining: number;
+  collapseRemaining?: number;
+}
+interface GrenadeProjectile {
+  object: Mesh;
+  start: Vector3;
+  target: Vector3;
+  elapsed: number;
+  duration: number;
+}
+const activeTurrets: ActiveTurret[] = [];
+const grenadeProjectiles: GrenadeProjectile[] = [];
+let grenadeCount = 3;
+let grenadeCooldownRemaining = 0;
+let turretPreview: Group | undefined;
+let turretRangeMarker: Mesh | undefined;
+let turretPreviewPoint: Vector3 | undefined;
+let turretPreviewValid = false;
+const turretPlacementRadius = 18;
+const turretAttackRadius = 10;
+const artilleryRadius = 7;
+const grenadeBlastRadius = 4.2;
 let routeLine: Line | undefined;
 let dragPointerId: number | undefined;
 let pointerStart: { id: number; x: number; y: number } | undefined;
@@ -444,6 +478,7 @@ let navigationRequestCount = 0;
 let dynamicNavigationRefresh = 0;
 let pointerX = window.innerWidth / 2;
 let pointerY = window.innerHeight / 2;
+let suppressPlacementContextMenu = false;
 let observedDash = false;
 let autoAttackTargetId: string | undefined;
 const enemyAimAssistRadius = 44;
@@ -620,9 +655,10 @@ function renderControls(): void {
               'Q',
               `Dash${combat.dashCooldownRemaining > 0 ? ` · ${combat.dashCooldownRemaining.toFixed(1)}s` : ''}`,
             ),
-            row('1', 'Field dressing'),
-            row('2', 'Shock pulse'),
+            row('1', 'Hold to preview · release to place · mouse click cancels'),
+            row('2', 'Call artillery at cursor'),
             row('3', 'Adrenaline'),
+            row('G', `Throw grenade · ${grenadeCount} carried`),
             row('X', 'Use carried supply'),
             row('F', 'Interact / enter / exit'),
             row('TAB', 'Switch camera'),
@@ -635,9 +671,10 @@ function renderControls(): void {
               'Q',
               `Dash${combat.dashCooldownRemaining > 0 ? ` · ${combat.dashCooldownRemaining.toFixed(1)}s` : ''}`,
             ),
-            row('W', 'Field dressing'),
-            row('E', 'Shock pulse'),
+            row('W', 'Hold to preview · release to place · mouse click cancels'),
+            row('E', 'Call artillery at cursor'),
             row('R', 'Adrenaline'),
+            row('G', `Throw grenade · ${grenadeCount} carried`),
             row('X', 'Use carried supply'),
             row('F', 'Interact / enter / exit'),
             row('TAB', 'Switch camera'),
@@ -701,15 +738,17 @@ function updateCombatUi(): void {
   );
   const capacity = cargoCapacity(saveData);
   elements.cargoValue!.textContent = `${cargoWeight(cargo)} / ${capacity}`;
-  elements.cargoBreakdown!.textContent = `GEAR ${cargo.gear} · SUP ${cargo.supplies} · CR ${cargo.money} · FUEL ${cargo.fuel}`;
-  elements.abilityStatus!.innerHTML = ([1, 2, 3] as const)
-    .map((slot) => {
-      const remaining = combat.abilityCooldownsRemaining[slot];
-      const key = cameraRig.mode === 'top-down' ? ['W', 'E', 'R'][slot - 1] : String(slot);
-      const title = ['MED', 'PULSE', 'ADREN'][slot - 1];
-      return `<span class="${remaining > 0 ? 'cooling' : ''}">${key} ${title}${remaining > 0 ? ` ${remaining.toFixed(0)}s` : ''}</span>`;
-    })
-    .join('');
+  elements.cargoBreakdown!.textContent = `GEAR ${cargo.gear} · SUP ${cargo.supplies} · GRENADES ${grenadeCount} · CR ${cargo.money} · FUEL ${cargo.fuel}`;
+  elements.abilityStatus!.innerHTML =
+    ([1, 2, 3] as const)
+      .map((slot) => {
+        const remaining = combat.abilityCooldownsRemaining[slot];
+        const key = cameraRig.mode === 'top-down' ? ['W', 'E', 'R'][slot - 1] : String(slot);
+        const title = ['TURRET', 'ARTY', 'ADREN'][slot - 1];
+        return `<span class="${remaining > 0 ? 'cooling' : ''}">${key} ${title}${remaining > 0 ? ` ${remaining.toFixed(0)}s` : ''}</span>`;
+      })
+      .join('') +
+    `<span class="${grenadeCooldownRemaining > 0 ? 'cooling' : ''}">G FRAG ${grenadeCount}${grenadeCooldownRemaining > 0 ? ` ${grenadeCooldownRemaining.toFixed(1)}s` : ''}</span>`;
   if (!combat.alive) elements.deathMessage!.textContent = combat.lastMessage;
 }
 
@@ -830,8 +869,8 @@ function setSeed(seed: string): void {
   worldGroup.visible = false;
   scene.add(worldGroup);
   fieldNavigator = new GridNavigator(world);
+  combatNavigator = new GridNavigator(world);
   navigator = campNavigator;
-  combatNavigator = fieldNavigator;
   combat = new CombatSimulation(world, combatNavigator);
   navigationTask = undefined;
   setNavigationStatus('IDLE');
@@ -868,7 +907,6 @@ function setCampContext(position = campWorld.spawn, resetCamera = true): void {
   setCampAtmosphere();
   if (zombieGroup) zombieGroup.visible = false;
   navigator = campNavigator;
-  combatNavigator = fieldNavigator;
   player.setWorld(campWorld, () => 0);
   player.setPosition(position.x, position.z);
   player.setEnabled(elements.baseOverlay!.hasAttribute('hidden'));
@@ -1110,7 +1148,6 @@ function startHordeTest(): void {
   campGroup.visible = false;
   worldGroup.visible = true;
   navigator = fieldNavigator;
-  combatNavigator = fieldNavigator;
   navigationTask = undefined;
   player.cancelNavigation();
   navigator.setDynamicObstacles([]);
@@ -1515,6 +1552,7 @@ function enterBuilding(entrance: BuildingEntrance): void {
   const roomWorld = interiorWorld(layout, world);
   const roomGroup = buildInterior(layout, world);
   const roomNavigator = new GridNavigator(roomWorld);
+  const roomCombatNavigator = new GridNavigator(roomWorld);
   const roomLootGroup = new Group();
   roomLootGroup.name = `Interior loot ${entrance.id}`;
   const views = new Map<string, InteractiveView>();
@@ -1582,8 +1620,8 @@ function enterBuilding(entrance: BuildingEntrance): void {
     outdoorZombieViews: savedZombieViews,
   };
   navigator = roomNavigator;
-  combatNavigator = roomNavigator;
-  combat.setContext(roomWorld, roomNavigator, () => 0, savedRoomHostiles);
+  combatNavigator = roomCombatNavigator;
+  combat.setContext(roomWorld, roomCombatNavigator, () => 0, savedRoomHostiles);
   player.setWorld(roomWorld, () => 0);
   player.setPosition(layout.entry.x, layout.entry.z);
   player.setEnabled(true);
@@ -2284,6 +2322,22 @@ function updateNavigationProgress(): void {
 }
 
 function clearRunScene(): void {
+  cancelTurretPlacement();
+  for (const turret of activeTurrets) {
+    scene.remove(turret.object);
+    disposeTree(turret.object);
+  }
+  activeTurrets.length = 0;
+  for (const grenade of grenadeProjectiles) {
+    scene.remove(grenade.object);
+    disposeTree(grenade.object);
+  }
+  grenadeProjectiles.length = 0;
+  for (const effect of timedEffects) {
+    scene.remove(effect.object);
+    disposeTree(effect.object);
+  }
+  timedEffects.length = 0;
   if (interiorSession) leaveBuilding(false);
   removeRappelRope();
   if (chopper) {
@@ -2324,10 +2378,11 @@ function startRun(): void {
   worldGroup.visible = true;
   applyRunAtmosphere(world.seed);
   navigator = fieldNavigator;
-  combatNavigator = fieldNavigator;
   navigator.setDynamicObstacles([]);
   dynamicNavigationRefresh = 0;
   cargo = emptyInventory();
+  grenadeCount = 3;
+  grenadeCooldownRemaining = 0;
   if (saveData.base.gear > 0) {
     saveData.base.gear -= 1;
     cargo.gear += 1;
@@ -2537,22 +2592,506 @@ function addShotEffect(start: Vector3, end: Vector3): void {
   timedEffects.push({ object: flash, remaining: 0.055 });
 }
 
-function addShockEffect(): void {
-  const pulse = new Mesh(
-    new CircleGeometry(9, 48),
-    new MeshBasicMaterial({ color: '#d6c477', transparent: true, opacity: 0.2, depthWrite: false }),
-  );
-  pulse.rotation.x = -Math.PI / 2;
-  pulse.position.set(player.position.x, player.position.y + 0.11, player.position.z);
-  scene.add(pulse);
-  timedEffects.push({ object: pulse, remaining: 0.22 });
-}
-
 function addAbilityParticles(color: string, count = 10): void {
   if (atmosphereSettings.reduceMotion) return;
   const position = player.position.clone();
   position.y += 0.55;
   particleBursts.burst(position, color, count, 1.25, 0.48);
+}
+
+function createTurretVisual(preview = false): { object: Group; gun: Group } {
+  const object = new Group();
+  object.name = preview ? 'Turret placement preview' : 'Deployed auto turret';
+  const opacity = preview ? 0.48 : 1;
+  const material = (color: string, metalness = 0.12) =>
+    new MeshStandardMaterial({
+      color,
+      roughness: 0.72,
+      metalness,
+      transparent: preview,
+      opacity,
+      depthWrite: !preview,
+      flatShading: true,
+    });
+  const base = new Mesh(new CylinderGeometry(0.58, 0.68, 0.26, 8), material('#59614d', 0.2));
+  base.position.y = 0.13;
+  base.castShadow = !preview;
+  const collar = new Mesh(new CylinderGeometry(0.22, 0.29, 0.24, 8), material('#a27c48', 0.36));
+  collar.position.y = 0.36;
+  const mast = new Mesh(new CylinderGeometry(0.14, 0.2, 0.92, 7), material('#4d5547', 0.25));
+  mast.position.y = 0.9;
+  const gun = new Group();
+  gun.position.y = 1.42;
+  const housing = new Mesh(new BoxGeometry(0.78, 0.42, 0.62), material('#58634d', 0.28));
+  housing.castShadow = !preview;
+  const barrelMaterial = material('#343a33', 0.52);
+  const barrelA = new Mesh(new CylinderGeometry(0.065, 0.08, 0.9, 6), barrelMaterial);
+  barrelA.rotation.x = -Math.PI / 2;
+  barrelA.position.set(-0.17, 0.02, -0.63);
+  const barrelB = new Mesh(new CylinderGeometry(0.065, 0.08, 0.9, 6), barrelMaterial.clone());
+  barrelB.rotation.x = -Math.PI / 2;
+  barrelB.position.set(0.17, 0.02, -0.63);
+  const sensor = new Mesh(new SphereGeometry(0.12, 8, 6), material('#e2be69', 0.04));
+  sensor.position.set(0, 0.27, -0.16);
+  gun.add(housing, barrelA, barrelB, sensor);
+  object.add(base, collar, mast, gun);
+  return { object, gun };
+}
+
+function setTurretPreviewColor(valid: boolean): void {
+  if (!turretPreview) return;
+  const color = valid ? '#a8ca73' : '#d86a50';
+  turretPreview.traverse((part) => {
+    if (!('material' in part) || !part.material) return;
+    const materials = Array.isArray(part.material) ? part.material : [part.material];
+    for (const material of materials) {
+      if ('color' in material) (material as MeshStandardMaterial).color.set(color);
+    }
+  });
+}
+
+function beginTurretPlacement(): void {
+  if (gamePhase !== 'active' || !combat.alive) return;
+  if (!combat.canUseAbility(1)) {
+    combat.lastMessage = 'Turret is still recharging.';
+    updateCombatUi();
+    return;
+  }
+  if (!turretPreview) {
+    turretPreview = createTurretVisual(true).object;
+    const marker = new Mesh(
+      new RingGeometry(0.78, 0.9, 28),
+      new MeshBasicMaterial({
+        color: '#a8ca73',
+        transparent: true,
+        opacity: 0.82,
+        depthWrite: false,
+      }),
+    );
+    marker.rotation.x = -Math.PI / 2;
+    marker.position.y = 0.04;
+    turretPreview.add(marker);
+    scene.add(turretPreview);
+    turretRangeMarker = new Mesh(
+      new RingGeometry(turretPlacementRadius - 0.12, turretPlacementRadius, 72),
+      new MeshBasicMaterial({
+        color: '#b8d984',
+        transparent: true,
+        opacity: 0.35,
+        depthWrite: false,
+      }),
+    );
+    turretRangeMarker.rotation.x = -Math.PI / 2;
+    scene.add(turretRangeMarker);
+  }
+  updateTurretPlacementPreview();
+}
+
+function cancelTurretPlacement(): boolean {
+  if (!turretPreview && !turretRangeMarker) return false;
+  if (turretPreview) {
+    scene.remove(turretPreview);
+    disposeTree(turretPreview);
+  }
+  if (turretRangeMarker) {
+    scene.remove(turretRangeMarker);
+    disposeTree(turretRangeMarker);
+  }
+  turretPreview = undefined;
+  turretRangeMarker = undefined;
+  turretPreviewPoint = undefined;
+  turretPreviewValid = false;
+  return true;
+}
+
+function updateTurretPlacementPreview(): void {
+  if (!turretPreview) return;
+  if (gamePhase !== 'active' || !combat.alive) {
+    cancelTurretPlacement();
+    return;
+  }
+  if (turretRangeMarker) {
+    turretRangeMarker.position.set(player.position.x, player.position.y + 0.08, player.position.z);
+    const rangeMaterial = turretRangeMarker.material as MeshBasicMaterial;
+    rangeMaterial.color.set(turretPreviewValid ? '#b8d984' : '#d88165');
+  }
+  const aim = currentAimPosition();
+  const point = terrainPointAt(aim.x, aim.y);
+  if (!point) {
+    turretPreview.visible = false;
+    turretPreviewPoint = undefined;
+    turretPreviewValid = false;
+    setTurretPreviewColor(false);
+    return;
+  }
+  turretPreviewPoint = point;
+  const insideRange =
+    Math.hypot(point.x - player.position.x, point.z - player.position.z) <= turretPlacementRadius;
+  const clearOfOtherTurrets = activeTurrets.every(
+    (turret) => Math.hypot(point.x - turret.x, point.z - turret.z) >= 2.2,
+  );
+  turretPreviewValid = insideRange && clearOfOtherTurrets && navigator.isWalkable(point.x, point.z);
+  turretPreview.visible = true;
+  turretPreview.position.set(point.x, point.y, point.z);
+  setTurretPreviewColor(turretPreviewValid);
+  if (turretRangeMarker)
+    (turretRangeMarker.material as MeshBasicMaterial).color.set(
+      turretPreviewValid ? '#b8d984' : '#d88165',
+    );
+}
+
+function finishTurretPlacement(): void {
+  if (!turretPreview) return;
+  if (gamePhase !== 'active' || !combat.alive) {
+    cancelTurretPlacement();
+    return;
+  }
+  updateTurretPlacementPreview();
+  if (!turretPreviewPoint || !turretPreviewValid) {
+    cancelTurretPlacement();
+    combat.lastMessage = 'Turret needs clear ground inside the placement circle.';
+    updateCombatUi();
+    return;
+  }
+  if (!combat.startAbilityCooldown(1, 10)) {
+    cancelTurretPlacement();
+    combat.lastMessage = 'Turret is still recharging.';
+    updateCombatUi();
+    return;
+  }
+  const position = turretPreviewPoint.clone();
+  cancelTurretPlacement();
+  const { object, gun } = createTurretVisual();
+  object.position.copy(position);
+  scene.add(object);
+  activeTurrets.push({
+    object,
+    gun,
+    x: position.x,
+    z: position.z,
+    activeRemaining: 5,
+    fireRemaining: 0.18,
+  });
+  combat.lastMessage = 'Auto turret deployed · active for 5 seconds.';
+  addAbilityParticles('#b8d984', 8);
+  updateCombatUi();
+}
+
+function createComicBurstGeometry(radius: number): ShapeGeometry {
+  const shape = new Shape();
+  const points = 24;
+  for (let index = 0; index < points; index += 1) {
+    const angle = (index / points) * Math.PI * 2;
+    const distance = radius * (index % 2 === 0 ? 1 : 0.66);
+    const x = Math.cos(angle) * distance;
+    const y = Math.sin(angle) * distance;
+    if (index === 0) shape.moveTo(x, y);
+    else shape.lineTo(x, y);
+  }
+  shape.closePath();
+  return new ShapeGeometry(shape);
+}
+
+function addBlastVisual(center: Vector3, radius: number, decalDuration: number): void {
+  const ground = new Group();
+  ground.name = 'Blast scorch decal';
+  ground.position.set(center.x, center.y + 0.035, center.z);
+  const scorch = new Mesh(
+    new CircleGeometry(radius * 0.78, 36),
+    new MeshBasicMaterial({
+      color: '#292720',
+      transparent: true,
+      opacity: 0.62,
+      depthWrite: false,
+    }),
+  );
+  scorch.rotation.x = -Math.PI / 2;
+  const soot = new Mesh(
+    new RingGeometry(radius * 0.78, radius * 0.91, 36),
+    new MeshBasicMaterial({ color: '#655343', transparent: true, opacity: 0.5, depthWrite: false }),
+  );
+  soot.rotation.x = -Math.PI / 2;
+  soot.position.y = 0.008;
+  ground.add(scorch, soot);
+  for (let index = 0; index < 7; index += 1) {
+    const angle = (index / 7) * Math.PI * 2 + 0.22;
+    const crack = new Mesh(
+      new BoxGeometry(radius * 0.38, 0.014, 0.045),
+      new MeshBasicMaterial({ color: '#302c25', transparent: true, opacity: 0.8 }),
+    );
+    crack.position.set(Math.cos(angle) * radius * 0.58, 0.016, Math.sin(angle) * radius * 0.58);
+    crack.rotation.y = -angle;
+    ground.add(crack);
+  }
+  scene.add(ground);
+  timedEffects.push({ object: ground, remaining: decalDuration });
+
+  const explosion = new Group();
+  explosion.name = 'Comic blast and smoke';
+  explosion.position.set(center.x, center.y + 0.55, center.z);
+  const reducedFlash = atmosphereSettings.reduceFlashes;
+  const outer = new Mesh(
+    createComicBurstGeometry(radius * 0.74),
+    new MeshBasicMaterial({
+      color: reducedFlash ? '#a96348' : '#ed6738',
+      transparent: true,
+      opacity: reducedFlash ? 0.68 : 0.96,
+      side: 2,
+      depthWrite: false,
+    }),
+  );
+  outer.rotation.x = -Math.PI / 2;
+  const inner = new Mesh(
+    createComicBurstGeometry(radius * 0.48),
+    new MeshBasicMaterial({
+      color: reducedFlash ? '#c29b5c' : '#ffd866',
+      transparent: true,
+      opacity: reducedFlash ? 0.7 : 0.98,
+      side: 2,
+      depthWrite: false,
+    }),
+  );
+  inner.rotation.x = -Math.PI / 2;
+  inner.position.y = 0.025;
+  const core = new Mesh(
+    new SphereGeometry(radius * 0.31, 8, 6),
+    new MeshBasicMaterial({
+      color: reducedFlash ? '#b49a71' : '#fff0aa',
+      transparent: true,
+      opacity: reducedFlash ? 0.58 : 0.96,
+    }),
+  );
+  core.position.y = 0.8;
+  const smokeMaterial = new MeshBasicMaterial({
+    color: '#656863',
+    transparent: true,
+    opacity: 0.76,
+    depthWrite: false,
+  });
+  for (let index = 0; index < 7; index += 1) {
+    const angle = (index / 7) * Math.PI * 2;
+    const puff = new Mesh(new SphereGeometry(radius * 0.22, 7, 5), smokeMaterial);
+    puff.position.set(
+      Math.cos(angle) * radius * 0.42,
+      1.4 + (index % 3) * 0.26,
+      Math.sin(angle) * radius * 0.42,
+    );
+    puff.scale.set(1.15, 1.3, 0.95);
+    explosion.add(puff);
+  }
+  explosion.add(outer, inner, core);
+  scene.add(explosion);
+  const duration = 1.15;
+  timedEffects.push({
+    object: explosion,
+    remaining: duration,
+    duration,
+    onUpdate: (progress) => {
+      explosion.scale.setScalar(0.55 + progress * 0.7);
+      smokeMaterial.opacity = 0.76 * (1 - progress * 0.8);
+    },
+  });
+
+  if (!atmosphereSettings.reduceMotion) {
+    for (let index = 0; index < 4; index += 1) {
+      const angle = (index / 4) * Math.PI * 2;
+      const smokePosition = center
+        .clone()
+        .add(new Vector3(Math.cos(angle) * radius * 0.28, 0.5, Math.sin(angle) * radius * 0.28));
+      particleBursts.burst(smokePosition, '#777972', 7, 2.2, 1.3);
+    }
+    particleBursts.burst(center.clone().add(new Vector3(0, 0.7, 0)), '#dd8050', 8, 3.1, 0.75);
+    if (atmosphereSettings.shakeIntensity > 0)
+      cameraRig.kickShake(0.14 * atmosphereSettings.shakeIntensity, 0.32);
+  }
+}
+
+function fireArtilleryAtPointer(): void {
+  if (gamePhase !== 'active' || !combat.alive) return;
+  const aim = currentAimPosition();
+  const target = terrainPointAt(aim.x, aim.y);
+  if (!target) {
+    combat.lastMessage = 'Artillery needs a visible ground target.';
+    updateCombatUi();
+    return;
+  }
+  if (!combat.startAbilityCooldown(2, 20)) {
+    combat.lastMessage = 'Artillery is still recharging.';
+    updateCombatUi();
+    return;
+  }
+  const mark = new Group();
+  mark.name = 'Artillery impact marker';
+  mark.position.copy(target).add(new Vector3(0, 0.1, 0));
+  const fill = new Mesh(
+    new CircleGeometry(artilleryRadius, 48),
+    new MeshBasicMaterial({
+      color: '#df7046',
+      transparent: true,
+      opacity: 0.13,
+      side: 2,
+      depthWrite: false,
+    }),
+  );
+  fill.rotation.x = -Math.PI / 2;
+  const ring = new Mesh(
+    new RingGeometry(artilleryRadius - 0.16, artilleryRadius, 48),
+    new MeshBasicMaterial({
+      color: '#f0c36b',
+      transparent: true,
+      opacity: 0.88,
+      side: 2,
+      depthWrite: false,
+    }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  mark.add(fill, ring);
+  scene.add(mark);
+  timedEffects.push({
+    object: mark,
+    remaining: 1.2,
+    onExpire: () => {
+      const affected = combat.damageHostilesInRadius(target, artilleryRadius, 100);
+      combat.lastMessage = `Artillery impact · ${affected} hostile(s) caught in the blast.`;
+      addBlastVisual(target, artilleryRadius, 10);
+      audioFeedback.play('explosion');
+      updateCombatUi();
+    },
+  });
+  combat.lastMessage = 'Artillery inbound · impact in 1.2 seconds.';
+  updateCombatUi();
+}
+
+function throwGrenadeAtPointer(): void {
+  if (gamePhase !== 'active' || !combat.alive) return;
+  if (grenadeCount <= 0) {
+    combat.lastMessage = 'No grenades left in the backpack.';
+    updateCombatUi();
+    return;
+  }
+  if (grenadeCooldownRemaining > 0) return;
+  const pointer = currentAimPosition();
+  const aim = terrainPointAt(pointer.x, pointer.y);
+  if (!aim) {
+    combat.lastMessage = 'Grenade needs a visible ground target.';
+    updateCombatUi();
+    return;
+  }
+  const offset = new Vector3(aim.x - player.position.x, 0, aim.z - player.position.z);
+  if (offset.length() > 38) {
+    offset.setLength(38);
+    aim.set(
+      player.position.x + offset.x,
+      player.terrainHeight(player.position.x + offset.x, player.position.z + offset.z),
+      player.position.z + offset.z,
+    );
+  }
+  const projectile = new Mesh(
+    new SphereGeometry(0.18, 8, 6),
+    new MeshStandardMaterial({
+      color: '#44463d',
+      roughness: 0.58,
+      metalness: 0.3,
+      flatShading: true,
+    }),
+  );
+  projectile.name = 'Thrown grenade';
+  const start = player.position.clone().add(new Vector3(0, 1.1, 0));
+  projectile.position.copy(start);
+  scene.add(projectile);
+  const duration = Math.max(0.35, Math.min(1.1, offset.length() / 25));
+  grenadeProjectiles.push({ object: projectile, start, target: aim.clone(), elapsed: 0, duration });
+  grenadeCount -= 1;
+  grenadeCooldownRemaining = 1;
+  combat.lastMessage = `Grenade thrown · ${grenadeCount} remaining.`;
+  updateCombatUi();
+}
+
+function impactGrenade(point: Vector3): void {
+  const affected = combat.damageHostilesInRadius(point, grenadeBlastRadius, 100);
+  combat.lastMessage = `Grenade blast · ${affected} hostile(s) caught in the explosion.`;
+  addBlastVisual(point, grenadeBlastRadius, 5);
+  audioFeedback.play('explosion');
+  updateCombatUi();
+}
+
+function animateFieldAbilities(delta: number): void {
+  grenadeCooldownRemaining = Math.max(0, grenadeCooldownRemaining - delta);
+  updateTurretPlacementPreview();
+  for (let index = grenadeProjectiles.length - 1; index >= 0; index -= 1) {
+    const grenade = grenadeProjectiles[index]!;
+    grenade.elapsed += delta;
+    const progress = Math.min(1, grenade.elapsed / grenade.duration);
+    grenade.object.position.lerpVectors(grenade.start, grenade.target, progress);
+    grenade.object.position.y +=
+      Math.sin(progress * Math.PI) * Math.min(3.4, grenade.start.distanceTo(grenade.target) * 0.09);
+    grenade.object.rotation.set(progress * 8, progress * 5, progress * 3);
+    if (progress < 1) continue;
+    const target = grenade.target.clone();
+    scene.remove(grenade.object);
+    disposeTree(grenade.object);
+    grenadeProjectiles.splice(index, 1);
+    impactGrenade(target);
+  }
+
+  for (let index = activeTurrets.length - 1; index >= 0; index -= 1) {
+    const turret = activeTurrets[index]!;
+    turret.activeRemaining = Math.max(0, turret.activeRemaining - delta);
+    if (
+      turret.activeRemaining > 0 &&
+      combat.alive &&
+      (gamePhase === 'active' || gamePhase === 'extracting')
+    ) {
+      turret.fireRemaining -= delta;
+      const target = combat.zombies
+        .filter(
+          (zombie) =>
+            zombie.alive &&
+            Math.hypot(zombie.position.x - turret.x, zombie.position.z - turret.z) <=
+              turretAttackRadius,
+        )
+        .sort(
+          (a, b) =>
+            Math.hypot(a.position.x - turret.x, a.position.z - turret.z) -
+            Math.hypot(b.position.x - turret.x, b.position.z - turret.z),
+        )[0];
+      if (target) {
+        const dx = target.position.x - turret.x;
+        const dz = target.position.z - turret.z;
+        turret.gun.rotation.y = Math.atan2(-dx, -dz);
+        if (turret.fireRemaining <= 0) {
+          turret.fireRemaining = 0.82;
+          turret.object.updateMatrixWorld(true);
+          const muzzle = turret.object.localToWorld(new Vector3(0.17, 1.48, -1.03));
+          const hitPoint = target.position.clone().add(new Vector3(0, 1.05, 0));
+          combat.damageHostile(target.id, 22);
+          combat.lastMessage = `Auto turret hit ${target.id}.`;
+          addShotEffect(muzzle, hitPoint);
+          if (!atmosphereSettings.reduceMotion)
+            particleBursts.burst(hitPoint, '#edc773', 4, 1.2, 0.2);
+          audioFeedback.play('shot');
+          updateCombatUi();
+        }
+      }
+    }
+    if (turret.activeRemaining <= 0) {
+      const collapseDuration = 0.6;
+      if (turret.collapseRemaining === undefined) {
+        turret.collapseRemaining = collapseDuration;
+        combat.lastMessage = 'Auto turret collapsing.';
+        updateCombatUi();
+      }
+      turret.collapseRemaining = Math.max(0, turret.collapseRemaining - delta);
+      const scale = Math.max(0.02, turret.collapseRemaining / collapseDuration);
+      turret.object.scale.set(1, scale, 1);
+      turret.object.rotation.z = (1 - scale) * 0.16;
+      if (turret.collapseRemaining <= 0) {
+        scene.remove(turret.object);
+        disposeTree(turret.object);
+        activeTurrets.splice(index, 1);
+      }
+    }
+  }
 }
 
 function addDashIndicator(): void {
@@ -2584,10 +3123,12 @@ function animateEffects(delta: number): void {
   for (let index = timedEffects.length - 1; index >= 0; index -= 1) {
     const effect = timedEffects[index];
     effect.remaining -= delta;
+    if (effect.duration) effect.onUpdate?.(Math.max(0, 1 - effect.remaining / effect.duration));
     if (effect.remaining > 0) continue;
     scene.remove(effect.object);
     disposeTree(effect.object);
     timedEffects.splice(index, 1);
+    effect.onExpire?.();
   }
 }
 
@@ -2596,21 +3137,17 @@ player = new PlayerController(
   () => switchView(),
   (slot: AbilitySlot) => {
     if (gamePhase !== 'active' && !stressActive) return;
-    if (!combat.activateAbility(slot, player.position)) return;
-    if (slot === 1) {
-      audioFeedback.play('heal');
-      addAbilityParticles('#b3d89c');
-    } else if (slot === 2) {
-      addShockEffect();
-      audioFeedback.play('shock');
-      addAbilityParticles('#9fd8d0', 14);
-      if (!atmosphereSettings.reduceMotion)
-        cameraRig.kickShake(0.04 * atmosphereSettings.shakeIntensity, 0.22);
-    } else {
-      audioFeedback.play('adrenaline');
-      addAbilityParticles('#e9cb7a');
+    if (slot === 2) {
+      fireArtilleryAtPointer();
+      return;
     }
+    if (slot !== 3 || !combat.activateAbility(slot)) return;
+    audioFeedback.play('adrenaline');
+    addAbilityParticles('#e9cb7a');
   },
+  () => beginTurretPlacement(),
+  () => finishTurretPlacement(),
+  () => cancelTurretPlacement(),
   () => {
     if (gamePhase !== 'active' && !stressActive) return false;
     if (cameraRig.mode === 'top-down') updateTopDownDashAim(pointerX, pointerY);
@@ -2623,6 +3160,7 @@ player = new PlayerController(
     if (started && cameraRig.mode === 'top-down') autoAttackTargetId = undefined;
     return started;
   },
+  () => throwGrenadeAtPointer(),
 );
 scene.add(player.visual);
 createCampInteractiveViews();
@@ -2843,6 +3381,12 @@ function pointToNdc(event: PointerEvent | MouseEvent): Vector2 {
   return document.pointerLockElement === canvas
     ? new Vector2(0, 0)
     : pointerNdc(event.clientX, event.clientY);
+}
+
+function currentAimPosition(): { x: number; y: number } {
+  return document.pointerLockElement === canvas
+    ? { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+    : { x: pointerX, y: pointerY };
 }
 
 function terrainPointAt(clientX: number, clientY: number): Vector3 | undefined {
@@ -3088,7 +3632,13 @@ function moveToPointer(event: MouseEvent): void {
 }
 
 window.addEventListener('keydown', (event) => {
-  if (event.code !== 'Escape' || cameraRig.mode !== 'top-down' || !navigationTask) return;
+  if (event.code !== 'Escape') return;
+  if (cancelTurretPlacement()) {
+    combat.lastMessage = 'Turret placement cancelled.';
+    updateCombatUi();
+    return;
+  }
+  if (cameraRig.mode !== 'top-down' || !navigationTask) return;
   event.preventDefault();
   clearNavigation('CANCELLED');
   combat.lastMessage = 'Click-to-move route cancelled.';
@@ -3097,6 +3647,16 @@ window.addEventListener('keydown', (event) => {
 
 canvas.addEventListener('contextmenu', (event) => {
   event.preventDefault();
+  if (suppressPlacementContextMenu) {
+    suppressPlacementContextMenu = false;
+    return;
+  }
+  if (turretPreview) {
+    cancelTurretPlacement();
+    combat.lastMessage = 'Turret placement cancelled.';
+    updateCombatUi();
+    return;
+  }
   moveToPointer(event);
 });
 canvas.addEventListener(
@@ -3140,6 +3700,14 @@ document.addEventListener('mousemove', (event) => {
   );
 });
 canvas.addEventListener('pointerdown', (event) => {
+  if (turretPreview && (event.button === 0 || event.button === 2)) {
+    event.preventDefault();
+    cancelTurretPlacement();
+    combat.lastMessage = 'Turret placement cancelled.';
+    updateCombatUi();
+    suppressPlacementContextMenu = event.button === 2;
+    return;
+  }
   if (event.button !== 0) return;
   pointerStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
   if (cameraRig.mode !== 'third-person' || document.pointerLockElement === canvas) return;
@@ -3329,6 +3897,7 @@ function animate(now: number): void {
       player.update(fixedStep, cameraRig.mode, cameraRig.yaw, 1);
       updateNavigationProgress();
     } else if (gamePhase === 'active' || gamePhase === 'extracting') {
+      combat.tickCooldowns(fixedStep);
       if (gamePhase === 'active') {
         if (!interiorSession) runElapsed += fixedStep;
         const warningTimes = [50, 110];
@@ -3360,7 +3929,7 @@ function animate(now: number): void {
       if (player.isDashing && !observedDash && cameraRig.mode === 'top-down') addDashIndicator();
       const wasDashing = player.isDashing;
       if (gamePhase === 'extracting' || interiorSession || runElapsed >= 12)
-        combat.tick(fixedStep, player.position);
+        combat.tickHostiles(fixedStep, player.position);
       if (!combat.alive) {
         simulationAccumulator = 0;
         break;
@@ -3435,6 +4004,7 @@ function animate(now: number): void {
       cameraRig.currentTarget.z - camera.position.z,
     );
   }
+  animateFieldAbilities(delta);
   animateEffects(delta);
   if (gamePhase === 'active' || gamePhase === 'extracting') {
     if (!interiorSession) updateExtractionGuide();

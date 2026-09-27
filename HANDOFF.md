@@ -23,13 +23,13 @@ Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain preset
 ## Phase 2 decisions and tuning
 
 - Third-person abilities use `1/2/3`. Top-down abilities use `W/E/R`; the active map is shown in the field controls and HUD. `Tab` switches views.
-- `Q` dashes for 0.22 seconds at 20 m/s (about 4.4 m) with a 2.5-second cooldown and no resource cost. Switching views preserves the dash direction; switching clears held movement keys.
+- `Q` dashes for 0.22 seconds at 20 m/s (about 4.4 m) with a 2-second cooldown and no resource cost. Switching views preserves the dash direction; switching clears held movement keys.
 - In top-down view, Q takes its direction from the current cursor position and briefly displays a ring-and-arrow cue. When the dash ends, the click-to-move route is recalculated from the landing point to its saved destination to avoid backtracking.
 - A top-down shot turns the player toward its aim point and briefly preserves that facing while moving. Hovering a live hostile changes the cursor/reticle to a square target mark.
 - Top-down left-click assist selects a visible living hostile within an invisible 44 CSS-pixel radius of the pointer. It keeps firing on the rifle cooldown until the player issues a move or dash, clicks empty space, switches views, or the hostile dies. Clicking another hostile changes the target. Selecting a hostile clears the previous move route.
 - Third-person pitch now permits aiming above the horizon. Camera position orbits a fixed 9.3 m sphere centered 1.75 m above the terrain at the player, with a small right-side bias; the low edge is clamped above the ground while the upward view angle remains available.
 - The camera aims along its yaw and pitch, and the player faces that horizontal look direction. Third-person follow updates directly after view transitions, so mouse orbit does not trail.
-- Field dressing restores 35 health and has a 12-second cooldown. Shock pulse deals 40 damage and stuns hostiles within 9 m for 1.8 seconds; cooldown is 9 seconds. Adrenaline raises movement speed by 50% for 5 seconds; cooldown is 14 seconds.
+- Field ability bindings are top-down W/E/R and third-person 1/2/3. Slot 1 is a hold-to-place turret: preview radius 18 m, five seconds of firing at targets within 10 m, 22 damage every 0.82 seconds, then a 0.6-second collapse; cooldown is 10 seconds. Slot 2 calls artillery at the cursor with a 1.2-second warning, a 7 m blast radius, 100 damage, and a scorch decal that lasts 10 seconds; cooldown is 20 seconds. Slot 3 remains adrenaline, raising movement speed by 50% for 5 seconds; cooldown is 14 seconds. Either mouse button or Escape cancels a turret preview. G throws cursor-aimed grenades; deployments start with three, each has a one-second cooldown, a 38 m throw limit, a 4.2 m blast radius, and 100 damage.
 - The rifle deals 50 damage with a 0.24-second firing cooldown. Hostiles have 100 health. The three-hostile encounter is intentionally small and uses A* repaths around static colliders every 0.7 seconds.
 - Player health is 100. Each hostile attack deals 8 damage every 1.3 seconds while in melee range. Phase 3 replaces the Phase 2 restart overlay with a run-loss result and return-to-camp action.
 - Top-down player movement uses a 2 m A* grid with static collider clearance. Phase 5 adds walkable route smoothing, moving-hostile blockers, interaction approaches, route cancellation, and stuck recovery. Third-person movement remains direct, camera-relative, and collision-aware.
@@ -38,6 +38,7 @@ Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain preset
 ## What changed
 
 - Added the view-specific input map and a visible control panel that changes with camera mode.
+- Replaced the field dressing and shock pulse key actions with a hold-to-place auto turret and cursor-aimed artillery; shortened the dash cooldown to two seconds; added three carried grenades per deployment on G; and updated the field controls and playtest checklist.
 - Added player dash, top-down click-to-move, direct third-person movement, collision checks, and the visible rifle.
 - Added `CombatSimulation` for health, rifle fire rate, abilities, hostile damage, pursuit, stun, death, and restart state.
 - Added three low-poly zombies, obstacle-aware pursuit, and combat feedback HUD/effects.
@@ -199,6 +200,15 @@ Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain preset
 - Replaced player-following fog spheres with animated, irregular world-space fog banks that drift slowly over the map and respond to scene lights; restored distance-based haze to soften distant scenery. Rain now places about twice as many road puddles with more varied sizes.
 - `npm test` passed (14 files, 50 tests); `npm run build` passed and emits the 163.46 kB game chunk and existing 562.77 kB asset-document chunk (Vite's advisory above 500 kB); `npm run format:check` and `git diff --check` passed. A browser playtest was not repeated for this combined revision; the owner is continuing the combined playtest.
 - Implementation commit: `9ec8283`.
+
+## Field ability revision (2026-09-27)
+
+- Kept the established view-specific bindings: W/E/R in top-down and 1/2/3 in third-person. Q remains dash with a two-second cooldown; R/3 remains adrenaline.
+- W/1 starts a turret preview at the cursor and shows the 18 m placement ring. Releasing places it on walkable ground; left-click, right-click, or Escape cancels. The turret fires at hostiles within 10 m for five seconds, then collapses over 0.6 seconds. Successful placement starts a 10-second cooldown.
+- E/2 places a warning circle at the cursor and impacts after 1.2 seconds. The 7 m blast deals 100 damage and leaves its scorched-ground decal for 10 seconds. Cooldown is 20 seconds.
+- G throws one of three per-deployment grenades toward visible ground within 38 m. Grenades have a one-second cooldown and a 4.2 m, 100-damage blast; grenade use is separate from cargo capacity.
+- Fixed top-down pursuit: player routing and hostile pathfinding now keep distinct navigation grids in both outdoor and building scenes. The player grid's moving-hostile blockers no longer make enemies path around or block one another while chasing.
+- Updated the README controls and combined playtest checklist. `npm run build` passed after the pursuit-grid correction. Automated tests and browser playtest were not run for this revision.
 
 ## Verification
 

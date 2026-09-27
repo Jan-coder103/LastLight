@@ -1,7 +1,7 @@
 import type { Weather } from './settings';
 
 export type AudioCue =
-  'shot' | 'hit' | 'damage' | 'dash' | 'shock' | 'heal' | 'adrenaline' | 'thunder';
+  'shot' | 'hit' | 'damage' | 'dash' | 'shock' | 'heal' | 'adrenaline' | 'thunder' | 'explosion';
 
 /** Small Web Audio cues; the context is created only after a user gesture. */
 export class AudioFeedback {
@@ -49,26 +49,30 @@ export class AudioFeedback {
       source.stop(now + duration);
       return;
     }
-    if (cue === 'thunder') {
+    if (cue === 'thunder' || cue === 'explosion') {
       const source = context.createBufferSource();
       source.buffer = this.getNoiseBuffer(context);
       const filter = context.createBiquadFilter();
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(170, now);
+      filter.frequency.setValueAtTime(cue === 'thunder' ? 170 : 460, now);
       const gain = context.createGain();
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.linearRampToValueAtTime(0.042, now + 0.26);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.1);
+      const duration = cue === 'thunder' ? 2.1 : 0.62;
+      gain.gain.linearRampToValueAtTime(
+        cue === 'thunder' ? 0.042 : 0.095,
+        now + (cue === 'thunder' ? 0.26 : 0.025),
+      );
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
       source.connect(filter).connect(gain).connect(context.destination);
       source.start(now);
-      source.stop(now + 2.15);
+      source.stop(now + duration + 0.05);
       return;
     }
 
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     const tones: Record<
-      Exclude<AudioCue, 'shot' | 'dash' | 'thunder'>,
+      Exclude<AudioCue, 'shot' | 'dash' | 'thunder' | 'explosion'>,
       [number, number, number, OscillatorType, number]
     > = {
       hit: [620, 360, 0.11, 'triangle', 0.045],

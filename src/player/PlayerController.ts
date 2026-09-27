@@ -85,6 +85,7 @@ export class PlayerController {
   readonly position = new Vector3();
   readonly velocity = new Vector3();
   private readonly keys = new Set<string>();
+  private readonly heldAbilityKeys = new Set<string>();
   private readonly path: NavPoint[] = [];
   private readonly cursorWorldPoint = new Vector3();
   private world: WorldData;
@@ -103,19 +104,31 @@ export class PlayerController {
   private navigationStuck = false;
   private onViewToggle: () => void;
   private onAbility: (slot: AbilitySlot) => void;
+  private onAbilityHoldStart: () => void;
+  private onAbilityHoldEnd: () => void;
+  private onAbilityHoldCancel: () => void;
   private onDashRequest: () => boolean;
+  private onGrenadeRequest: () => void;
 
   constructor(
     world: WorldData,
     onViewToggle: () => void,
     onAbility: (slot: AbilitySlot) => void,
+    onAbilityHoldStart: () => void,
+    onAbilityHoldEnd: () => void,
+    onAbilityHoldCancel: () => void,
     onDashRequest: () => boolean,
+    onGrenadeRequest: () => void,
   ) {
     this.world = world;
     this.surfaceHeight = (x, z) => terrainHeightAt(world.seed, x, z);
     this.onViewToggle = onViewToggle;
     this.onAbility = onAbility;
+    this.onAbilityHoldStart = onAbilityHoldStart;
+    this.onAbilityHoldEnd = onAbilityHoldEnd;
+    this.onAbilityHoldCancel = onAbilityHoldCancel;
     this.onDashRequest = onDashRequest;
+    this.onGrenadeRequest = onGrenadeRequest;
     this.setPosition(world.spawn.x, world.spawn.z);
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('keyup', this.handleKeyUp);
@@ -392,7 +405,19 @@ export class PlayerController {
     const ability = abilityFromKey(event.code, this.currentMode);
     if (ability !== undefined) {
       event.preventDefault();
-      if (!event.repeat) this.onAbility(ability);
+      if (!event.repeat) {
+        if (ability === 1) {
+          this.heldAbilityKeys.add(event.code);
+          this.onAbilityHoldStart();
+        } else {
+          this.onAbility(ability);
+        }
+      }
+      return;
+    }
+    if (event.code === 'KeyG') {
+      event.preventDefault();
+      if (!event.repeat) this.onGrenadeRequest();
       return;
     }
     if (isDashKey(event.code)) {
@@ -408,10 +433,13 @@ export class PlayerController {
 
   private handleKeyUp = (event: KeyboardEvent): void => {
     this.keys.delete(event.code);
+    if (this.heldAbilityKeys.delete(event.code)) this.onAbilityHoldEnd();
   };
 
   private clearInput = (): void => {
     this.keys.clear();
+    if (this.heldAbilityKeys.size > 0) this.onAbilityHoldCancel();
+    this.heldAbilityKeys.clear();
   };
 
   private handleVisibility = (): void => {

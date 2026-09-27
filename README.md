@@ -23,9 +23,10 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. The target 
 | Drag on the scene              | Orbit camera and aim                  | —                                     |
 | Mouse wheel                    | Zoom camera in or out                 | Zoom camera in or out                 |
 | Optional **Capture Mouse**     | Continuous look; Escape releases it   | Not available                         |
-| Q                              | Dash; 2.5-second cooldown, no cost    | Dash; 2.5-second cooldown, no cost    |
-| 1 / 2 / 3                      | Heal / shock pulse / adrenaline       | —                                     |
-| W / E / R                      | —                                     | Heal / shock pulse / adrenaline       |
+| Q                              | Dash; 2-second cooldown, no cost      | Dash; 2-second cooldown, no cost      |
+| 1 / 2 / 3                      | Turret / artillery / adrenaline       | —                                     |
+| W / E / R                      | —                                     | Turret / artillery / adrenaline       |
+| G                              | Throw grenade                         | Throw grenade                         |
 | X                              | Use one carried supply to heal        | Use one carried supply to heal        |
 | F                              | Interact, enter/exit, or board nearby | Interact, enter/exit, or board nearby |
 | Tab or **Change View**         | Switch camera without moving player   | Switch camera without moving player   |
@@ -41,7 +42,7 @@ The extraction arrow and distance remain on screen during the run. A radio warni
 
 Building doors become usable during an active run. Press **F** or click a door, then use **F** or the lit exit marker to return to the same outdoor position. The generated 2–4 room layout, loot, and infected encounter repeat for that building and world seed. Collected interior loot and defeated infected remain cleared for the rest of that run. The outdoor horde and run timer pause while inside; player health and ability cooldowns continue normally.
 
-The Phase 2 camera and combat rules still apply. In top-down view, clicking near a visible hostile keeps firing until you move, dash, click empty space, switch views, or the hostile dies. Q dashes toward the cursor and briefly shows its direction; the player replans the remaining click-to-move route after landing. A dash already in progress keeps its world direction through a camera change. The shock pulse damages and briefly stuns nearby hostiles; adrenaline increases movement speed for five seconds; field dressing restores health when injured.
+In top-down view, clicking near a visible hostile keeps firing until you move, dash, click empty space, switch views, or the hostile dies. Q dashes toward the cursor and briefly shows its direction; the player replans the remaining click-to-move route after landing. A dash already in progress keeps its world direction through a camera change. Hold W (or 1 in third-person) to preview a turret inside the 18 m placement circle; release to place it, or click either mouse button / press Escape to cancel. The turret attacks nearby hostiles for five seconds, collapses, and has a 10-second cooldown. E (or 2) marks the cursor's ground position and calls artillery after a 1.2-second warning; its blast leaves a scorch decal for 10 seconds and has a 20-second cooldown. R (or 3) keeps adrenaline, increasing movement speed by 50% for five seconds. Each deployment starts with three grenades; G throws one toward the cursor, with a one-second cooldown and a 38 m throw limit. Grenades are carried run supplies and do not use cargo capacity.
 
 ## Project commands
 
@@ -147,7 +148,7 @@ Create a small module in `src/assets/` that exports an `AuthoredAsset` with a st
 
 1. At camp, press **O**. Check that seeded lighting and weather are selected by default, then choose **Low sun** and **Clear** and deploy. Note the scene's orientation/readability and confirm the displayed sky preset stays fixed during the run.
 2. Return to camp, choose **High moon** and **Mist**, deploy again, then repeat with **Rain & distant thunder**. Check the map remains readable, irregular world-space fog banks drift slowly across the map without visible sphere boundaries, distant haze softens the horizon, fog scatters light, varied rain puddles catch highlights, rain stays outdoors, and thunder is distant and restrained.
-3. In a regular encounter, fire the rifle and use dash, shock pulse, and other abilities. Check the muzzle/hit/ability particles, reticle and damage feedback, and camera shake. Try the same actions after enabling reduced motion and reduced flashes.
+3. In a regular encounter, fire the rifle and use Q dash, hold/release W or 1 to place a turret, cancel turret previews with either mouse button, and aim E or 2 artillery at the cursor. Check the warning circle, explosion, smoke, and 10-second scorch decal. Throw grenades with G until the carried count reaches zero, then check that an extra press cannot throw. Use R or 3 for adrenaline. Try the same actions after enabling reduced motion and reduced flashes.
 4. Toggle rain particles and audio cues separately during an active run. Confirm each option takes effect immediately. Set a new lighting/weather preset during that run; it should not change until the next deployment.
 5. Adjust impact shake from 0% to a comfortable value. Reload the page and confirm options persist; if the operating system requests reduced motion and no saved choice exists, confirm the reduced-motion default is respected.
 6. Open **Horde Simulation Lab**, start 10,000 agents, and inspect weather/effects with diagnostics visible. Record browser, viewport, camera, frame-time p95, JS/GPU timing, draw calls, triangles, heap, and active effects. Compare stress and normal scenes; report stutter, visual obstruction, discomfort, or audio issues.
