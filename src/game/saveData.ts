@@ -1,3 +1,12 @@
+import {
+  emptyItemGrid,
+  gridRows,
+  itemDefinitions,
+  parseItemGrid,
+  type ItemGrid,
+  type ItemId,
+} from './itemInventory';
+
 export type ResourceKind = 'gear' | 'supplies' | 'money' | 'fuel';
 
 export type ResourceInventory = Record<ResourceKind, number>;
@@ -7,6 +16,9 @@ export interface SaveData {
   base: ResourceInventory;
   cargoUpgrade: boolean;
   completedRuns: number;
+  scrap: number;
+  storedItems: ItemGrid;
+  storedReserve: ItemId[];
 }
 
 export const cargoCapacityBase = 10;
@@ -22,6 +34,9 @@ export function createDefaultSave(): SaveData {
     base: { gear: 2, supplies: 3, money: 80, fuel: 2 },
     cargoUpgrade: false,
     completedRuns: 0,
+    scrap: 0,
+    storedItems: emptyItemGrid(),
+    storedReserve: [],
   };
 }
 
@@ -50,6 +65,15 @@ export function parseSave(raw: string | null): SaveData {
       },
       cargoUpgrade: record.cargoUpgrade === true,
       completedRuns: validCount(record.completedRuns),
+      scrap: validCount(record.scrap),
+      storedItems: parseItemGrid(record.storedItems, gridRows(record.cargoUpgrade === true)),
+      storedReserve: Array.isArray(record.storedReserve)
+        ? record.storedReserve
+            .filter(
+              (id): id is ItemId => typeof id === 'string' && Object.hasOwn(itemDefinitions, id),
+            )
+            .slice(0, 256)
+        : [],
     };
   } catch {
     return createDefaultSave();

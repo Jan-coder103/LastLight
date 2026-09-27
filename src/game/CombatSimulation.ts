@@ -148,12 +148,12 @@ export class CombatSimulation {
     return true;
   }
 
-  tryFire(targetId?: string): boolean {
+  tryFire(targetId?: string, damage = weaponDamage, cooldown = weaponCooldown): boolean {
     if (!this.alive || this.fireCooldownRemaining > 0) return false;
-    this.fireCooldownRemaining = weaponCooldown;
+    this.fireCooldownRemaining = cooldown;
     const target = targetId ? this.zombies.find((zombie) => zombie.id === targetId) : undefined;
     if (target?.alive) {
-      target.health = Math.max(0, target.health - weaponDamage);
+      target.health = Math.max(0, target.health - damage);
       if (target.health === 0) {
         target.alive = false;
         this.lastMessage = 'Hostile eliminated.';

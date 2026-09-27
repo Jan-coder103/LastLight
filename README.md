@@ -26,6 +26,7 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. The target 
 | 1 / 2 / 3                      | Turret / artillery / adrenaline       | —                                     |
 | W / E / R                      | —                                     | Turret / artillery / adrenaline       |
 | G                              | Throw grenade                         | Throw grenade                         |
+| I                              | Open shaped backpack                  | Open shaped backpack                  |
 | X                              | Use one carried supply to heal        | Use one carried supply to heal        |
 | F                              | Interact, enter/exit, or board nearby | Interact, enter/exit, or board nearby |
 | Tab                            | Switch camera without moving player   | Switch camera without moving player   |
@@ -33,7 +34,11 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. The target 
 
 Press **O** or choose **Atmosphere** to open lighting, weather, and accessibility options. Lighting is seeded per run by default, with low sun and high moon alternatives. Weather is also seeded by default, with clear, mist, and rain options. Mist adds slowly drifting, irregular volumetric fog banks, light scattering, and denser distance haze; rain adds a lighter haze and reflective puddles of varied sizes along roads. Changing these presets affects your next deployment; the current run's sky stays fixed. Reduce motion/camera shake, reduce flashes, hide rain particles, disable audio cues, or adjust impact-shake intensity at any time. Accessibility options apply immediately and persist separately from camp inventory.
 
-At camp, use **W/A/S/D** to walk, right-click in top-down view to route, **F** at a marked service or building, **M** for the camp terminal, and **Tab** to change camera. The quartermaster opens its trade menu, camp storage opens a read-only inventory view, and the operations board opens destination selection. **M** keeps the combined terminal available from anywhere in camp.
+At camp, use **W/A/S/D** to walk, right-click in top-down view to route, **F** at a marked service or building, **M** for the camp terminal, **I** for the backpack, and **Tab** to change camera. The quartermaster opens its trade menu, camp storage opens the resource ledger, and the operations board opens destination selection. **M** keeps the combined terminal available from anywhere in camp.
+
+The backpack has an 8×6 grid, with the scout shown on the left. Drag shaped items between cells; drop one on the bottom arrow to put it on the ground for later pickup. Click a firearm in the backpack to equip it. A rifle occupies 4×2 cells, a tire 5×5, and smaller items as little as 1×1. The 90-credit backpack and cargo-harness upgrade expands the grid to 8×8 and the existing cargo limit from 10 to 15. Opening the backpack pauses an active encounter. Each deployment issues a rifle and three grenades. Field caches now reveal one shaped item alongside their existing resource pickups. Carried shaped items are lost on death and secured at camp after extraction; items already banked at camp remain safe. Recovered items that do not fit in the camp grid wait in a safe reserve list until you make space.
+
+The scrap hut and two scrap piles are beside the east camp path. Speak with the worker there to break scrap items into weightless scrap currency, then exchange five scrap for ten credits. Scrap items cannot be sold. The food stand near the west path buys and sells all eight food items for credits; food has no consumption effect yet. Both vendors use the same backpack grid, so a purchase needs a fitting space. Simple glyphs and colored tiles stand in for later item sprites.
 
 The compact HUD at the bottom center shows health as a red ring and Q/W/E/R/G abilities with cooldown timers. Third-person slot keys display as 1/2/3 to match the field controls. The current camera view is listed in the right-side dev telemetry panel; the left controls panel lists **Tab** for switching views.
 

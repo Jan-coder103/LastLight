@@ -2,7 +2,13 @@ import type { BuildingEntrance, WorldData } from '../world/generateWorld';
 
 export interface CampService {
   id: string;
-  kind: 'camp-shop' | 'camp-storage' | 'camp-operations' | 'camp-departure';
+  kind:
+    | 'camp-shop'
+    | 'camp-storage'
+    | 'camp-operations'
+    | 'camp-departure'
+    | 'camp-scrap'
+    | 'camp-food';
   x: number;
   z: number;
 }
@@ -12,6 +18,8 @@ export const campServices: readonly CampService[] = [
   { id: 'camp-storage', kind: 'camp-storage', x: -18, z: 8 },
   { id: 'camp-operations', kind: 'camp-operations', x: 0, z: -23 },
   { id: 'camp-departure', kind: 'camp-departure', x: 17, z: 17 },
+  { id: 'camp-scrap', kind: 'camp-scrap', x: 9, z: 9 },
+  { id: 'camp-food', kind: 'camp-food', x: -8, z: 8 },
 ];
 
 export const campEntrances: readonly BuildingEntrance[] = [

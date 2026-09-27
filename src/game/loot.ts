@@ -2,6 +2,7 @@ import { createRandom } from '../core/seededRandom';
 import type { GridNavigator } from '../navigation/GridNavigator';
 import type { WorldData } from '../world/generateWorld';
 import type { ResourceKind } from './saveData';
+import { scavengedItems, type ItemId } from './itemInventory';
 
 export interface CacheSite {
   id: string;
@@ -18,6 +19,7 @@ export interface LootDrop {
   x: number;
   z: number;
   collected: boolean;
+  itemId?: ItemId;
 }
 
 const lootKinds: ResourceKind[] = ['gear', 'supplies', 'money', 'fuel'];
@@ -83,7 +85,7 @@ export function placeLootCaches(
 export function openCache(site: CacheSite, seed: string): LootDrop[] {
   const random = createRandom(`${seed}:contents:${site.id}`);
   const count = 2 + Math.floor(random() * 2);
-  return Array.from({ length: count }, (_, index) => {
+  const resources: LootDrop[] = Array.from({ length: count }, (_, index) => {
     const kind = lootKinds[Math.floor(random() * lootKinds.length)];
     const amount = kind === 'money' ? 12 + Math.floor(random() * 29) : 1 + Math.floor(random() * 2);
     const spread = (index - (count - 1) / 2) * 1.15;
@@ -97,4 +99,16 @@ export function openCache(site: CacheSite, seed: string): LootDrop[] {
       collected: false,
     };
   });
+  const itemId = scavengedItems[Math.floor(random() * scavengedItems.length)]!;
+  resources.push({
+    id: `${site.id}-item`,
+    cacheId: site.id,
+    kind: 'gear',
+    amount: 1,
+    x: site.x + 1.7,
+    z: site.z + 0.5,
+    collected: false,
+    itemId,
+  });
+  return resources;
 }

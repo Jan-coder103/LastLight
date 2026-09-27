@@ -400,6 +400,36 @@ function addQuartermaster(parent: Group): void {
   parent.add(stall);
 }
 
+function addScrapYard(parent: Group): void {
+  const hut = new Group();
+  hut.userData.interactiveId = 'camp-scrap';
+  box(hut, 3.5, 2.3, 2.6, materials.timber, 10.8, 1.15, 11.2);
+  const roof = box(hut, 4.2, 0.28, 3.3, materials.roof, 10.8, 2.48, 11.2);
+  roof.rotation.z = 0.12;
+  box(hut, 1.6, 1.25, 0.16, materials.darkMetal, 10.8, 0.63, 9.84);
+  for (const x of [6.5, 14.4]) {
+    box(hut, 1.7, 0.5, 1.6, materials.darkMetal, x, 0.25, 12.7);
+    box(hut, 1.15, 0.4, 1.2, materials.fence, x - 0.12, 0.68, 12.7);
+    box(hut, 0.9, 0.45, 0.9, materials.trim, x + 0.24, 0.92, 12.5);
+  }
+  addPerson(hut, 9, 0, 10.2, false, 1);
+  parent.add(hut);
+}
+
+function addFoodStand(parent: Group): void {
+  const stand = new Group();
+  stand.userData.interactiveId = 'camp-food';
+  box(stand, 4.4, 0.72, 1.05, materials.timber, -8, 0.62, 10.3);
+  for (const x of [-10, -6]) box(stand, 0.15, 2.4, 0.15, materials.timber, x, 1.3, 10.2);
+  box(stand, 4.9, 0.2, 2.1, materials.canvas, -8, 2.52, 10.1);
+  for (const x of [-9.3, -8, -6.7]) {
+    box(stand, 0.8, 0.34, 0.65, materials.trim, x, 1.16, 10.28);
+    mesh(new SphereGeometry(0.2, 7, 5), materials.red, x, 1.45, 10.2, stand);
+  }
+  addPerson(stand, -8, 0, 11.7, false, 2);
+  parent.add(stand);
+}
+
 function addStorehouse(parent: Group): void {
   const store = new Group();
   store.position.set(-18, 0, 15);
@@ -744,6 +774,8 @@ export function buildCamp(): Group {
   addBarracks(camp, 'camp-clinic', 15, -13, true);
   addStorehouse(camp);
   addQuartermaster(camp);
+  addScrapYard(camp);
+  addFoodStand(camp);
   addOperationsBoard(camp);
   addDeparturePad(camp);
   addGuard(camp, -5, 24.5, 0);

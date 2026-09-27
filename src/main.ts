@@ -60,6 +60,17 @@ import { benchmarkCountsForHorde, benchmarkHorde } from './game/HordeBenchmark';
 import { HordeSimulation, type HordeSpawnPattern } from './game/HordeSimulation';
 import { PerformanceWindow } from './game/PerformanceWindow';
 import { openCache, placeLootCaches, type CacheSite, type LootDrop } from './game/loot';
+import { InventoryPanel } from './game/InventoryPanel';
+import {
+  addItem,
+  bankScavengedItems,
+  emptyItemGrid,
+  gridRows,
+  itemDefinitions,
+  removeItem,
+  type ItemGrid,
+  type ItemId,
+} from './game/itemInventory';
 import {
   addCargo,
   cargoCapacity,
@@ -313,7 +324,9 @@ type InteractiveKind =
   | 'camp-shop'
   | 'camp-storage'
   | 'camp-operations'
-  | 'camp-departure';
+  | 'camp-departure'
+  | 'camp-scrap'
+  | 'camp-food';
 
 interface InteractiveView {
   id: string;
@@ -373,6 +386,17 @@ let hordeSyncMs = 0;
 let hordeSyncCount = 0;
 let saveData: SaveData = loadSave();
 let cargo = emptyInventory();
+let runItems: ItemGrid = emptyItemGrid();
+let issuedItemUids = new Set<string>();
+let equippedWeapon: ItemId = 'rifle';
+let droppedItemNumber = 0;
+let inventoryPanel: InventoryPanel;
+function activeItems(): ItemGrid {
+  return gamePhase === 'base' ? saveData.storedItems : runItems;
+}
+function syncGrenades(): void {
+  grenadeCount = runItems.items.filter((item) => item.id === 'grenade').length;
+}
 let runElapsed = 0;
 let arrivalElapsed = 0;
 let hoverElapsed = 0;
@@ -621,6 +645,7 @@ function renderControls(): void {
             row('DRAG', 'Look around'),
             row('F', 'Use nearby service / door'),
             row('M', 'Open camp terminal'),
+            row('I', 'Open backpack'),
             row('TAB', 'Switch camera'),
           ]
         : [
@@ -628,13 +653,14 @@ function renderControls(): void {
             row('ESC', 'Cancel route'),
             row('F', 'Use nearby service / door'),
             row('M', 'Open camp terminal'),
+            row('I', 'Open backpack'),
             row('TAB', 'Switch camera'),
           ]
       : cameraRig.mode === 'third-person'
         ? [
             row('W A S D', 'Move · camera-relative'),
             row('DRAG', 'Look / aim'),
-            row('LMB', 'Fire rifle'),
+            row('LMB', 'Fire equipped weapon'),
             row(
               'Q',
               `Dash${combat.dashCooldownRemaining > 0 ? ` · ${combat.dashCooldownRemaining.toFixed(1)}s` : ''}`,
@@ -643,6 +669,7 @@ function renderControls(): void {
             row('2', 'Call artillery at cursor'),
             row('3', 'Adrenaline'),
             row('G', `Throw grenade · ${grenadeCount} carried`),
+            row('I', 'Open backpack / equip weapon'),
             row('X', 'Use carried supply'),
             row('F', 'Interact / enter / exit'),
             row('TAB', 'Switch camera'),
@@ -659,6 +686,7 @@ function renderControls(): void {
             row('E', 'Call artillery at cursor'),
             row('R', 'Adrenaline'),
             row('G', `Throw grenade · ${grenadeCount} carried`),
+            row('I', 'Open backpack / equip weapon'),
             row('X', 'Use carried supply'),
             row('F', 'Interact / enter / exit'),
             row('TAB', 'Switch camera'),
@@ -785,8 +813,8 @@ function updateBaseUi(): void {
   elements.storageFuel!.textContent = String(saveData.base.fuel);
   elements.runCount!.textContent = String(saveData.completedRuns);
   elements.harnessStatus!.textContent = saveData.cargoUpgrade
-    ? `Cargo capacity: ${cargoCapacity(saveData)} units · upgraded`
-    : `Cargo capacity: ${cargoCapacity(saveData)} units`;
+    ? `Cargo ${cargoCapacity(saveData)} units · backpack 8×8 · upgraded`
+    : `Cargo ${cargoCapacity(saveData)} units · backpack 8×6`;
   elements.buySuppliesButton!.disabled = saveData.base.money < campPrices.supplies;
   elements.buyGearButton!.disabled = saveData.base.money < campPrices.gear;
   elements.sellSuppliesButton!.disabled = saveData.base.supplies < 1 || saveData.base.money >= 9999;
@@ -794,8 +822,8 @@ function updateBaseUi(): void {
   elements.buyCargoButton!.disabled =
     saveData.cargoUpgrade || saveData.base.money < campPrices.cargoUpgrade;
   elements.buyCargoButton!.innerHTML = saveData.cargoUpgrade
-    ? 'CARGO HARNESS INSTALLED <span>✓</span>'
-    : 'UPGRADE CARGO HARNESS <span>90 CR</span>';
+    ? 'BACKPACK & HARNESS UPGRADED <span>✓</span>'
+    : 'UPGRADE BACKPACK & HARNESS <span>90 CR</span>';
   elements.zoneStatus!.textContent = gamePhase === 'base' ? 'BASE' : 'ENGAGED';
 }
 
@@ -1392,11 +1420,15 @@ function createDropVisual(drop: LootDrop): Group {
   const group = new Group();
   group.name = `Pickup ${drop.id}`;
   group.userData.interactiveId = drop.id;
-  group.position.set(drop.x, terrainHeightAt(world.seed, drop.x, drop.z) + 0.48, drop.z);
+  group.position.set(
+    drop.x,
+    (gamePhase === 'base' ? 0 : terrainHeightAt(world.seed, drop.x, drop.z)) + 0.48,
+    drop.z,
+  );
   const token = new Mesh(
     new BoxGeometry(0.56, 0.56, 0.56),
     new MeshStandardMaterial({
-      color: colors[drop.kind],
+      color: drop.itemId ? itemDefinitions[drop.itemId].color : colors[drop.kind],
       roughness: 0.5,
       metalness: 0.16,
       flatShading: true,
@@ -1408,7 +1440,7 @@ function createDropVisual(drop: LootDrop): Group {
   const glow = new Mesh(
     new RingGeometry(0.4, 0.52, 22),
     new MeshBasicMaterial({
-      color: colors[drop.kind],
+      color: drop.itemId ? itemDefinitions[drop.itemId].color : colors[drop.kind],
       transparent: true,
       opacity: 0.56,
       side: 2,
@@ -1527,7 +1559,11 @@ function createInteriorLootVisual(drop: LootDrop): Group {
   group.userData.interactiveId = drop.id;
   const token = new Mesh(
     new BoxGeometry(0.48, 0.48, 0.48),
-    new MeshStandardMaterial({ color: colors[drop.kind], roughness: 0.8, flatShading: true }),
+    new MeshStandardMaterial({
+      color: drop.itemId ? itemDefinitions[drop.itemId].color : colors[drop.kind],
+      roughness: 0.8,
+      flatShading: true,
+    }),
   );
   token.position.y = 0.42;
   token.rotation.y = Math.PI / 4;
@@ -1535,7 +1571,11 @@ function createInteriorLootVisual(drop: LootDrop): Group {
   token.userData.interactiveId = drop.id;
   const marker = new Mesh(
     new RingGeometry(0.42, 0.54, 20),
-    new MeshBasicMaterial({ color: colors[drop.kind], transparent: true, opacity: 0.58 }),
+    new MeshBasicMaterial({
+      color: drop.itemId ? itemDefinitions[drop.itemId].color : colors[drop.kind],
+      transparent: true,
+      opacity: 0.58,
+    }),
   );
   marker.rotation.x = -Math.PI / 2;
   marker.position.y = 0.04;
@@ -1660,6 +1700,9 @@ function enterBuilding(entrance: BuildingEntrance): void {
 function leaveBuilding(resumePlayer = true): void {
   const session = interiorSession;
   if (!session) return;
+  const discarded = [...session.views.values()].flatMap((view) =>
+    view.drop?.cacheId === 'discard' && view.drop.itemId ? [view.drop.itemId] : [],
+  );
   interiorHostiles.set(session.entrance.id, combat.zombies.slice());
   scene.remove(session.group, session.lootGroup, zombieGroup);
   disposeTree(session.group);
@@ -1689,6 +1732,8 @@ function leaveBuilding(resumePlayer = true): void {
   cameraRig.setWorld(world);
   cameraRig.snapTo(player.position);
   interiorSession = undefined;
+  for (const id of discarded)
+    spawnGroundItem(id, session.returnPosition.x + 1.7, session.returnPosition.z + 0.7);
   navigationTask = undefined;
   autoAttackTargetId = undefined;
   setNavigationStatus('IDLE');
@@ -1718,6 +1763,37 @@ function addPickup(drop: LootDrop): void {
   });
 }
 
+function spawnGroundItem(id: ItemId, x: number, z: number): void {
+  const drop: LootDrop = {
+    id: `discard-${++droppedItemNumber}`,
+    cacheId: 'discard',
+    kind: 'gear',
+    amount: 1,
+    x,
+    z,
+    collected: false,
+    itemId: id,
+  };
+  const object =
+    interiorSession || campInteriorSession
+      ? createInteriorLootVisual(drop)
+      : createDropVisual(drop);
+  const views = activeInteractiveViews();
+  (
+    interiorSession?.lootGroup ??
+    campInteriorSession?.group ??
+    (gamePhase === 'base' ? campGroup : lootGroup)
+  ).add(object);
+  views.set(drop.id, { id: drop.id, kind: 'drop', x: drop.x, z: drop.z, object, drop });
+  if (gamePhase !== 'base') lootDrops.push(drop);
+}
+
+function dropInventoryItem(id: ItemId): void {
+  spawnGroundItem(id, player.position.x + 1.7, player.position.z + 0.7);
+  if (id === 'grenade') syncGrenades();
+  if (id === equippedWeapon) equippedWeapon = 'rifle';
+}
+
 function openLoot(view: InteractiveView): void {
   if (interiorSession || view.kind !== 'cache' || !view.cache || openedCacheIds.has(view.id))
     return;
@@ -1732,6 +1808,26 @@ function openLoot(view: InteractiveView): void {
 
 function collectLoot(view: InteractiveView): void {
   if (view.kind !== 'drop' || !view.drop || view.drop.collected) return;
+  if (view.drop.itemId) {
+    const item = addItem(activeItems(), view.drop.itemId, gridRows(saveData.cargoUpgrade));
+    if (!item) {
+      combat.lastMessage = 'Backpack full. Rearrange items or upgrade it at camp.';
+      updateCombatUi();
+      return;
+    }
+    if (gamePhase === 'base') storeSave(saveData);
+    if (view.drop.itemId === 'grenade') syncGrenades();
+    if (gamePhase === 'active' && view.drop.cacheId !== 'discard') runLootCollected += 1;
+    const name = itemDefinitions[view.drop.itemId].name;
+    view.drop.collected = true;
+    view.object.parent?.remove(view.object);
+    disposeTree(view.object);
+    activeInteractiveViews().delete(view.id);
+    combat.lastMessage = `Picked up ${name}.`;
+    inventoryPanel.render();
+    updateCombatUi();
+    return;
+  }
   const accepted = addCargo(cargo, view.drop.kind, view.drop.amount, cargoCapacity(saveData));
   if (accepted <= 0) {
     combat.lastMessage = `Cargo full. Capacity is ${cargoCapacity(saveData)} units.`;
@@ -1766,7 +1862,8 @@ const campMenuCopy: Record<
   quartermaster: {
     title: 'QUARTERMASTER',
     kicker: 'CAMP SERVICES / SUPPLY COUNTER',
-    message: 'Buy field gear, medical supplies, or a cargo harness; sell spare stock for credits.',
+    message:
+      'Buy field gear, medical supplies, or a backpack upgrade; sell spare stock for credits.',
     footnote: 'Trades update your saved camp inventory immediately.',
   },
   storage: {
@@ -1864,9 +1961,14 @@ function enterCampBuilding(entrance: BuildingEntrance): void {
 function leaveCampBuilding(): void {
   const session = campInteriorSession;
   if (!session) return;
+  const discarded = [...session.views.values()].flatMap((view) =>
+    view.drop?.cacheId === 'discard' && view.drop.itemId ? [view.drop.itemId] : [],
+  );
   scene.remove(session.group);
   disposeTree(session.group);
   campInteriorSession = undefined;
+  for (const id of discarded)
+    spawnGroundItem(id, session.returnPosition.x + 1.7, session.returnPosition.z + 0.7);
   campGroup.visible = true;
   setCampAtmosphere();
   navigator = campNavigator;
@@ -1910,6 +2012,14 @@ function interactWithCamp(view: InteractiveView, allowApproach: boolean): void {
   }
   if (view.kind === 'camp-departure') {
     startRun();
+  } else if (view.kind === 'drop') {
+    collectLoot(view);
+  } else if (view.kind === 'camp-scrap') {
+    inventoryPanel.show('scrap');
+    player.setEnabled(false);
+  } else if (view.kind === 'camp-food') {
+    inventoryPanel.show('food');
+    player.setEnabled(false);
   } else if (view.kind === 'camp-shop') {
     openBaseTerminal('quartermaster');
   } else if (view.kind === 'camp-storage') {
@@ -2052,11 +2162,17 @@ function updateNearbyAction(): void {
         : distance <= 3.8
           ? nearby.kind === 'camp-shop'
             ? 'F  QUARTERMASTER'
-            : nearby.kind === 'camp-storage'
-              ? 'F  CAMP STORAGE'
-              : nearby.kind === 'camp-operations'
-                ? 'F  OPERATIONS BOARD'
-                : 'F  DEPART FOR GREYWOOD'
+            : nearby.kind === 'camp-scrap'
+              ? 'F  SCRAP YARD'
+              : nearby.kind === 'camp-food'
+                ? 'F  FOOD STAND'
+                : nearby.kind === 'drop'
+                  ? 'F  PICK UP ITEM'
+                  : nearby.kind === 'camp-storage'
+                    ? 'F  CAMP STORAGE'
+                    : nearby.kind === 'camp-operations'
+                      ? 'F  OPERATIONS BOARD'
+                      : 'F  DEPART FOR GREYWOOD'
           : cameraRig.mode === 'top-down'
             ? 'CLICK TO APPROACH SERVICE'
             : 'WALK TO CAMP SERVICE';
@@ -2391,6 +2507,7 @@ function clearRunScene(): void {
 
 function startRun(): void {
   if (gamePhase !== 'base' || stressActive) return;
+  inventoryPanel.close();
   if (campInteriorSession) leaveCampBuilding();
   clearRunScene();
   campGroup.visible = false;
@@ -2400,7 +2517,16 @@ function startRun(): void {
   navigator.setDynamicObstacles([]);
   dynamicNavigationRefresh = 0;
   cargo = emptyInventory();
-  grenadeCount = 3;
+  runItems = emptyItemGrid();
+  issuedItemUids = new Set();
+  const issuedRifle = addItem(runItems, 'rifle', gridRows(saveData.cargoUpgrade));
+  if (issuedRifle) issuedItemUids.add(issuedRifle.uid);
+  for (let index = 0; index < 3; index += 1) {
+    const issuedGrenade = addItem(runItems, 'grenade', gridRows(saveData.cargoUpgrade));
+    if (issuedGrenade) issuedItemUids.add(issuedGrenade.uid);
+  }
+  equippedWeapon = 'rifle';
+  syncGrenades();
   grenadeCooldownRemaining = 0;
   if (saveData.base.gear > 0) {
     saveData.base.gear -= 1;
@@ -2518,6 +2644,14 @@ function beginTakeoff(): void {
   player.visual.visible = true;
   createRappelRope();
   resolveRunOutcome(saveData, cargo, true);
+  bankScavengedItems(
+    runItems,
+    saveData.storedItems,
+    saveData.storedReserve,
+    issuedItemUids,
+    gridRows(saveData.cargoUpgrade),
+  );
+  runItems = emptyItemGrid();
   const saved = storeSave(saveData);
   elements.baseMessage!.textContent = saved
     ? 'Recovered cargo is secured in storage.'
@@ -2532,6 +2666,7 @@ function beginTakeoff(): void {
 
 function finishDeath(): void {
   gamePhase = 'result';
+  runItems = emptyItemGrid();
   player.setEnabled(false);
   elements.extractionGuide!.setAttribute('hidden', '');
   elements.resultEyebrow!.textContent = 'RUN LOST';
@@ -2571,6 +2706,7 @@ function returnToBase(): void {
   clearRunScene();
   gamePhase = 'base';
   cargo = emptyInventory();
+  inventoryPanel.close();
   runElapsed = 0;
   combat.reset();
   createZombieViews();
@@ -3020,7 +3156,10 @@ function throwGrenadeAtPointer(): void {
   scene.add(projectile);
   const duration = Math.max(0.35, Math.min(1.1, offset.length() / 25));
   grenadeProjectiles.push({ object: projectile, start, target: aim.clone(), elapsed: 0, duration });
-  grenadeCount -= 1;
+  const grenade = runItems.items.find((item) => item.id === 'grenade');
+  if (grenade) removeItem(runItems, grenade.uid);
+  syncGrenades();
+  inventoryPanel.render();
   grenadeCooldownRemaining = 1;
   combat.lastMessage = `Grenade thrown · ${grenadeCount} remaining.`;
   updateCombatUi();
@@ -3182,6 +3321,31 @@ player = new PlayerController(
   () => throwGrenadeAtPointer(),
 );
 scene.add(player.visual);
+inventoryPanel = new InventoryPanel(
+  saveData,
+  activeItems,
+  () => gamePhase === 'base',
+  dropInventoryItem,
+  () => {
+    if (gamePhase === 'base') storeSave(saveData);
+    syncGrenades();
+    updateBaseUi();
+    updateCombatUi();
+  },
+  (id) => {
+    equippedWeapon = id;
+    combat.lastMessage = `${itemDefinitions[id].name} equipped.`;
+    updateCombatUi();
+  },
+  () => {
+    if (
+      (gamePhase === 'base' || gamePhase === 'active') &&
+      elements.baseOverlay!.hasAttribute('hidden')
+    )
+      player.setEnabled(true);
+    canvas?.focus({ preventScroll: true });
+  },
+);
 createCampInteractiveViews();
 player.setWorld(campWorld, () => 0);
 player.setEnabled(true);
@@ -3313,10 +3477,44 @@ elements.buyCargoButton!.addEventListener('click', () => {
   if (gamePhase !== 'base' || !buyCampItem(saveData, 'cargoUpgrade')) return;
   const saved = storeSave(saveData);
   elements.baseMessage!.textContent = saved
-    ? 'Harness installed. Carrying capacity increased by five units.'
-    : 'Harness installed for this session; browser storage is unavailable.';
+    ? 'Backpack expanded to 8×8 and cargo capacity increased by five units.'
+    : 'Backpack and harness upgraded for this session; browser storage is unavailable.';
   updateBaseUi();
 });
+window.addEventListener(
+  'keydown',
+  (event) => {
+    const typing =
+      event.target instanceof HTMLElement &&
+      ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName);
+    if (typing) return;
+    if (
+      event.code === 'KeyI' &&
+      !event.repeat &&
+      (gamePhase === 'base' || gamePhase === 'active')
+    ) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (inventoryPanel.open) inventoryPanel.close();
+      else {
+        if (!elements.baseOverlay!.hasAttribute('hidden')) closeBaseTerminal();
+        inventoryPanel.show();
+        player.setEnabled(false);
+        releaseMouseCapture();
+        releaseLookDrag();
+      }
+      return;
+    }
+    if (inventoryPanel.open) {
+      if (event.code === 'Escape') {
+        inventoryPanel.close();
+        event.preventDefault();
+      }
+      event.stopImmediatePropagation();
+    }
+  },
+  true,
+);
 window.addEventListener('keydown', (event) => {
   if (event.repeat) return;
   const isFormControl =
@@ -3495,17 +3693,31 @@ function updateEnemyHover(clientX: number, clientY: number, overScene: boolean):
 
 function fireAlongRay(aimPoint: Vector3): boolean {
   if (!combat.alive) return false;
+  if (
+    gamePhase === 'active' &&
+    !runItems.items.some((item) => ['rifle', 'handgun', 'shotgun'].includes(item.id))
+  ) {
+    combat.lastMessage = 'No firearm in the backpack.';
+    updateCombatUi();
+    return false;
+  }
+  const weapon = runItems.items.some((item) => item.id === equippedWeapon)
+    ? equippedWeapon
+    : (runItems.items.find((item) => ['rifle', 'handgun', 'shotgun'].includes(item.id))?.id ??
+      'rifle');
+  const damage = weapon === 'shotgun' ? 100 : weapon === 'handgun' ? 35 : 50;
+  const cooldown = weapon === 'shotgun' ? 0.7 : weapon === 'handgun' ? 0.33 : 0.24;
   if (cameraRig.mode === 'top-down') player.faceToward(aimPoint.x, aimPoint.z);
   const muzzle = player.muzzlePosition();
   const shotDirection = aimPoint.clone().sub(muzzle);
-  const shotLength = Math.min(90, shotDirection.length());
+  const shotLength = Math.min(weapon === 'shotgun' ? 16 : 90, shotDirection.length());
   if (shotLength < 0.001) return false;
   shotDirection.normalize();
   const weaponRay = new Raycaster(muzzle, shotDirection, 0, shotLength + 0.05);
   const weaponHit = firstWorldOrLivingHit(weaponRay);
   const hitPoint = weaponHit?.point ?? aimPoint;
   const targetId = findZombieId(weaponHit?.object);
-  if (!combat.tryFire(targetId)) return false;
+  if (!combat.tryFire(targetId, damage, cooldown)) return false;
   audioFeedback.play('shot');
   if (targetId) {
     const hostile = combat.zombies.find((zombie) => zombie.id === targetId);
@@ -3885,7 +4097,9 @@ function animate(now: number): void {
   const simulationStartedAt = performance.now();
   simulationAccumulator = Math.min(simulationAccumulator + delta, fixedStep * 8);
   while (simulationAccumulator >= fixedStep) {
-    if (stressActive && hordeSimulation) {
+    if (inventoryPanel.open) {
+      // The backpack pauses the field encounter while arranging items.
+    } else if (stressActive && hordeSimulation) {
       hordeSimulation.tick(fixedStep, player.position.x, player.position.z);
       player.update(fixedStep, cameraRig.mode, cameraRig.yaw, 1);
       updateNavigationProgress();

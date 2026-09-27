@@ -4,6 +4,8 @@ Last updated: 2026-09-27
 
 Current gate: Phases 1–9 are accepted. Phases 10 and 11 are implemented; the combined owner playtest is active. Camp, helicopter arrival/extraction, camera zoom, NPC, operations-board, puddle, and fog revisions are implemented and await owner retest. Both phases remain unaccepted.
 
+Inventory extension: implemented shaped 8×6/8×8 backpack, field item pickups and ground drops, equipped firearms and cell-based grenades, bank/loss persistence with safe camp reserve, scrap hut with two piles and scrap-to-credit trade, and a food buy/sell stand. Build and 54 tests pass; local browser smoke confirmed the inventory layout, starting field items, and both reachable vendor menus. Owner playtest remains open for item dragging, vendor transactions, pickup/drop, extraction, and death loss.
+
 Next authorized work: Continue the combined Phase 10/11 playtest and capture the owner's next findings. The hub, arrival/extraction, zoom, NPC, board, puddle, and fog revisions await owner retest. Both phases remain unaccepted. Phase 7 was explicitly approved by the owner on 2026-09-26; the outstanding reference-machine profiles remain undocumented because no reference setup was supplied.
 
 ## Phase status
