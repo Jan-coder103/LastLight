@@ -86,17 +86,12 @@
         <div class="field-line">
           <span>SKY</span><strong id="atmosphere-status">CAMP · CLEAR</strong>
         </div>
-        <div class="health-label">
-          <span>HEALTH</span><strong id="health-value">100 / 100</strong>
-        </div>
-        <div class="health-track"><span id="health-fill"></span></div>
         <div class="field-line cargo-line">
           <span>CAMP STOCK</span><strong id="cargo-value">0 G / 0 S</strong>
         </div>
         <div class="cargo-breakdown" id="cargo-breakdown">GEAR 0 · SUP 0 · CR 0 · FUEL 0</div>
         <p class="nearby-action" id="nearby-action" hidden></p>
         <p id="combat-message">Three hostiles detected. Stay mobile.</p>
-        <div class="ability-status" id="ability-status"></div>
       </section>
 
       <section
@@ -280,27 +275,17 @@
         </div>
       </section>
 
-      <footer class="bottom-bar">
-        <div class="movement-state">
-          <span class="state-icon" aria-hidden="true">⌖</span>
-          <div>
-            <span class="eyebrow">CURRENT VIEW</span><strong id="view-name">THIRD PERSON</strong>
-          </div>
+      <section class="action-hud" aria-label="Health and abilities">
+        <div class="health-orb" role="img" aria-label="Health 100 percent">
+          <svg viewBox="0 0 72 72" aria-hidden="true">
+            <circle class="health-orb-track" cx="36" cy="36" r="31" />
+            <circle id="health-ring" class="health-orb-fill" cx="36" cy="36" r="31" />
+          </svg>
+          <strong id="health-percent">100%</strong>
         </div>
-        <div class="footer-divider"></div>
-        <button id="view-button" class="view-button" type="button">
-          <span class="switch-glyph" aria-hidden="true">↔</span><span>CHANGE VIEW</span
-          ><span class="button-key">TAB</span>
-        </button>
-        <button id="lock-button" class="lock-button" type="button">
-          <span class="lock-icon" aria-hidden="true">⌖</span
-          ><span id="lock-label">CAPTURE MOUSE</span><span class="button-key">OPTIONAL</span>
-        </button>
-        <button id="base-menu-button" class="base-menu-button" type="button" hidden>
-          CAMP TERMINAL <span class="button-key">M</span>
-        </button>
-        <p class="footer-note">PHASE 11 <span>—</span> ATMOSPHERE</p>
-      </footer>
+        <span class="action-hud-divider" aria-hidden="true"></span>
+        <div class="ability-bar" id="ability-bar" aria-label="Abilities"></div>
+      </section>
 
       <aside class="diagnostics" aria-label="Development diagnostics">
         <div class="diag-heading">
@@ -320,7 +305,8 @@
           <div><span>DRAW CALLS / TRIANGLES</span><strong id="render-value">—</strong></div>
           <div><span>GPU TIME P95</span><strong id="gpu-value">—</strong></div>
           <div><span>HEAP / GEOMETRIES / TEXTURES</span><strong id="memory-value">—</strong></div>
-          <div><span>CAMERA / CANVAS</span><strong id="resolution-value">—</strong></div>
+          <div><span>CAMERA VIEW</span><strong id="view-name">THIRD PERSON</strong></div>
+          <div><span>CANVAS</span><strong id="resolution-value">—</strong></div>
           <div><span>ACTIVE EFFECTS</span><strong id="effects-value">—</strong></div>
           <div><span>WORLD OBJECTS</span><strong id="entity-value">—</strong></div>
           <div>

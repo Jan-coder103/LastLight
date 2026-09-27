@@ -11,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite, usually `http://localhost:5173`. The target is a desktop Chromium browser (Chrome or Edge) or Firefox with WebGL2. Pointer Lock is optional; third-person drag-to-look works without it.
+Open the local URL printed by Vite, usually `http://localhost:5173`. The target is a desktop Chromium browser (Chrome or Edge) or Firefox with WebGL2. Third-person drag-to-look works directly on the scene.
 
 ## Controls
 
@@ -22,19 +22,20 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. The target 
 | Left-click                     | Fire at the cursor                    | Attack with cursor assist             |
 | Drag on the scene              | Orbit camera and aim                  | —                                     |
 | Mouse wheel                    | Zoom camera in or out                 | Zoom camera in or out                 |
-| Optional **Capture Mouse**     | Continuous look; Escape releases it   | Not available                         |
 | Q                              | Dash; 2-second cooldown, no cost      | Dash; 2-second cooldown, no cost      |
 | 1 / 2 / 3                      | Turret / artillery / adrenaline       | —                                     |
 | W / E / R                      | —                                     | Turret / artillery / adrenaline       |
 | G                              | Throw grenade                         | Throw grenade                         |
 | X                              | Use one carried supply to heal        | Use one carried supply to heal        |
 | F                              | Interact, enter/exit, or board nearby | Interact, enter/exit, or board nearby |
-| Tab or **Change View**         | Switch camera without moving player   | Switch camera without moving player   |
+| Tab                            | Switch camera without moving player   | Switch camera without moving player   |
 | World Seed field + reload icon | Rebuild the map and encounter         | Rebuild the map and encounter         |
 
 Press **O** or choose **Atmosphere** to open lighting, weather, and accessibility options. Lighting is seeded per run by default, with low sun and high moon alternatives. Weather is also seeded by default, with clear, mist, and rain options. Mist adds slowly drifting, irregular volumetric fog banks, light scattering, and denser distance haze; rain adds a lighter haze and reflective puddles of varied sizes along roads. Changing these presets affects your next deployment; the current run's sky stays fixed. Reduce motion/camera shake, reduce flashes, hide rain particles, disable audio cues, or adjust impact-shake intensity at any time. Accessibility options apply immediately and persist separately from camp inventory.
 
 At camp, use **W/A/S/D** to walk, right-click in top-down view to route, **F** at a marked service or building, **M** for the camp terminal, and **Tab** to change camera. The quartermaster opens its trade menu, camp storage opens a read-only inventory view, and the operations board opens destination selection. **M** keeps the combined terminal available from anywhere in camp.
+
+The compact HUD at the bottom center shows health as a red ring and Q/W/E/R/G abilities with cooldown timers. Third-person slot keys display as 1/2/3 to match the field controls. The current camera view is listed in the right-side dev telemetry panel; the left controls panel lists **Tab** for switching views.
 
 Depart from the operations board, camp terminal, or chopper. The camera follows the inbound chopper; after it hovers, the scout rappels down automatically and controls unlock on landing. The chopper lowers a rope again for extraction, lifts the scout aboard, and flies out. Search a cache with F when close or left-click its crate; collect the revealed pickups with F or by clicking them. Top-down clicks on distant loot set a route. Recover at least one cache item before the chopper clears extraction. Gear, supplies, and fuel use carrying capacity; credits do not. X consumes a carried medical supply to restore up to 35 health. F boards when you are in the landing ring and no hostile is close; hold position for four seconds while the chopper is vulnerable to interruption.
 

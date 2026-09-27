@@ -199,9 +199,6 @@ const elements = {
   shakeIntensity: document.querySelector<HTMLInputElement>('#shake-intensity'),
   shakeValue: document.querySelector<HTMLOutputElement>('#shake-value'),
   modeName: document.querySelector<HTMLElement>('#view-name'),
-  lockButton: document.querySelector<HTMLButtonElement>('#lock-button'),
-  lockLabel: document.querySelector<HTMLElement>('#lock-label'),
-  viewButton: document.querySelector<HTMLButtonElement>('#view-button'),
   fpsValue: document.querySelector<HTMLElement>('#fps-value'),
   frameValue: document.querySelector<HTMLElement>('#frame-value'),
   cpuFrameValue: document.querySelector<HTMLElement>('#cpu-frame-value'),
@@ -218,10 +215,10 @@ const elements = {
   controlsContent: document.querySelector<HTMLElement>('#controls-content'),
   hostileCount: document.querySelector<HTMLElement>('#hostile-count'),
   atmosphereStatus: document.querySelector<HTMLElement>('#atmosphere-status'),
-  healthValue: document.querySelector<HTMLElement>('#health-value'),
-  healthFill: document.querySelector<HTMLElement>('#health-fill'),
+  healthPercent: document.querySelector<HTMLElement>('#health-percent'),
+  healthRing: document.querySelector<SVGCircleElement>('#health-ring'),
   combatMessage: document.querySelector<HTMLElement>('#combat-message'),
-  abilityStatus: document.querySelector<HTMLElement>('#ability-status'),
+  abilityBar: document.querySelector<HTMLElement>('#ability-bar'),
   reticle: document.querySelector<HTMLElement>('#aim-reticle'),
   deathOverlay: document.querySelector<HTMLElement>('#death-overlay'),
   deathMessage: document.querySelector<HTMLElement>('#death-message'),
@@ -238,7 +235,6 @@ const elements = {
   guideAction: document.querySelector<HTMLElement>('#guide-action'),
   baseOverlay: document.querySelector<HTMLElement>('#base-overlay'),
   baseCloseButton: document.querySelector<HTMLButtonElement>('#base-close-button'),
-  baseMenuButton: document.querySelector<HTMLButtonElement>('#base-menu-button'),
   baseMessage: document.querySelector<HTMLElement>('#base-message'),
   baseTitle: document.querySelector<HTMLElement>('#base-title'),
   baseKicker: document.querySelector<HTMLElement>('#base-kicker'),
@@ -486,7 +482,6 @@ const enemyAimAssistRadius = 44;
 function updateModeUi(): void {
   const label = cameraRig.mode === 'third-person' ? 'THIRD PERSON' : 'TOP-DOWN';
   elements.modeName!.textContent = label;
-  elements.viewButton!.setAttribute('aria-label', `Change camera from ${label.toLowerCase()} view`);
   document.querySelector('#game')?.classList.toggle('is-top-down', cameraRig.mode === 'top-down');
   renderControls();
 }
@@ -609,17 +604,6 @@ function releaseLookDrag(): void {
   document.querySelector('#game')?.classList.remove('is-look-dragging');
 }
 
-function updatePointerUi(): void {
-  const captured = document.pointerLockElement === canvas;
-  elements.lockLabel!.textContent = captured ? 'MOUSE CAPTURED' : 'CAPTURE MOUSE';
-  elements.lockButton!.classList.toggle('captured', captured);
-  elements.lockButton!.setAttribute('aria-pressed', String(captured));
-  if (captured) {
-    elements.reticle!.style.left = '50%';
-    elements.reticle!.style.top = '50%';
-  }
-}
-
 function row(keys: string, action: string): string {
   const keycaps = keys
     .split('|')
@@ -682,13 +666,67 @@ function renderControls(): void {
   elements.controlsContent!.innerHTML = rows.join('');
 }
 
+function updateActionHud(healthPercent: number): void {
+  const health = Math.max(0, Math.min(100, healthPercent));
+  const circumference = 2 * Math.PI * 31;
+  elements.healthPercent!.textContent = `${Math.round(health)}%`;
+  elements.healthRing!.style.strokeDasharray = String(circumference);
+  elements.healthRing!.style.strokeDashoffset = String(circumference * (1 - health / 100));
+  elements.healthRing!.style.stroke = health < 30 ? '#ee574d' : '#d9473d';
+  elements.healthPercent!.parentElement!.setAttribute(
+    'aria-label',
+    `Health ${Math.round(health)} percent`,
+  );
+
+  const slots = [1, 2, 3] as const;
+  const labels = cameraRig.mode === 'top-down' ? ['W', 'E', 'R'] : ['1', '2', '3'];
+  const abilities = [
+    { key: 'Q', symbol: '➤', name: 'Dash', cooldown: combat.dashCooldownRemaining },
+    {
+      key: labels[0]!,
+      symbol: '▥',
+      name: 'Turret',
+      cooldown: combat.abilityCooldownsRemaining[slots[0]],
+    },
+    {
+      key: labels[1]!,
+      symbol: '✹',
+      name: 'Artillery',
+      cooldown: combat.abilityCooldownsRemaining[slots[1]],
+    },
+    {
+      key: labels[2]!,
+      symbol: 'ϟ',
+      name: 'Adrenaline',
+      cooldown: combat.abilityCooldownsRemaining[slots[2]],
+    },
+    {
+      key: 'G',
+      symbol: '●',
+      name: `Grenade · ${grenadeCount} remaining`,
+      cooldown: grenadeCooldownRemaining,
+    },
+  ];
+  elements.abilityBar!.innerHTML = abilities
+    .map(({ key, symbol, name, cooldown }) => {
+      const cooling = cooldown > 0;
+      const unavailable =
+        !cooling && (gamePhase !== 'active' || !combat.alive || (key === 'G' && grenadeCount <= 0));
+      return `<div class="ability-tile${cooling ? ' cooling' : ''}${unavailable ? ' unavailable' : ''}" aria-label="${name} · ${key}${cooling ? ` · ${cooldown.toFixed(1)} seconds` : ''}" title="${name}">
+        <span class="ability-key">${key}</span><span class="ability-symbol" aria-hidden="true">${symbol}</span>
+        ${cooling ? `<span class="ability-cooldown" aria-hidden="true">${cooldown.toFixed(1)}</span>` : ''}
+        ${key === 'G' ? `<span class="ability-count" aria-hidden="true">${grenadeCount}</span>` : ''}
+      </div>`;
+    })
+    .join('');
+}
+
 function updateCombatUi(): void {
   updateAtmosphereStatus();
   if (stressActive && hordeSimulation) {
     const health = Math.ceil(hordeSimulation.playerHealth);
     elements.hostileCount!.textContent = `${hordeSimulation.livingCount} / ${hordeSimulation.count}`;
-    elements.healthValue!.textContent = `${health} / 100`;
-    elements.healthFill!.style.width = `${health}%`;
+    updateActionHud(health);
     elements.combatMessage!.textContent = 'Horde stress scene running.';
     return;
   }
@@ -702,15 +740,13 @@ function updateCombatUi(): void {
     if (stockLabel) stockLabel.textContent = 'CAMP STOCK';
     if (controlsHeading) controlsHeading.textContent = 'CAMP CONTROLS';
     elements.hostileCount!.textContent = 'SAFE';
-    elements.healthValue!.textContent = `${Math.ceil(combat.health)} / ${combat.maxHealth}`;
-    elements.healthFill!.style.width = `${Math.max(0, Math.min(100, combat.health))}%`;
+    updateActionHud((combat.health / combat.maxHealth) * 100);
     elements.combatMessage!.textContent = campInteriorSession
       ? 'Safe-zone building · find the lit marker to return outside.'
       : 'Wayfarer Camp · move between services, or open the camp terminal with M.';
     elements.runClock!.textContent = 'CAMP';
     elements.cargoValue!.textContent = `${saveData.base.gear} G / ${saveData.base.supplies} S`;
     elements.cargoBreakdown!.textContent = `CR ${saveData.base.money} · FUEL ${saveData.base.fuel}`;
-    elements.abilityStatus!.textContent = '';
     updateNearbyAction();
     return;
   }
@@ -724,12 +760,7 @@ function updateCombatUi(): void {
   if (stockLabel) stockLabel.textContent = 'CARRIED / CAPACITY';
   if (controlsHeading) controlsHeading.textContent = 'FIELD CONTROLS';
   elements.hostileCount!.textContent = String(combat.livingZombieCount);
-  elements.healthValue!.textContent = `${Math.ceil(combat.health)} / ${combat.maxHealth}`;
-  elements.healthFill!.style.width = `${healthPercent}%`;
-  elements.healthFill!.style.background =
-    healthPercent < 30
-      ? 'linear-gradient(90deg, #a45443, #d07754)'
-      : 'linear-gradient(90deg, #85945e, #c2bb76)';
+  updateActionHud(healthPercent);
   elements.combatMessage!.textContent = combat.lastMessage;
   elements.runClock!.textContent = `${String(Math.floor(runElapsed / 60)).padStart(2, '0')}:${String(Math.floor(runElapsed % 60)).padStart(2, '0')}`;
   elements.runClock!.classList.toggle(
@@ -739,16 +770,6 @@ function updateCombatUi(): void {
   const capacity = cargoCapacity(saveData);
   elements.cargoValue!.textContent = `${cargoWeight(cargo)} / ${capacity}`;
   elements.cargoBreakdown!.textContent = `GEAR ${cargo.gear} · SUP ${cargo.supplies} · GRENADES ${grenadeCount} · CR ${cargo.money} · FUEL ${cargo.fuel}`;
-  elements.abilityStatus!.innerHTML =
-    ([1, 2, 3] as const)
-      .map((slot) => {
-        const remaining = combat.abilityCooldownsRemaining[slot];
-        const key = cameraRig.mode === 'top-down' ? ['W', 'E', 'R'][slot - 1] : String(slot);
-        const title = ['TURRET', 'ARTY', 'ADREN'][slot - 1];
-        return `<span class="${remaining > 0 ? 'cooling' : ''}">${key} ${title}${remaining > 0 ? ` ${remaining.toFixed(0)}s` : ''}</span>`;
-      })
-      .join('') +
-    `<span class="${grenadeCooldownRemaining > 0 ? 'cooling' : ''}">G FRAG ${grenadeCount}${grenadeCooldownRemaining > 0 ? ` ${grenadeCooldownRemaining.toFixed(1)}s` : ''}</span>`;
   if (!combat.alive) elements.deathMessage!.textContent = combat.lastMessage;
 }
 
@@ -776,7 +797,6 @@ function updateBaseUi(): void {
     ? 'CARGO HARNESS INSTALLED <span>✓</span>'
     : 'UPGRADE CARGO HARNESS <span>90 CR</span>';
   elements.zoneStatus!.textContent = gamePhase === 'base' ? 'BASE' : 'ENGAGED';
-  elements.baseMenuButton!.hidden = gamePhase !== 'base';
 }
 
 function updateExtractionGuide(): void {
@@ -996,7 +1016,7 @@ function updateRenderDiagnosticsUi(): void {
   elements.renderValue!.textContent = `${info.render.calls} / ${info.render.triangles.toLocaleString()}`;
   elements.gpuValue!.textContent = gpu;
   elements.memoryValue!.textContent = `${heap} · ${info.memory.geometries}g / ${info.memory.textures}t`;
-  elements.resolutionValue!.textContent = `${cameraRig.mode} · ${renderer.domElement.width}×${renderer.domElement.height} @${renderer.getPixelRatio().toFixed(2)}x`;
+  elements.resolutionValue!.textContent = `${renderer.domElement.width}×${renderer.domElement.height} @${renderer.getPixelRatio().toFixed(2)}x`;
   elements.effectsValue!.textContent = String(
     timedEffects.length + particleBursts.activeCount + Number(atmosphereRuntime.isRaining),
   );
@@ -1164,7 +1184,6 @@ function startHordeTest(): void {
   updateSettingsControls();
   document.querySelector('#game')?.classList.add('is-horde-test');
   elements.baseOverlay!.setAttribute('hidden', '');
-  elements.baseMenuButton!.hidden = true;
   elements.hordeLiveStats!.removeAttribute('hidden');
   elements.hordeActiveTools!.setAttribute('hidden', '');
   elements.hordeStart!.setAttribute('hidden', '');
@@ -3237,7 +3256,6 @@ elements.shakeIntensity!.addEventListener('input', () => {
 });
 window.addEventListener('pointerdown', () => audioFeedback.unlock(), { passive: true });
 window.addEventListener('keydown', () => audioFeedback.unlock());
-elements.viewButton!.addEventListener('click', switchView);
 elements.openHordeLab!.addEventListener('click', openHordeLab);
 elements.hordeLabToggle!.addEventListener('click', () => {
   if (elements.hordeLab!.hasAttribute('hidden')) openHordeLab();
@@ -3255,7 +3273,6 @@ elements.hordeCamera!.addEventListener('change', () => {
   if (selected !== cameraRig.mode) switchView();
 });
 elements.restartButton!.addEventListener('click', returnToBase);
-elements.baseMenuButton!.addEventListener('click', () => openBaseTerminal());
 elements.baseCloseButton!.addEventListener('click', closeBaseTerminal);
 elements.startRunButton!.addEventListener('click', startRun);
 elements.buySuppliesButton!.addEventListener('click', () => {
@@ -3350,26 +3367,6 @@ window.addEventListener('keydown', (event) => {
   event.preventDefault();
   interactNearest();
 });
-elements.lockButton!.addEventListener('click', () => {
-  canvas?.focus({ preventScroll: true });
-  if (document.pointerLockElement === canvas) {
-    releaseMouseCapture();
-  } else if (cameraRig.mode === 'third-person' && canvas.requestPointerLock) {
-    try {
-      const request = canvas.requestPointerLock();
-      if (request instanceof Promise) {
-        request.catch(() => {
-          elements.seedHint!.textContent =
-            'Mouse capture was blocked. Drag on the open scene to look around instead.';
-        });
-      }
-    } catch {
-      elements.seedHint!.textContent =
-        'Mouse capture is unavailable. Drag on the open scene to look around instead.';
-    }
-  }
-});
-
 function pointerNdc(clientX: number, clientY: number): Vector2 {
   return new Vector2(
     (clientX / window.innerWidth) * 2 - 1,
@@ -3674,7 +3671,6 @@ canvas.addEventListener(
   },
   { passive: false },
 );
-document.addEventListener('pointerlockchange', updatePointerUi);
 document.addEventListener('pointerlockerror', () => {
   elements.seedHint!.textContent =
     'Mouse capture was blocked. Drag on the open scene to look around instead.';
@@ -4062,7 +4058,6 @@ function animate(now: number): void {
   if (frameCount === 1) {
     elements.diagSeed!.textContent = world.seed;
     updateModeUi();
-    updatePointerUi();
   }
   if (now - lastUiTime > 120) {
     updateCombatUi();

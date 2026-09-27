@@ -210,6 +210,14 @@ Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain preset
 - Fixed top-down pursuit: player routing and hostile pathfinding now keep distinct navigation grids in both outdoor and building scenes. The player grid's moving-hostile blockers no longer make enemies path around or block one another while chasing.
 - Updated the README controls and combined playtest checklist. `npm run build` passed after the pursuit-grid correction. Automated tests and browser playtest were not run for this revision.
 
+## HUD refinement (2026-09-27)
+
+- Removed the wide bottom control strip, including its view toggle hint, mouse-capture button, and camp-terminal button. Tab and M remain listed in the left controls panel.
+- Moved the current camera view into the right-side dev telemetry panel. The controls panel remains the source for the Tab view-switch hint.
+- Added a compact centered lower HUD with a red circular health meter and Q/W/E/R/G ability tiles. Ability labels show the active bindings (W/E/R in top-down, 1/2/3 in third-person); cooldown tiles dim and show a live timer, and G shows the remaining grenade count.
+- Removed the duplicate health bar and ability cooldown text from the right-side field-status panel. Updated README controls and HUD notes.
+- Verification: `npm test` passed (14 files, 50 tests); `npm run build` passed with the existing asset-document chunk-size advisory. A browser preview could not be started in this sandbox because local port binding is unavailable.
+
 ## Verification
 
 - `npm test` — passed: 8 files, 34 tests. Includes deterministic 2–4 room generation, room/loot/encounter route reachability, and walkable exterior entrances in the existing 24-seed regression.
