@@ -21,6 +21,10 @@ The runtime currently builds authored models from TypeScript and Three.js geomet
 
 Make assets feel like they belong in a stylized, low-poly, post-apocalyptic rural/urban survival game. Existing art favors large, clear shapes, subdued natural colors, slightly worn surfaces, and a readable silhouette over surface detail. Assets should look coherent beside the scout, vegetation, city shells, camp buildings, fences, and the utility helicopter. The gameplay scout mesh in the viewer is used at its original scale and stands about 2.1 m from ground to head top.
 
+### Human scale reference
+
+The game's world uses **1 Three.js unit = 1 metre**; authored dimensions, placement coordinates, and gameplay movement use that same scale. The scout shown in the viewer is the actual gameplay model, placed unscaled. Its visible bounds are about **2.1 m high** from the ground plane to the top of the head. The jacket capsule alone is about 1.84 m tall; the head extends above it. This is a stylized game character rather than an anatomically exact human measurement, so use the scout in the viewer as the practical scale check. Keep the reference enabled while reviewing a candidate, then adjust the center-distance slider only to make both silhouettes easy to compare. Do not rescale either model to fit the preview.
+
 - Use a few deliberate geometric forms. Flat-sided boxes, low-sided cylinders/cones, simple custom meshes, and lightly irregular shapes fit the existing work. Flat shading is common; use it when it helps show facets.
 - Make the major silhouette recognizable from the angled top-down camera and close third-person view. Check the model at both distances before spending time on small details.
 - Favor solid, believable construction and a small number of purposeful details: doors, roof breaks, supports, braces, trim, or a beacon. Avoid clusters of tiny bolts, thin wires that disappear at game distance, dense bevels, smooth high-poly surfaces, photoreal textures, and intricate interior geometry unless the asset specifically needs them.
