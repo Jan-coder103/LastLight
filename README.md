@@ -71,7 +71,8 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 - `src/interiors/interiorLayout.ts` creates reproducible room layouts, loot, encounter positions, and collision data; `src/interiors/buildInterior.ts` assembles the reusable room pieces.
 - `src/assets/` contains authored asset modules and shared versioned metadata; `helicopter.ts` builds the shared detailed camp/deployment helicopter.
 - `asset-editor.html` and `src/assetEditor/` provide the separate Asset Bench for reviewing and adjusting the same authored definitions.
-- `src/player/PlayerController.ts` owns direct third-person movement, top-down route following, dash movement, and the player visual.
+- `unapproved-assets/` is an isolated staging area for candidate models and includes a lightweight Three.js viewer. Its `AGENTS.md` contains the asset authoring guide, and `examples/` has copies of the current building and water tower modules. Nothing in this folder is loaded by the game.
+- `src/player/PlayerController.ts` owns direct third-person movement, top-down route following, and dash movement; `src/player/playerVisual.ts` builds the shared gameplay scout model used by the staging viewer too.
 - `src/navigation/GridNavigator.ts` routes the player around static colliders and refreshed hostile positions; combat pursuers use a separate static navigation map.
 - `src/game/CombatSimulation.ts` owns health, firing and ability cooldowns, damage, and zombie pursuit/attacks.
 - `src/game/HordeSimulation.ts` owns the seeded 10,000-agent stress simulation, spatial queries, obstacle deflection, and near/mid/far update tiers; `src/game/HordeBenchmark.ts` measures fixed simulation steps without rendering.
@@ -84,13 +85,21 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 
 ## Asset Bench
 
-From the camp panel, open **Asset Bench**. Select one of the five shared assets, orbit or zoom the preview, and compare the near and far camera presets. Edit placement bounds, collision, interaction points, or material color/roughness/metalness. The inspector limits values and blocks saving when metadata is invalid.
+From the camp panel, open **Asset Bench**. Select one of the five catalog assets (pine tree, boulder, building shell, water tower, or radio mast), orbit or zoom the preview, and compare the near and far camera presets. Edit placement bounds, collision, interaction points, or named material color/roughness/metalness. The inspector limits values and blocks saving when metadata is invalid. The Bench previews source-defined geometry; its JSON format only edits metadata and materials for an asset already in the catalog. It does not create or import a new mesh.
 
 **Save JSON** exports a versioned `last-light-authored-asset` document. **Open JSON** validates and reopens that file. **Try in Game** stores the validated document for this browser and opens Last Light; start a run to use the edited bounds, collision, materials, or building interaction point. **Restore Source** clears the saved game override and resets the selected asset in the editor.
 
 ## Adding an authored asset
 
 Create a small module in `src/assets/` that exports an `AuthoredAsset` with a stable ID, schema version, dimensions, optional collider, interaction points, named materials, and a visual factory. Register it in `src/assets/catalog.ts`, then place its ID from `src/world/generateWorld.ts`; keep generated position/rotation/scale/variant values in `AssetPlacement`, not in the asset definition. Add deterministic coverage if the placement changes generation behavior.
+
+### Candidate assets (staged, not in the game)
+
+New model work belongs in [`unapproved-assets/`](unapproved-assets/). Read its [`AGENTS.md`](unapproved-assets/AGENTS.md) before authoring; it documents the project's geometry conventions, scale, palette, review files, and staging boundary. The `examples/` subfolder contains copies of `buildingShell.ts` and `waterTower.ts` from `src/assets/` as style and structure references.
+
+The current game builds authored models from Three.js geometry and materials in TypeScript modules. Candidate modules and their review notes stay in `unapproved-assets/`; the world generator, asset catalog, Asset Bench, and game do not read that folder. A candidate is not approved just because it is complete or committed. Phase 12 in `plan.md` is the later owner review and integration gate. The draft author may make local Git commits limited to `unapproved-assets/` so candidate history is reviewable; those commits must not change or register live game assets.
+
+To preview the reference models and top-level `candidate-*.ts` drafts, start `npm run dev` and open `/unapproved-assets/viewer.html`. Drag to orbit, scroll to zoom, and use the X/Y/Z sliders to move the directional key light. The exact gameplay scout model is shown beside each asset by default; toggle it or adjust its safe distance from the asset center. The page uses the game's base camp renderer settings and daylight; it omits gameplay weather and effects. Refresh after adding a candidate module.
 
 ## Phase 3 playtest checklist
 

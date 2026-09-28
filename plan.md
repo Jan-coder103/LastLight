@@ -174,7 +174,19 @@ Status vocabulary: **Not started**, **In progress**, **Awaiting owner playtest**
 
 **Acceptance:** atmosphere enhances orientation and combat feedback, presets stay fixed within a run, accessibility settings work, and phase 7 performance gates still pass. Owner playtests visual comfort and mood.
 
-## Backlog after phase 11
+## Phase 12 — Candidate asset review and integration
+
+**Goal:** review the models collected in `unapproved-assets/`, select the ones that fit the game, and integrate only owner-approved candidates into the live asset pipeline. Candidate creation can continue in the staging folder before this phase; staging work does not change the game or advance the integration gate.
+
+1. Inventory each candidate and review its source/model, dimensions, scale beside the player, silhouette at near and far camera distances, palette, material count, collision proposal, interaction points, and author-provided notes. Record a disposition for each: revise, approved for integration, or not selected.
+2. Work through requested visual or metadata revisions in the staging folder. Keep the original source and review notes with each candidate so the final decision is traceable.
+3. Port each selected model into a project-native authored module under `src/assets/`. Give it a stable ID, named materials, meter-based dimensions, an appropriate collider and interaction points, and a deterministic visual factory. Register it in `src/assets/catalog.ts` and add only the intended procedural placement or camp use.
+4. Check placement clearance and navigation for any new collision. Add deterministic generation or asset-document coverage where the integration changes those behaviors, and update README, tracker, and handoff notes.
+5. Review integrated candidates in the Asset Bench and in their intended game context, including near/far readability and both camera modes where applicable. Keep staging files separate from the runtime catalog unless they are explicitly needed as source references.
+
+**Acceptance:** every candidate has an owner-reviewed disposition; selected assets are integrated with valid metadata and intended placement; builds and relevant automated checks pass; the owner confirms their appearance and usability in game. Candidates not selected remain in `unapproved-assets/` and are not loaded by the game.
+
+## Backlog after phase 12
 
 Prioritize by playtest value and measured cost: military-base and large-city destination generation, props, loot, and fuel pricing; explosive barrels with fire/shake; noise meter and discovery radius; fences and interactive gates; blood decals/trails with pooling and limits; companion bot; additional enemy families and survivor/bandit behavior; optimized rain puddles/wet reflections; plane variant. Promote an item to a scoped phase or subphase before implementing it, with acceptance criteria and tests recorded in `tracker.md`.
 

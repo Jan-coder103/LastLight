@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#171b16" />
+    <meta name="description" content="Preview staged Last Light asset models." />
+    <title>Last Light // Unapproved Asset Viewer</title>
+  </head>
+  <body>
+    <div class="viewer-app">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">LAST LIGHT / WORKSHOP</div>
+          <h1>UNAPPROVED MODEL VIEWER</h1>
+        </div>
+        <a href="./README.md">FOLDER GUIDE <span aria-hidden="true">↗</span></a>
+      </header>
+
+      <main class="workspace">
+        <section class="preview-panel" aria-label="Model preview">
+          <div class="toolbar">
+            <label class="asset-picker">
+              <span>MODEL</span>
+              <select id="asset-select" aria-label="Select a staged model"></select>
+            </label>
+            <label class="variant-picker">
+              <span>VARIANT</span>
+              <select id="variant-select" aria-label="Select model variant">
+                <option value="0">00</option>
+                <option value="1">01</option>
+                <option value="2">02</option>
+              </select>
+            </label>
+            <button id="fit-button" class="quiet-button" type="button">FIT MODEL</button>
+          </div>
+          <div id="preview-stage" class="preview-stage">
+            <canvas id="preview-canvas" aria-label="Drag to orbit around the model"></canvas>
+            <div id="load-message" class="load-message" role="status" aria-live="polite"></div>
+            <div class="stage-badge"><span></span> PREVIEW · NOT IN GAME</div>
+            <div class="stage-hint">DRAG TO ORBIT <span>·</span> SCROLL TO ZOOM</div>
+          </div>
+          <div class="caption-row">
+            <span id="asset-caption">Loading models…</span>
+            <span id="bounds-caption">—</span>
+          </div>
+        </section>
+
+        <aside class="control-panel" aria-label="Preview controls">
+          <section class="control-section player-reference">
+            <div class="eyebrow">1:1 GAME SCALE</div>
+            <h2>SCOUT REFERENCE</h2>
+            <div class="player-control-row">
+              <label class="player-toggle">
+                <input id="player-visible" type="checkbox" checked />
+                <span>SHOW</span>
+              </label>
+              <label class="player-distance">
+                <span>CENTER DISTANCE <output id="player-distance-value">—</output></span>
+                <input id="player-distance" type="range" min="1" max="50" step="0.2" value="12" />
+              </label>
+            </div>
+            <p id="player-size-note">Exact gameplay model; minimum distance clears the asset.</p>
+          </section>
+
+          <section class="control-section">
+            <div class="section-heading">
+              <div>
+                <div class="eyebrow">DIRECTIONAL KEY</div>
+                <h2>LIGHT POSITION</h2>
+              </div>
+              <button id="light-reset" class="small-button" type="button">GAME DEFAULT</button>
+            </div>
+            <p>
+              Move the key light around the model. Ambient and fill light keep the game's camp
+              balance.
+            </p>
+            <label class="axis-control">
+              <span>X <output id="light-x-value">−8.2</output></span>
+              <input id="light-x" type="range" min="-20" max="20" step="0.2" value="-8.2" />
+            </label>
+            <label class="axis-control">
+              <span>Y <output id="light-y-value">11.2</output></span>
+              <input id="light-y" type="range" min="-20" max="20" step="0.2" value="11.2" />
+            </label>
+            <label class="axis-control">
+              <span>Z <output id="light-z-value">4.8</output></span>
+              <input id="light-z" type="range" min="-20" max="20" step="0.2" value="4.8" />
+            </label>
+          </section>
+
+          <section class="control-section render-note">
+            <div class="eyebrow">GAME RENDER SETTINGS</div>
+            <h2>BASE DAYLIGHT</h2>
+            <p>
+              Uses the game's color space, ACES tone mapping, exposure, ambient colors, key light,
+              shadows, and camp ground. Weather and combat effects are omitted.
+            </p>
+          </section>
+          <div id="viewer-status" class="viewer-status" role="status" aria-live="polite">
+            Preparing preview…
+          </div>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="./viewer.ts"></script>
+  </body>
+</html>
