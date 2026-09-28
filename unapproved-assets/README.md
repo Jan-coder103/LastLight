@@ -4,6 +4,8 @@ This is a review staging area. Candidate assets here are not included in Last Li
 
 Read [`AGENTS.md`](AGENTS.md) before creating or revising candidates. It contains the detailed project style, palette, geometry conventions, deliverables, and Git boundary. The [`examples/`](examples/) folder holds reference copies of the current `buildingShell.ts` and `waterTower.ts` modules.
 
+[`ASSET_IDEAS.txt`](ASSET_IDEAS.txt) contains optional prompts for 50 candidate assets across city, rural, military, port, mountain, industrial, and survival-prop themes.
+
 For each candidate, keep a TypeScript draft module and a companion Markdown review sheet together. Optional renders or modeling source files can help with review. Do not add candidates to the live catalog or edit any file outside this folder.
 
 ## Preview models

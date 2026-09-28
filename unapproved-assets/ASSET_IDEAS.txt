@@ -1,0 +1,68 @@
+LAST LIGHT — 50 ASSET IDEAS
+
+Use these as optional starting points for candidate models. They are ideas only, not approved content or commitments to add them to the game. Keep any drafts in this folder and follow AGENTS.md for scale, style, palette, and handoff details.
+
+CITY AND SUBURBS
+
+01. Damaged row house — a narrow two-storey home with a broken roof edge, boarded windows, and a clear front door.
+02. Burned corner store — a compact shop shell with a faded awning, cracked display windows, and a blocked side entrance.
+03. Apartment block entrance — a reusable ground-floor facade with a recessed doorway, mailboxes, and a small canopy.
+04. Rooftop water tank — a low-poly metal tank and support frame that can silhouette above city roofs.
+05. Parking garage ramp — a recognizable concrete ramp section with chipped edges and a partial barrier.
+06. Collapsed pedestrian bridge — a compact road landmark made from broken deck sections and bent supports.
+07. City bus wreck — a damaged but readable bus shell that can act as a large obstacle or landmark.
+08. Ambulance wreck — a compact emergency vehicle with faded paint, damaged lights, and subdued red markings.
+09. Transit shelter — a bus-stop shelter with a cracked panel, bench, and weathered route sign.
+10. Alley fire escape — a wall-mounted ladder and small platforms for a distinctive building silhouette.
+
+FOREST AND RURAL
+
+11. Forest ranger cabin — a small timber building with a covered porch, boarded windows, and one usable entrance.
+12. Fire lookout tower — a slender timber or metal tower with a simple enclosed lookout cabin.
+13. Hunting blind — a raised, weathered hide with ladder rungs and narrow viewing slits.
+14. Abandoned sawmill — a low industrial shed with a broad roof, loading bay, and simple exterior machinery.
+15. Timber stacks — several reusable piles of cut logs with irregular ends and a practical collision footprint.
+16. Burned tree cluster — a small group of blackened trunks and muted dead branches for fire-damaged forest patches.
+17. Roadside picnic shelter — a timber shelter with a roof, table, and scattered debris for a rural rest stop.
+18. Farm grain silo — a cylindrical storage landmark with a cone roof, ladder, and small attached utility shed.
+19. Barn shell — a broad rural building with sliding doors, faded siding, and a broken roof section.
+20. Wind pump — a compact old farm water pump with a simple multi-blade wheel and a grounded support frame.
+
+MILITARY BASE AND CHECKPOINTS
+
+21. Vehicle checkpoint — a small road control point with concrete barriers, a booth, and faded warning signs.
+22. Blast-wall segment — modular concrete wall pieces that can form a base perimeter or protect a supply area.
+23. Pillbox guard post — a low reinforced lookout with a narrow firing slit and an approachable door.
+24. Aircraft hangar shell — a wide military building with a large sliding-door opening and weathered metal panels.
+25. Radar dish — a large, faceted dish on a simple rotating-looking pedestal, suitable as a distant landmark.
+26. Communications truck — a military utility vehicle with a box body, roof antenna, and muted field paint.
+27. Ammunition bunker — a compact earth-covered storage structure with a heavy door and warning placards.
+28. Vehicle maintenance bay — an open-sided service shelter with a lift frame, tool cabinet, and spare tire stack.
+29. Portable floodlight tower — a simple trailer or tripod unit with a mast and a few blocky lamps.
+30. Field medical station — a canvas shelter or container with restrained medical markings and a clear entrance.
+
+PORT, MOUNTAIN, AND INDUSTRIAL AREAS
+
+31. Ferry terminal shell — a coastal building facade with a ticket window, covered queue, and salt-worn details.
+32. Cargo container stack — reusable shipping containers with restrained color variations and damaged corner panels.
+33. Dry dock crane — a large, simple gantry silhouette that can mark a harbor or shipyard district.
+34. Flooded road marker — a leaning depth post and guardrail fragment for a low-lying or storm-damaged map.
+35. Mountain road tunnel — a rough concrete tunnel mouth with cracked retaining walls and a blocked lane.
+36. Avalanche barrier — a repeated timber or steel roadside frame for a cold mountain pass.
+37. Weather station hut — a small isolated ridge building with a mast, sensor frame, and snow-worn surfaces.
+38. Electrical substation — a fenced utility yard with a transformer, insulators, and a readable central silhouette.
+39. Water treatment tanks — a small set of circular basins, pipes, and a service platform for an industrial landmark.
+40. Quarry crusher — a blocky aggregate-processing machine with a hopper and conveyor frame.
+
+LOOT, SURVIVAL, AND INTERACTION PROPS
+
+41. Handmade supply cache — a reinforced wooden crate with rope, patches, and a distinctive lid that reads at distance.
+42. Wall-mounted medical cabinet — a small searchable cabinet with a hinged-looking door and a faded cross marking.
+43. Locked ammunition locker — a squat metal box with a latch and a few painted inventory marks.
+44. Abandoned fuel pump — a weathered pump island with a hose, protective posts, and muted warning colors.
+45. Portable generator — a compact generator with a frame, exhaust, and simple control panel.
+46. Hand-crank water pump — a standalone pump with a lever and a bucket or short pipe outlet.
+47. Makeshift lookout platform — a timber platform built from scavenged boards, with a ladder and partial railing.
+48. Barricade gate — a reusable road gate made from timber or scrap metal, with a small control box or chain point.
+49. Evacuation rally marker — a weathered sign, flare stand, or painted ground marker hinting at a failed extraction point.
+50. Scrap sorting station — a waist-high table with separated metal parts, a hand scale, and a few reusable bins.
