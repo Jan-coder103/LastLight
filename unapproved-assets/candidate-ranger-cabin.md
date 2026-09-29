@@ -3,6 +3,21 @@
 Draft ID: `candidate-ranger-cabin` · Category: `building` · Status: **Ready for owner review**
 Source idea: `ASSET_IDEAS.txt` #11, "Forest and rural"
 
+## Revision (owner feedback: floating above ground, porch too small for a person)
+
+- **Floating:** the old 0.44 m footing course topped out 11 cm below the wall bases, leaving a
+  daylight slit under the walls that read as the cabin hovering over its own foundation. The
+  footing is now 0.7 m tall, so the wall bases (0.55 m) and the floor slab (0.52 m) sit inside
+  it with no gap.
+- **Porch:** the old porch roof swept at 2.3-2.55 m - below the 2.1 m scout's head once the
+  0.34 m deck was underfoot. The deck is now 6.4 x 2.2 m (was 5.9 x 1.5) and the roof sits at
+  2.78-3.5 m: **2.44 m of headroom over the boards**, a full scout plus a hat. A second step
+  down to the ground was added and the rail respanned between the moved posts. The door
+  interaction point moved to (0, 0, 2.6), on the deck in front of the open door.
+- Declared `dimensions`: **6.6 x 5.0 x 6.4 m** (measured 6.60 x 4.85 x 6.38 m). Collider,
+  materials, and the open-doorway geometry are unchanged.
+
+
 ## Purpose and intended placement
 
 A small timber cabin with a covered porch, boarded windows, and **one usable entrance**. Intended

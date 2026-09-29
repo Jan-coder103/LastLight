@@ -3,6 +3,17 @@
 Draft ID: `candidate-row-house` · Category: `building` · Status: **Ready for owner review**
 Source idea: `ASSET_IDEAS.txt` #01, "City and suburbs"
 
+## Revision (owner feedback: part of the roof clips through the building)
+
+The collapsed section of the -X slope was a full-width panel tilted 0.5 rad at z 3.0, and its
+outboard end ran through the top of the front wall and out past the front gable. It is now a
+shorter broken chunk (2.0 x 2.6 m) at 0.4 rad, contained inside the attic: high end tucked just
+under the intact slope's underside, low end broken through onto the loft floor, 0.1 m clear of
+the front gable and clear of the exposed rafters at the tear line. It is seen only through the
+gap in the slope - which is where a fallen roof section belongs. Dimensions, collider, and
+materials are unchanged (measured 6.75 x 8.12 x 9.62 m in all variants).
+
+
 ## Purpose and intended placement
 
 A narrow two-storey terrace home with a broken roof edge, boarded windows, and a clear front

@@ -157,12 +157,14 @@ export const candidateRowHouse: AuthoredAsset = {
     slopeLeft.castShadow = true;
     house.add(slopeLeft);
 
-    const slopeCollapsed = new Mesh(
-      new BoxGeometry(SLOPE_LENGTH, roofThickness, 3.5),
-      roofMaterial,
-    );
-    slopeCollapsed.position.set(-1.55, 6.55, 3.0);
-    slopeCollapsed.rotation.z = 0.5;
+    // The fallen section of the -X slope lies INSIDE the attic: high end tucked just under the
+    // intact slope's underside, low end broken through onto the loft floor. The first draft
+    // tilted the full-width panel at 0.5 rad at z 3.0, which drove its outboard end through the
+    // front wall and the front gable; this one is a shorter broken chunk that stays inside the
+    // roof envelope and is only seen through the gap.
+    const slopeCollapsed = new Mesh(new BoxGeometry(2.0, roofThickness, 2.6), roofMaterial);
+    slopeCollapsed.position.set(-1.75, 6.66, 2.75);
+    slopeCollapsed.rotation.z = 0.4;
     slopeCollapsed.castShadow = true;
     house.add(slopeCollapsed);
 

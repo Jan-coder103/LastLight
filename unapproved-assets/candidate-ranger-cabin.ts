@@ -106,18 +106,20 @@ export const candidateRangerCabin: AuthoredAsset = {
   id: 'candidate-ranger-cabin',
   name: 'Forest Ranger Cabin',
   category: 'building',
-  dimensions: { x: 6.2, y: 5.0, z: 5.5 },
+  dimensions: { x: 6.6, y: 5.0, z: 6.4 },
   // The cabin body only. The porch deck and its roof are left non-solid so the player can step
   // up onto the porch and stand under the porch roof, which is the point of a porch.
   collider: { center: { x: 0, y: 1.9, z: 0 }, size: { x: 5.5, y: 3.8, z: 3.4 } },
-  interactionPoints: [{ id: 'front-door', label: 'Cabin Door', position: { x: 0, y: 0, z: 3.4 } }],
+  interactionPoints: [{ id: 'front-door', label: 'Cabin Door', position: { x: 0, y: 0, z: 2.6 } }],
   createVisual(variant = 0) {
     const cabin = new Group();
     const wallMaterial = wallMaterials[variant % wallMaterials.length]!;
 
-    // Stone footing course under the walls.
-    const footing = new Mesh(new BoxGeometry(WIDTH + 0.3, 0.44, DEPTH + 0.3), stoneMaterial);
-    footing.position.y = 0.22;
+    // Stone footing course under the walls. It rises to 0.7 m so the wall bases (0.55 m) and the
+    // floor slab (0.52 m) sit inside it — the earlier 0.44 m course left a daylight slit under
+    // the walls that made the whole cabin read as floating above its own foundation.
+    const footing = new Mesh(new BoxGeometry(WIDTH + 0.3, 0.7, DEPTH + 0.3), stoneMaterial);
+    footing.position.y = 0.35;
     footing.receiveShadow = true;
     cabin.add(footing);
 
@@ -200,27 +202,34 @@ export const candidateRangerCabin: AuthoredAsset = {
     chimney.castShadow = true;
     cabin.add(chimney);
 
-    // Covered porch across the front: deck, roof, two posts, and a rail.
-    const deck = new Mesh(new BoxGeometry(5.9, 0.34, 1.5), roofMaterial);
-    deck.position.set(0, 0.17, HALF_D + 0.75);
+    // Covered porch across the front: deck, roof, two posts, a rail, and a step. Owner review
+    // found the old porch too small to stand in — its roof swept at 2.3-2.55 m, below the 2.1 m
+    // scout's head once the 0.34 m deck was added. The deck is now 2.2 m deep and the roof sits
+    // at 2.78-3.5 m, a full head of clearance over the deck boards.
+    const deck = new Mesh(new BoxGeometry(6.4, 0.34, 2.2), roofMaterial);
+    deck.position.set(0, 0.17, HALF_D + 1.1);
     deck.receiveShadow = true;
     deck.castShadow = true;
     cabin.add(deck);
-    const porchRoof = new Mesh(new BoxGeometry(6.0, 0.16, 1.7), roofMaterial);
-    porchRoof.position.set(0, 2.55, HALF_D + 0.85);
+    const porchRoof = new Mesh(new BoxGeometry(6.6, 0.16, 2.5), roofMaterial);
+    porchRoof.position.set(0, 3.15, 2.8);
     porchRoof.rotation.x = 0.3;
     porchRoof.castShadow = true;
     cabin.add(porchRoof);
     for (const side of [-1, 1]) {
-      const post = new Mesh(new BoxGeometry(0.16, 2.2, 0.16), wallMaterial);
-      post.position.set(side * 2.6, 1.44, HALF_D + 1.5);
+      const post = new Mesh(new BoxGeometry(0.16, 2.54, 0.16), wallMaterial);
+      post.position.set(side * 3.05, 1.61, 3.65);
       post.castShadow = true;
       cabin.add(post);
     }
-    const rail = new Mesh(new BoxGeometry(5.36, 0.1, 0.1), wallMaterial);
-    rail.position.set(0, 0.95, HALF_D + 1.5);
+    const rail = new Mesh(new BoxGeometry(5.9, 0.1, 0.1), wallMaterial);
+    rail.position.set(0, 0.95, 3.8);
     rail.castShadow = true;
     cabin.add(rail);
+    const porchStep = new Mesh(new BoxGeometry(1.8, 0.16, 0.5), stoneMaterial);
+    porchStep.position.set(0, 0.08, 4.15);
+    porchStep.receiveShadow = true;
+    cabin.add(porchStep);
 
     // The door itself, hinged open and standing out onto the porch. Measured by raycast: the
     // opening shows the dark interior panel, not a wall.

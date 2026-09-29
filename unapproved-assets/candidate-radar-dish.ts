@@ -83,7 +83,7 @@ export const candidateRadarDish: AuthoredAsset = {
   id: 'candidate-radar-dish',
   name: 'Radar Dish',
   category: 'landmark',
-  dimensions: { x: 7.2, y: 9.2, z: 7.0 },
+  dimensions: { x: 7.2, y: 9.5, z: 6.6 },
   // Pedestal and pad only. The dish is more than 5 m overhead and a player can walk underneath it,
   // which is the better read. Same judgement as the wind pump, for the same reason.
   collider: { center: { x: 0, y: 2.6, z: 0 }, size: { x: 2.3, y: 5.2, z: 2.3 } },
@@ -130,9 +130,14 @@ export const candidateRadarDish: AuthoredAsset = {
     radar.add(head);
 
     // The bowl group is authored in cap space: a spherical cap around +Y whose concave side faces
-    // -Y. Rotating it -90 degrees about X turns the opening toward +Z.
+    // -Y. Rotating it -90 degrees about X turns the opening toward +Z. The bowl is then shifted
+    // along +Z so its back hub lands exactly on the head origin — until this shift the whole cap
+    // hovered 2-3.5 m BEHIND the pedestal with nothing connecting the two, which read as a dish
+    // floating next to a tower. With the hub on the origin the dish also stays centred over the
+    // pedestal for every tilt, because the head rotates about that same point.
     const bowl = new Group();
     bowl.rotation.x = -Math.PI / 2;
+    bowl.position.z = DISH_R + 0.06;
     head.add(bowl);
 
     // Faceted spherical cap. 12 x 4 segments with flat shading: enough to read as a curved dish,
@@ -192,21 +197,37 @@ export const candidateRadarDish: AuthoredAsset = {
       bowl.add(strut);
     }
 
-    // Equipment box at the foot, and a short access ladder up the pedestal.
+    // Mount, counterweight, equipment box, and access ladder, all on the -Z side of the
+    // pedestal. The dish shell now sweeps the +Z side in every variant, so anything left in
+    // front of the pedestal would be clipped by the tilted rim; the rear stays clear at all
+    // attitudes and is where a real az-el mount hangs its balance weight anyway.
+    const mountPost = new Mesh(new BoxGeometry(0.34, 0.8, 0.3), frameMaterial);
+    mountPost.position.set(0, 6.0, -0.55);
+    mountPost.castShadow = true;
+    radar.add(mountPost);
+    const mountArm = new Mesh(new BoxGeometry(0.3, 0.26, 0.6), frameMaterial);
+    mountArm.position.set(0, 6.28, -0.32);
+    mountArm.castShadow = true;
+    radar.add(mountArm);
+    const counterweight = new Mesh(new BoxGeometry(0.42, 0.5, 0.44), frameMaterial);
+    counterweight.position.set(0, 5.95, -0.85);
+    counterweight.castShadow = true;
+    radar.add(counterweight);
+
     const cabinet = new Mesh(new BoxGeometry(1.1, 1.3, 0.7), frameMaterial);
-    cabinet.position.set(1.3, 0.36 + 0.65, 0.9);
+    cabinet.position.set(1.3, 0.36 + 0.65, -0.9);
     cabinet.castShadow = true;
     radar.add(cabinet);
     for (const x of [0.42, 0.86]) {
       const rail = new Mesh(new BoxGeometry(0.06, 4.1, 0.06), frameMaterial);
-      rail.position.set(x, 0.36 + 2.05, 1.15);
+      rail.position.set(x, 0.36 + 2.05, -1.15);
       rail.castShadow = true;
       radar.add(rail);
     }
     // Rung spacing 0.41 m: close enough to read as a real ladder.
     for (let i = 0; i < 9; i++) {
       const rung = new Mesh(new BoxGeometry(0.5, 0.05, 0.05), frameMaterial);
-      rung.position.set(0.64, 0.72 + i * 0.41, 1.15);
+      rung.position.set(0.64, 0.72 + i * 0.41, -1.15);
       radar.add(rung);
     }
 

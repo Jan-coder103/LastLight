@@ -3,6 +3,23 @@
 Draft ID: `candidate-vehicle-checkpoint` · Category: `prop` · Status: **Ready for owner review**
 Source idea: `ASSET_IDEAS.txt` #21, "Military base and checkpoints"
 
+## Revision (owner feedback: rotate the three barriers 90 degrees)
+
+Done, and it was the missing half of the design: the barriers were 3 m long along X - parallel
+to traffic, blocking nothing. They now lie **across the lane** (long axis on Z; the rotation is
+the only change to the barrier itself) and the stagger forms a real chicane for the -Z oncoming
+traffic: pass left, pass right, swing wide left. Two consequences were handled:
+
+- The third gate at its old (x -0.8, z 0.4) would have run its new z-extent into the booth
+  plinth, so it swings wider to **x -1.5** and ends 0.08 m clear of the plinth; the booth roof
+  overhang passes 1.6 m above it.
+- Variant 2's fourth gate moved to (1.6, 2.0), closing the drive-around past the booth instead
+  of intersecting it.
+
+Declared `dimensions`: **6.9 x 2.9 x 7.8 m** (measured 6.25 x 2.78 x 7.80 m). Collider and
+interaction point unchanged.
+
+
 ## Purpose and intended placement
 
 A small road control point: a guard booth, staggered concrete barriers forming a lane, and two
@@ -24,8 +41,9 @@ The idea names exactly three things and all three are modelled. Nothing was adde
 
 ## Pivot and front direction
 
-Ground at y = 0. **The road runs along X**, so the barriers are 3.0 m long in X and the asset
-"faces" in Z. **-Z is oncoming traffic**; the booth's window and the signs face that way.
+Ground at y = 0. **Traffic runs along Z**, and since the 90-degree barrier revision the
+barriers lie across the lane (3.0 m on Z) while the asset "faces" in Z. **-Z is oncoming
+traffic**; the booth's window and the signs face that way.
 
 That is the opposite of most assets in this batch, where +Z is the front. Here +Z is the shoulder
 the booth stands on, which is the only sensible arrangement for something that straddles a road.

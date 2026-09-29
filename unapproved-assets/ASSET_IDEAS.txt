@@ -1,4 +1,4 @@
-LAST LIGHT — 50 ASSET IDEAS
+LAST LIGHT — 60 ASSET IDEAS
 
 Use these as optional starting points for candidate models. They are ideas only, not approved content or commitments to add them to the game. Keep any drafts in this folder and follow AGENTS.md for scale, style, palette, and handoff details.
 
@@ -43,26 +43,39 @@ MILITARY BASE AND CHECKPOINTS
 
 PORT, MOUNTAIN, AND INDUSTRIAL AREAS
 
-31. Ferry terminal shell — a coastal building facade with a ticket window, covered queue, and salt-worn details.
-32. Cargo container stack — reusable shipping containers with restrained color variations and damaged corner panels.
-33. Dry dock crane — a large, simple gantry silhouette that can mark a harbor or shipyard district.
-34. Flooded road marker — a leaning depth post and guardrail fragment for a low-lying or storm-damaged map.
-35. Mountain road tunnel — a rough concrete tunnel mouth with cracked retaining walls and a blocked lane.
-36. Avalanche barrier — a repeated timber or steel roadside frame for a cold mountain pass.
-37. Weather station hut — a small isolated ridge building with a mast, sensor frame, and snow-worn surfaces.
-38. Electrical substation — a fenced utility yard with a transformer, insulators, and a readable central silhouette.
-39. Water treatment tanks — a small set of circular basins, pipes, and a service platform for an industrial landmark.
-40. Quarry crusher — a blocky aggregate-processing machine with a hopper and conveyor frame.
+31. [x] Ferry terminal shell — a coastal building facade with a ticket window, covered queue, and salt-worn details.  -> candidate-ferry-terminal.ts / .md
+32. [x] Cargo container stack — reusable shipping containers with restrained color variations and damaged corner panels.  -> candidate-cargo-containers.ts / .md
+33. [x] Dry dock crane — a large, simple gantry silhouette that can mark a harbor or shipyard district.  -> candidate-dry-dock-crane.ts / .md
+34. [x] Flooded road marker — a leaning depth post and guardrail fragment for a low-lying or storm-damaged map.  -> candidate-flooded-road-marker.ts / .md
+35. [x] Mountain road tunnel — a rough concrete tunnel mouth with cracked retaining walls and a blocked lane.  -> candidate-mountain-tunnel.ts / .md
+36. [x] Avalanche barrier — a repeated timber or steel roadside frame for a cold mountain pass.  -> candidate-avalanche-barrier.ts / .md
+37. [x] Weather station hut — a small isolated ridge building with a mast, sensor frame, and snow-worn surfaces.  -> candidate-weather-station.ts / .md
+38. [x] Electrical substation — a fenced utility yard with a transformer, insulators, and a readable central silhouette.  -> candidate-electrical-substation.ts / .md
+39. [x] Water treatment tanks — a small set of circular basins, pipes, and a service platform for an industrial landmark.  -> candidate-water-treatment-tanks.ts / .md
+40. [x] Quarry crusher — a blocky aggregate-processing machine with a hopper and conveyor frame.  -> candidate-quarry-crusher.ts / .md
 
 LOOT, SURVIVAL, AND INTERACTION PROPS
 
-41. Handmade supply cache — a reinforced wooden crate with rope, patches, and a distinctive lid that reads at distance.
-42. Wall-mounted medical cabinet — a small searchable cabinet with a hinged-looking door and a faded cross marking.
-43. Locked ammunition locker — a squat metal box with a latch and a few painted inventory marks.
-44. Abandoned fuel pump — a weathered pump island with a hose, protective posts, and muted warning colors.
-45. Portable generator — a compact generator with a frame, exhaust, and simple control panel.
-46. Hand-crank water pump — a standalone pump with a lever and a bucket or short pipe outlet.
-47. Makeshift lookout platform — a timber platform built from scavenged boards, with a ladder and partial railing.
-48. Barricade gate — a reusable road gate made from timber or scrap metal, with a small control box or chain point.
-49. Evacuation rally marker — a weathered sign, flare stand, or painted ground marker hinting at a failed extraction point.
-50. Scrap sorting station — a waist-high table with separated metal parts, a hand scale, and a few reusable bins.
+41. [x] Handmade supply cache — a reinforced wooden crate with rope, patches, and a distinctive lid that reads at distance.  -> candidate-supply-cache.ts / .md
+42. [x] Wall-mounted medical cabinet — a small searchable cabinet with a hinged-looking door and a faded cross marking.  -> candidate-medical-cabinet.ts / .md
+43. [x] Locked ammunition locker — a squat metal box with a latch and a few painted inventory marks.  -> candidate-ammunition-locker.ts / .md
+44. [x] Abandoned fuel pump — revised per owner feedback into a whole abandoned roadside gas station (store, canopy, two dispensers, price sign).  -> candidate-gas-station.ts / .md (supersedes candidate-fuel-pump)
+45. [x] Portable generator — a compact generator with a frame, exhaust, and simple control panel.  -> candidate-portable-generator.ts / .md
+46. [x] Hand-crank water pump — a standalone pump with a lever and a bucket or short pipe outlet.  -> candidate-hand-crank-pump.ts / .md
+47. [x] Makeshift lookout platform — a timber platform built from scavenged boards, with a ladder and partial railing.  -> candidate-lookout-platform.ts / .md
+48. [x] Barricade gate — a reusable road gate made from timber or scrap metal, with a small control box or chain point.  -> candidate-barricade-gate.ts / .md
+49. [x] Evacuation rally marker — a weathered sign, flare stand, or painted ground marker hinting at a failed extraction point.  -> candidate-rally-marker.ts / .md
+50. [x] Scrap sorting station — a waist-high table with separated metal parts, a hand scale, and a few reusable bins.  -> candidate-scrap-station.ts / .md
+
+FUR THEMES, ADDED AFTER THE FIRST FIFTY
+
+51. [x] Abandoned farm tractor — a small tractor with one large rear wheel down, a bent exhaust stack, and a broken front axle for a rural ruin.  -> candidate-farm-tractor.ts / .md
+52. [x] Wooden power pylon — a braced timber pylon with two cross-arms and one sagging line, for roads and industrial edges.  -> candidate-power-pylon.ts / .md
+53. [x] Oil pumpjack — a beam pump with a horsehead, counterweight, and pitman arm as an industrial silhouette.  -> candidate-pumpjack.ts / .md
+54. [x] Coastal lighthouse — a tapered stone tower with a gallery, lantern room, and one surviving light for a shore district.  -> candidate-lighthouse.ts / .md
+55. [x] Rock outcrop — a cluster of faceted boulders and a low slab for terrain variation on roads and hillsides.  -> candidate-rock-outcrop.ts / .md
+56. [x] Road guardrail run — a short modular guardrail with posts, a beam, and a broken end for roadside edges.  -> candidate-guardrail.ts / .md
+57. [x] Helipad — a concrete pad with a faded marking, edge kerb, and a windsock post for military or industrial sites.  -> candidate-helipad.ts / .md
+58. [x] Sandbag emplacement — a low sandbag wall with a firing step, a plank, and a supply box as a defensive position.  -> candidate-sandbag-post.ts / .md
+59. [x] Ground-level water reservoir — a cylindrical tank on a low plinth with a ladder, valve, and outlet pipe.  -> candidate-water-reservoir.ts / .md
+60. [x] Camp rain catchment — a tarp funnel on a timber frame feeding a drum beside a fire ring, for camps.  -> candidate-rain-catchment.ts / .md

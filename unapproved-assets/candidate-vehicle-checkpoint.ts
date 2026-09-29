@@ -2,8 +2,10 @@ import { BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three';
 import type { AuthoredAsset } from './assetTypes';
 
 // Draft candidate. Not registered in the live catalog.
-// Vehicle checkpoint. The road runs along X; +Z is the shoulder the booth stands on, so -Z faces
-// oncoming traffic. Staggered barriers form a chicane down the lane.
+// Vehicle checkpoint. Traffic runs along Z: -Z is oncoming, and the booth stands on the +Z
+// shoulder with its window facing the approach. The barriers lie ACROSS the lane (long axis on
+// Z, rotated 90 degrees from the first draft, where they ran parallel to the road and blocked
+// nothing) and are staggered in X to form the chicane.
 const barrierMaterials = [
   new MeshStandardMaterial({ color: '#aaa18f', roughness: 1 }),
   new MeshStandardMaterial({ color: '#8b887d', roughness: 1 }),
@@ -57,7 +59,7 @@ export const candidateVehicleCheckpoint: AuthoredAsset = {
   id: 'candidate-vehicle-checkpoint',
   name: 'Vehicle Checkpoint',
   category: 'prop',
-  dimensions: { x: 6.4, y: 2.9, z: 6.7 },
+  dimensions: { x: 6.9, y: 2.9, z: 7.8 },
   // The booth only. A single box cannot cover both the booth and a staggered barrier line without
   // sealing the whole carriageway, which would defeat the asset's purpose. The barriers are
   // therefore not solid. See the review sheet.
@@ -69,12 +71,14 @@ export const candidateVehicleCheckpoint: AuthoredAsset = {
     const checkpoint = new Group();
     const barrierMaterial = barrierMaterials[variant % barrierMaterials.length]!;
     const boothMaterial = boothMaterials[variant % boothMaterials.length]!;
-    // Variants change the lane layout, which is the useful axis for a checkpoint.
+    // Variants change the lane layout, which is the useful axis for a checkpoint. The third gate
+    // swings wider on -X (past the booth's shoulder edge) so the rotated 3 m barrier ends clear
+    // of the booth plinth; variant 2's fourth gate closes the drive-around past the booth.
     const lanes: [number, number][][] = [
       [
         [-0.8, -2.8],
         [0.8, -1.2],
-        [-0.8, 0.4],
+        [-1.5, 0.4],
       ],
       [
         [-0.9, -2.4],
@@ -83,8 +87,8 @@ export const candidateVehicleCheckpoint: AuthoredAsset = {
       [
         [-0.8, -2.8],
         [0.8, -1.2],
-        [-0.8, 0.4],
-        [0.8, 2.0],
+        [-1.5, 0.4],
+        [1.6, 2.0],
       ],
     ];
     const layout = lanes[variant % lanes.length]!;
@@ -94,6 +98,9 @@ export const candidateVehicleCheckpoint: AuthoredAsset = {
       for (const [h, w] of PROFILE) {
         const course = new Mesh(new BoxGeometry(BARRIER_L, h, w), barrierMaterial);
         course.position.set(x, y + h / 2, z);
+        // Across the lane, not along it: owner review rotated the barriers 90 degrees so the
+        // chicane actually obstructs Z traffic instead of decorating the roadside.
+        course.rotation.y = Math.PI / 2;
         course.castShadow = true;
         course.receiveShadow = true;
         checkpoint.add(course);

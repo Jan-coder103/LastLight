@@ -3,6 +3,26 @@
 Draft ID: `candidate-radar-dish` · Category: `landmark` · Status: **Ready for owner review**
 Source idea: `ASSET_IDEAS.txt` #25, "Military base and checkpoints"
 
+## Revision (owner feedback: the dish is separated from the tower and not centred)
+
+Right again, and this time it was the mount. The bowl assembly was authored entirely behind the
+head origin - its back hub sat 3.46 m behind the pedestal axis - so the dish hovered beside the
+tower top touching nothing, with its whole mass hanging off to one side. The fix:
+
+- The bowl group is shifted along +Z by exactly the hub offset (`DISH_R + 0.06`), so the back
+  hub lands ON the head origin, directly over the bearing collar. The head tilts about that same
+  point, so the dish stays centred over the pedestal in all three variant attitudes.
+- A rear mount now connects the pair: a post up from the collar, an arm to the hub, and a
+  counterweight on the back - the classic az-el silhouette, and the balance the head lacked.
+- The access ladder and the equipment cabinet moved to the -Z side: with the dish mounted, its
+  rim sweeps the entire +Z side at every tilt, and the rear is the only zone clear at all three
+  attitudes. A rear ladder is also what a real pedestal has.
+- Declared `dimensions`: **7.2 x 9.5 x 6.6 m** (measured 5.68 x 9.12 x 4.57 m v0; 7.09 x 9.37 x
+  6.48 m v1 - the steep rolled tilt is the widest; 6.52 x 9.41 x 3.82 m v2). The visual centre
+  sits about +1 m in +Z of the pivot, which matters when a placement centres its bounds box.
+  The pedestal-only collider is unchanged.
+
+
 ## Purpose and intended placement
 
 A large faceted dish on a pedestal that reads as able to turn. The idea's own framing is
