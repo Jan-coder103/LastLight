@@ -39,7 +39,7 @@ describe('world asset LOD', () => {
         (candidate) => candidate.levels[0]?.object.userData.assetId === visualAssetId,
       );
       expect(lod, assetId).toBeDefined();
-      expect(lod!.levels.map((level) => level.distance)).toEqual([0, 58, 300]);
+      expect(lod!.levels.map((level) => level.distance)).toEqual([0, 58, 200]);
       expect(lod!.levels[1]!.hysteresis).toBe(0.12);
       expect(lod!.levels[2]!.hysteresis).toBe(0.12);
       const nearModel = lod!.levels[0]!.object;

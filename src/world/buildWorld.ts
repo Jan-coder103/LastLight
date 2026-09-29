@@ -52,7 +52,7 @@ const terrainColors = new Map(
   ]),
 );
 const lowDetailDistance = 58;
-const veryLowDetailDistance = 300;
+const veryLowDetailDistance = 200;
 const lodViewer = new PerspectiveCamera();
 
 export function updateWorldLods(world: Group, viewerPosition: Vector3): void {

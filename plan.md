@@ -155,8 +155,8 @@ Keep Phase 7 **Revisions needed** until the broad-view and 10,000-agent targets 
 **Goal:** reduce distant world-render work while keeping close asset quality, map readability, collision, and interactions intact.
 
 1. Provide far representations for every approved asset in `assetCatalog`, and do not add assets from `unapproved-assets/`. Pine trees and burned-tree clusters keep their hand-authored 58 m models; remaining assets use a fallback generated from the selected asset variant.
-2. Add an ultra-far representation starting at 300 m, generated from each selected detailed asset variant. Cap cylinder/cone/toroid roundness at three segments, spheres at 3×2 segments, omit parts under 0.25 m, merge compatible geometry by material, and disable its shadow casting. Keep the 58 m tier's 0.08 m cutoff and hand-authored models intact.
-3. Keep each placement's transform, identity, collision, interaction points, and close-range model. Building interaction IDs remain on the near model. LOD uses player-to-asset distance with 12% hysteresis at the 58 m and 300 m switches; tune these values only after checking both camera modes.
+2. Add an ultra-far representation starting at 200 m, generated from each selected detailed asset variant. Cap cylinder/cone/toroid roundness at three segments, spheres at 3×2 segments, omit parts under 0.25 m, merge compatible geometry by material, and disable its shadow casting. Keep the 58 m tier's 0.08 m cutoff and hand-authored models intact.
+3. Keep each placement's transform, identity, collision, interaction points, and close-range model. Building interaction IDs remain on the near model. LOD uses player-to-asset distance with 12% hysteresis at the 58 m and 200 m switches; tune these values only after checking both camera modes.
 4. Compare asset LOD separately from other changes such as spatial culling, shadow changes, fog, and render scale. Keep the current fog and draw distance unchanged unless an isolated measurement shows otherwise.
 5. Compare normal and broad views on the reference desktop and check transitions, landmarks, threats, and routes in both cameras before claiming a performance gain.
 

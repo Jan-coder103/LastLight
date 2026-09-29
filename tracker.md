@@ -243,10 +243,10 @@ Update a checkbox only when the work and its verification are complete. Add the 
 
 ### 7.3 Ultra-far catalog LOD stage
 
-- [x] Add a third model per approved catalog asset, beginning at 300 m with the existing 12% hysteresis.
+- [x] Add a third model per approved catalog asset, beginning at 200 m with the existing 12% hysteresis.
 - [x] Generate very-low-detail models from selected asset variants: round primitives are capped at three segments, parts below 0.25 m are omitted, compatible geometry is merged by material, and ultra-far models do not cast shadows.
 - [x] Cover the hand-authored pine and burned-tree assets as well as generic-fallback catalog assets; leave fog, draw distance, and unapproved candidates unchanged.
-- [ ] Review the 300 m silhouette and readability in both camera modes; compare reference-desktop performance before claiming a gain.
+- [ ] Review the 200 m silhouette and readability in both camera modes; compare reference-desktop performance before claiming a gain.
 
 ### 7.4 Performance gate
 
