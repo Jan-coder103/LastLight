@@ -26,6 +26,16 @@ export interface AuthoredAsset {
   collider?: AssetCollider;
   interactionPoints: AssetInteractionPoint[];
   createVisual: (variant?: number) => import('three').Group;
+  /** Optional far-distance representation used by the runtime renderer. */
+  createLowDetailVisual?: (
+    variant?: number,
+    sourceVisual?: import('three').Group,
+  ) => import('three').Group;
+  /** Optional ultra-far representation used beyond the normal far-detail range. */
+  createVeryLowDetailVisual?: (
+    variant?: number,
+    sourceVisual?: import('three').Group,
+  ) => import('three').Group;
 }
 
 export interface AssetPlacement {

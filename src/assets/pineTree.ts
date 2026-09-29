@@ -12,6 +12,9 @@ pineMaterials[0]!.name = 'foliage-light';
 pineMaterials[1]!.name = 'foliage-middle';
 pineMaterials[2]!.name = 'foliage-dark';
 
+const lowDetailTrunkGeometry = new CylinderGeometry(0.34, 0.48, 2.5, 4);
+const lowDetailCanopyGeometry = new ConeGeometry(2.05, 6.3, 5);
+
 export const pineTree: AuthoredAsset = {
   schemaVersion: 1,
   id: 'pine-tree',
@@ -37,6 +40,21 @@ export const pineTree: AuthoredAsset = {
     });
     trunk.castShadow = true;
     tree.userData.assetId = 'pine-tree';
+    return tree;
+  },
+  createLowDetailVisual() {
+    const tree = new Group();
+    const trunk = new Mesh(lowDetailTrunkGeometry, trunkMaterial);
+    trunk.position.y = 1.25;
+    trunk.castShadow = false;
+    tree.add(trunk);
+
+    const canopy = new Mesh(lowDetailCanopyGeometry, pineMaterials[1]!);
+    canopy.position.y = 4.8;
+    canopy.castShadow = false;
+    tree.add(canopy);
+    tree.userData.assetId = 'pine-tree';
+    tree.userData.lod = 'low';
     return tree;
   },
 };

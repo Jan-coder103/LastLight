@@ -4,9 +4,12 @@ import {
   DoubleSide,
   Float32BufferAttribute,
   Group,
+  LOD,
   Mesh,
   MeshStandardMaterial,
+  Object3D,
   PlaneGeometry,
+  PerspectiveCamera,
   Vector3,
 } from 'three';
 import { getAsset } from '../assets/catalog';
@@ -48,6 +51,17 @@ const terrainColors = new Map(
     new Color(definition.terrainColor),
   ]),
 );
+const lowDetailDistance = 58;
+const veryLowDetailDistance = 300;
+const lodViewer = new PerspectiveCamera();
+
+export function updateWorldLods(world: Group, viewerPosition: Vector3): void {
+  const lods = world.userData.lodObjects as LOD[] | undefined;
+  if (!lods) return;
+  lodViewer.position.copy(viewerPosition);
+  lodViewer.updateMatrixWorld(true);
+  for (const lod of lods) lod.update(lodViewer);
+}
 
 function makeTerrain(world: WorldData): Mesh {
   const segments = 72;
@@ -154,12 +168,27 @@ export function buildWorld(world: WorldData): Group {
     addRoadMarkings(root, road);
   }
 
-  const prototypes = new Map<string, Group>();
+  const prototypes = new Map<string, Object3D>();
+  const lodObjects: LOD[] = [];
   for (const [placementIndex, placement] of world.placements.entries()) {
     const key = `${placement.assetId}:${placement.variant}`;
     let prototype = prototypes.get(key);
     if (!prototype) {
-      prototype = getAsset(placement.assetId).createVisual(placement.variant);
+      const asset = getAsset(placement.assetId);
+      const highDetail = asset.createVisual(placement.variant);
+      if (asset.createLowDetailVisual && asset.createVeryLowDetailVisual) {
+        const lod = new LOD();
+        lod.addLevel(highDetail, 0);
+        const lowDetail = asset.createLowDetailVisual(placement.variant, highDetail);
+        lod.addLevel(lowDetail, lowDetailDistance);
+        lod.levels[1]!.hysteresis = 0.12;
+        const veryLowDetail = asset.createVeryLowDetailVisual(placement.variant, highDetail);
+        lod.addLevel(veryLowDetail, veryLowDetailDistance);
+        lod.levels[2]!.hysteresis = 0.12;
+        prototype = lod;
+      } else {
+        prototype = highDetail;
+      }
       prototypes.set(key, prototype);
     }
     const visual = prototype.clone(true);
@@ -169,15 +198,18 @@ export function buildWorld(world: WorldData): Group {
     visual.traverse((object) => {
       if (object instanceof Mesh) object.receiveShadow = true;
     });
+    if (visual instanceof LOD) lodObjects.push(visual);
     visual.name = `${placement.assetId} instance`;
     if (placement.assetId === 'building-shell') {
-      const door = visual.children[2];
+      const nearVisual = visual instanceof LOD ? visual.levels[0]?.object : visual;
+      const door = nearVisual?.children[2];
       if (door) door.userData.interactiveId = `building-${placementIndex}`;
       visual.userData.buildingId = `building-${placementIndex}`;
     }
     root.add(visual);
   }
 
+  root.userData.lodObjects = lodObjects;
   root.add(makeWorldEdgeMarkers(world));
   root.userData.staticColliderCount = world.colliders.length;
   root.userData.assetCount = world.placements.length;

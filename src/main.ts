@@ -86,7 +86,7 @@ import { GridNavigator, type NavPoint } from './navigation/GridNavigator';
 import { buildInterior } from './interiors/buildInterior';
 import { generateInterior, interiorWorld, type InteriorLayout } from './interiors/interiorLayout';
 import { PlayerController } from './player/PlayerController';
-import { buildWorld } from './world/buildWorld';
+import { buildWorld, updateWorldLods } from './world/buildWorld';
 import {
   generateWorld,
   terrainHeightAt,
@@ -4182,6 +4182,7 @@ function animate(now: number): void {
   if (chopper && (gamePhase === 'arrival' || gamePhase === 'takeoff'))
     cameraFollowTarget.copy(chopper.position);
   cameraRig.update(delta, cameraFollowTarget);
+  if (worldGroup.visible) updateWorldLods(worldGroup, player.position);
   const rainCanRender =
     stressActive || (gamePhase !== 'base' && !interiorSession && !campInteriorSession);
   atmosphereRuntime.update(

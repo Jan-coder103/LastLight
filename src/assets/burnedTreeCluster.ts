@@ -17,6 +17,7 @@ const ashMaterial = new MeshStandardMaterial({ color: '#444943', roughness: 1 })
 ashMaterial.name = 'ash-ground';
 
 const UP = new Vector3(0, 1, 0);
+const lowDetailLimbGeometry = new CylinderGeometry(0.12, 0.3, 1, 4);
 
 // A branch or trunk segment placed between two points. Branches are open-ended, which halves their
 // triangle count; at 0.1 m thick the ends are sub-pixel at play distance and a visible hole in the
@@ -159,6 +160,29 @@ export const burnedTreeCluster: AuthoredAsset = {
     trees.add(scorch);
 
     trees.userData.assetId = 'burned-tree-cluster';
+    return trees;
+  },
+  createLowDetailVisual(variant = 0) {
+    const trees = new Group();
+    const trunks = CLUSTERS[variant % 3]!;
+    const charMaterial = charMaterials[variant % charMaterials.length]!;
+    for (const trunk of trunks) {
+      const base = new Vector3(trunk.x, 0.3 * Math.sin(Math.atan(trunk.lean)), trunk.z);
+      const top = new Vector3(
+        trunk.x + Math.cos(trunk.dir) * trunk.h * trunk.lean,
+        trunk.h,
+        trunk.z + Math.sin(trunk.dir) * trunk.h * trunk.lean,
+      );
+      const direction = top.clone().sub(base);
+      const limb = new Mesh(lowDetailLimbGeometry, charMaterial);
+      limb.position.copy(base).add(top).multiplyScalar(0.5);
+      limb.quaternion.setFromUnitVectors(UP, direction.clone().normalize());
+      limb.scale.y = direction.length();
+      limb.castShadow = false;
+      trees.add(limb);
+    }
+    trees.userData.assetId = 'burned-tree-cluster';
+    trees.userData.lod = 'low';
     return trees;
   },
 };

@@ -218,20 +218,43 @@ Update a checkbox only when the work and its verification are complete. Add the 
 - [x] Report GPU frame-time p95 when `EXT_disjoint_timer_query_webgl2` is available; otherwise show it as unavailable without blocking play.
 - [x] Report Chromium JavaScript heap when available plus Three.js geometry/texture object counts; label these as object counts rather than GPU memory bytes.
 - [x] Record an initial embedded-browser idle-camp profile and keep its environment separate from the owner's 10k result.
+- [x] Record owner-provided short-window FPS averages (third person ~40/~18/~18–35; top-down ~38/~30/~24 for empty/wide/10k); these are the initial baseline and do not require an unchanged-build rerun.
+- [ ] After a targeted code change, compare empty, wide-view, normal-run, and 10k-horde results in both camera modes with matching settings; capture available telemetry. GPU time and heap showed N/A in the report. The dev panel labels GPU p95 and reads heap from optional `performance.memory`.
+- [ ] **Deferred:** record a normal-run profile on an actual Pixel 10a-class phone when the owner begins phone testing; confirm mobile browser and viewport then.
 
 ### 7.2 Targeted rendering optimization
 
 - [x] Stop rewriting every horde instance transform each display frame; queue only state changes and coalesce sparse instance-buffer uploads.
 - [x] Keep a full-upload fallback for dense changes or excessive update ranges.
-- [ ] Measure before/after horde CPU sync, GPU, draw calls, and frame interval at 10k in both camera modes on the reference setup.
-- [ ] Profile a normal active run in both camera modes and tune a demonstrated bottleneck without reducing gameplay clarity.
+- [ ] Profile before changing content; use JavaScript, GPU, simulation, instance-sync, draw-call, triangle, and resolution readings to distinguish CPU, GPU, and fill-rate limits.
+- [ ] Test static-asset batching/instancing and spatial chunk culling; separately test spatially chunked horde instances because the current horde `InstancedMesh` has frustum culling disabled.
+- [ ] Test distance-based asset LOD and far-field simplification without obscuring navigation, landmarks, or threats.
+- [ ] Test lower/tighter shadow settings and reduced atmosphere/post-processing as independent changes.
+- [ ] Test a configurable render-scale/pixel-ratio cap and mobile quality preset; retain only changes with repeatable before/after gains.
+- [ ] Re-measure the empty wide view, normal run, and 10k horde in both camera modes on the desktop, then confirm normal play on the target phone.
 
-### 7.3 Performance gate
+### 7.2 Approved catalog LOD coverage
 
-- [ ] Repeat stress start/stop cycles and confirm heap/object counts settle; log browser, OS, hardware, canvas size, pixel ratio, camera, seed, and pattern.
-- [x] Owner approved Phase 7 and authorized Phase 8 on 2026-09-26 (“green lights for next phase”); no revisions were reported.
+- [x] Add low-detail asset factories and player-distance LOD selection without changing placements, collision data, or interaction IDs.
+- [x] Keep hand-authored low models for pine trees and burned-tree clusters; provide simplified fallback LODs for every other approved catalog asset.
+- [x] Leave `unapproved-assets/`, fog, and draw distance unchanged. Building door interaction IDs stay attached to the near model.
+- [x] Run the production build. Earlier local preview captures of the two tree pilots varied too much to establish a reliable performance gain; reference-desktop comparison remains open.
+- [ ] Compare all asset families and near/far transitions in both cameras on the reference desktop; tune the shared 58 m threshold only from that review.
 
-Owner approval is recorded as the phase gate. The reference-machine normal/stress profiles above remain undocumented and were not inferred from the approval.
+### 7.3 Ultra-far catalog LOD stage
+
+- [x] Add a third model per approved catalog asset, beginning at 300 m with the existing 12% hysteresis.
+- [x] Generate very-low-detail models from selected asset variants: round primitives are capped at three segments, parts below 0.25 m are omitted, compatible geometry is merged by material, and ultra-far models do not cast shadows.
+- [x] Cover the hand-authored pine and burned-tree assets as well as generic-fallback catalog assets; leave fog, draw distance, and unapproved candidates unchanged.
+- [ ] Review the 300 m silhouette and readability in both camera modes; compare reference-desktop performance before claiming a gain.
+
+### 7.4 Performance gate
+
+- [ ] Repeat stress start/stop cycles and confirm heap/object counts settle.
+- [x] Owner approved the original Phase 7 gate and authorized Phase 8 on 2026-09-26.
+- [ ] Owner accepts the reopened desktop Phase 7 gate after targets are measured and met, or revised targets are explicitly agreed. Phone testing is deferred and remains unverified until a device is available.
+
+The original approval remains in the history. The 2026-09-29 low-FPS report reopens the performance work; the observations are not comparable benchmark results until browser, resolution, pixel ratio, seed, and camera path are recorded.
 
 ## Phase 8 checklist
 

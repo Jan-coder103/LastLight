@@ -92,7 +92,7 @@ From the camp panel, open **Asset Bench**. Select any of the 43 catalog assets, 
 
 ## Adding an authored asset
 
-Create a small module in `src/assets/` that exports an `AuthoredAsset` with a stable ID, schema version, dimensions, optional collider, interaction points, named materials, and a visual factory. Register it in `src/assets/catalog.ts`, then place its ID from `src/world/generateWorld.ts`; keep generated position/rotation/scale/variant values in `AssetPlacement`, not in the asset definition. Add deterministic coverage if the placement changes generation behavior.
+Create a small module in `src/assets/` that exports an `AuthoredAsset` with a stable ID, schema version, dimensions, optional collider, interaction points, named materials, and a visual factory. The catalog supplies merged low and very-low models automatically unless the asset defines `createLowDetailVisual(variant)` or `createVeryLowDetailVisual(variant)`. Register it in `src/assets/catalog.ts`, then place its ID from `src/world/generateWorld.ts`; keep generated position/rotation/scale/variant values in `AssetPlacement`, not in the asset definition. Add deterministic coverage if the placement changes generation behavior.
 
 ## Generated world regions
 

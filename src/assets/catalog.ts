@@ -1,6 +1,7 @@
 import { Mesh, MeshStandardMaterial, type Group } from 'three';
 import type { AssetDocument, AssetMaterialSetting } from './assetDocument';
 import type { AuthoredAsset } from './assetTypes';
+import { createLowDetailVisual, createVeryLowDetailVisual } from './lowDetailVisual';
 import { abandonedSubstation } from './abandonedSubstation';
 import { barricadeGate } from './barricadeGate';
 import { basicCampingTent } from './basicCampingTent';
@@ -45,52 +46,71 @@ import { weatherStation } from './weatherStation';
 import { waterTower } from './waterTower';
 import { windPump } from './windPump';
 
+const authoredAssets: AuthoredAsset[] = [
+  pineTree,
+  dryDockCrane,
+  electricalSubstation,
+  abandonedSubstation,
+  fireLookout,
+  radarDish,
+  rockOutcrop,
+  rooftopWaterTank,
+  rowHouse,
+  scrapStation,
+  streetLight,
+  timberStacks,
+  vehicleCheckpoint,
+  waterTreatmentTanks,
+  barricadeGate,
+  farmTractor,
+  lookoutPlatform,
+  pumpjack,
+  rangerCabin,
+  powerPylon,
+  weatherStation,
+  portableGenerator,
+  cargoContainers,
+  boulder,
+  buildingShell,
+  waterTower,
+  radioMast,
+  ambulanceWreck,
+  barnShell,
+  burnedCornerStore,
+  burnedTreeCluster,
+  cityBusWreck,
+  communicationTruck,
+  totaledCar,
+  fireBin,
+  portableFloodlightTower,
+  farmGrainSilo,
+  aircraftHangar,
+  helipad,
+  coastalLighthouse,
+  transitShelter,
+  windPump,
+  basicCampingTent,
+];
+
+function withDetailFallbacks(asset: AuthoredAsset): AuthoredAsset {
+  return {
+    ...asset,
+    createLowDetailVisual: asset.createLowDetailVisual
+      ? (variant = 0, sourceVisual) => asset.createLowDetailVisual!(variant, sourceVisual)
+      : (variant = 0, sourceVisual) =>
+          createLowDetailVisual(sourceVisual ?? asset.createVisual(variant), asset.id),
+    createVeryLowDetailVisual: asset.createVeryLowDetailVisual
+      ? (variant = 0, sourceVisual) => asset.createVeryLowDetailVisual!(variant, sourceVisual)
+      : (variant = 0, sourceVisual) =>
+          createVeryLowDetailVisual(sourceVisual ?? asset.createVisual(variant), asset.id),
+  };
+}
+
 export const assetCatalog: ReadonlyMap<string, AuthoredAsset> = new Map(
-  [
-    pineTree,
-    dryDockCrane,
-    electricalSubstation,
-    abandonedSubstation,
-    fireLookout,
-    radarDish,
-    rockOutcrop,
-    rooftopWaterTank,
-    rowHouse,
-    scrapStation,
-    streetLight,
-    timberStacks,
-    vehicleCheckpoint,
-    waterTreatmentTanks,
-    barricadeGate,
-    farmTractor,
-    lookoutPlatform,
-    pumpjack,
-    rangerCabin,
-    powerPylon,
-    weatherStation,
-    portableGenerator,
-    cargoContainers,
-    boulder,
-    buildingShell,
-    waterTower,
-    radioMast,
-    ambulanceWreck,
-    barnShell,
-    burnedCornerStore,
-    burnedTreeCluster,
-    cityBusWreck,
-    communicationTruck,
-    totaledCar,
-    fireBin,
-    portableFloodlightTower,
-    farmGrainSilo,
-    aircraftHangar,
-    helipad,
-    coastalLighthouse,
-    transitShelter,
-    windPump,
-    basicCampingTent,
-  ].map((asset) => [asset.id, asset]),
+  authoredAssets.map((asset): [string, AuthoredAsset] => {
+    const withLods = withDetailFallbacks(asset);
+    return [withLods.id, withLods];
+  }),
 );
 
 const overrides = new Map<string, AssetDocument>();
@@ -157,6 +177,20 @@ export function getAsset(assetId: string): AuthoredAsset {
       applyAssetMaterialSettings(visual, values.materials);
       return visual;
     },
+    createLowDetailVisual: asset.createLowDetailVisual
+      ? (variant = 0, sourceVisual) => {
+          const visual = asset.createLowDetailVisual!(variant, sourceVisual);
+          applyAssetMaterialSettings(visual, values.materials);
+          return visual;
+        }
+      : undefined,
+    createVeryLowDetailVisual: asset.createVeryLowDetailVisual
+      ? (variant = 0, sourceVisual) => {
+          const visual = asset.createVeryLowDetailVisual!(variant, sourceVisual);
+          applyAssetMaterialSettings(visual, values.materials);
+          return visual;
+        }
+      : undefined,
   };
   resolvedAssetCache.set(assetId, resolved);
   return resolved;
