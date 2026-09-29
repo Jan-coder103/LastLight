@@ -1,6 +1,6 @@
 # Coding handoff
 
-Updated: 2026-09-27
+Updated: 2026-09-29
 
 ## Inventory and scrap-yard follow-up
 
@@ -8,7 +8,7 @@ The hub and mission inventory now share one grid and retain the same item positi
 
 ## Current position
 
-Phases 1–9 are **Accepted**. Phases 10 and 11 are implemented and **Revisions needed** during the owner's combined playtest. The hub, chopper arrival/extraction, camera zoom, NPC movement, operations boards, rain puddles, and volumetric/distance fog revisions are implemented and await retest. Neither Phase 10 nor Phase 11 is accepted yet. Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
+Phases 1–9 are **Accepted**. Phases 10 and 11 remain **Revisions needed** during the owner's combined playtest. The hub, chopper arrival/extraction, camera zoom, NPC movement, operations boards, rain puddles, and volumetric/distance fog revisions are implemented and await retest. Phase 12's 38 owner-approved models are integrated. Phase 13's themed regions and placement are implemented and **Awaiting owner playtest**; do not mark Phases 12 or 13 accepted until the owner confirms the models and map in game. Phase 7 active-run and 10,000-agent profiles on reference hardware remain undocumented because the reference setup was not supplied.
 
 The shaped-item inventory extension is implemented and awaits owner playtest. **I** opens an 8×6 backpack with scout silhouette, item glyphs, drag placement, and a ground-drop arrow. The existing 90-credit cargo harness also expands it to 8×8. Field caches yield one seeded shaped item each. The same backpack is carried from camp into the field; extraction saves its changes, while death loses carried items and restores a basic rifle and three grenades. Camp resources and the safe reserve list stay protected. Firearms can be equipped from the grid; grenades occupy cells and are consumed by G. The camp has an east-side scrap hut, two enlarged intersecting piles, and a worker who converts scrap items to weightless scrap currency and trades five scrap for ten credits. A food stand buys and sells eight food items. Saved version-1 games migrate to the starter backpack once when needed. The owner should check drag/drop, field pickup, vendor transactions, and extraction/death persistence in the combined playtest.
 
@@ -19,6 +19,14 @@ Phase 9 adds a separate Asset Bench at `/asset-editor.html`, using the game’s 
 Phase 10 adds a separate walkable camp scene with a gate, perimeter fence, towers/guards, friendly NPCs, physical service stations, barracks and clinic interiors, a map/mission board, and a chopper pad. M opens the quick camp terminal; F uses nearby services and doors. Quartermaster buy/sell and the one-time cargo harness update existing saved camp data. Greywood is available at no fuel cost; Military Base and Large City are disabled. Camp buildings reuse the Phase 8 room/interior system. Implementation commit: `00bb345`. Initial playtest feedback aligned the operations board with its north-side service point, corrected the slanted tower ladder rungs, requested a more detailed helicopter, and requested separate quartermaster/storage menus. The revisions are implemented; owner retest remains pending.
 
 Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain presets, persistent accessibility options, instanced rain and hit particles, distant thunder, bounded camera shake, damage feedback, and synthesized action/weather audio cues. **O** opens Atmosphere & Accessibility. Presets take effect on the next deployment; accessibility options apply immediately. Implementation commit: `f4a1252`. The complete Phase 11 scope and combined owner checklist are in `README.md`.
+
+## Phase 12/13 themed asset placement
+
+The original 16-asset batch and the newly approved 22-model batch are registered in `src/assets/catalog.ts`; their source reviews are in `docs/asset-reviews/`. The second batch maps damaged row house, utility assets, and street props to urban; the fire lookout, ranger cabin, rock, timber, lookout platform, weather hut, and pylon to forest; tractor and pumpjack to farm; radar, checkpoint, and barricade to military; dock crane and containers to coastal; and generator plus abandoned substation to the survival camp. The abandoned substation has its own ID and uses variant 2 of the approved electrical substation module. `src/world/regionThemes.ts` defines urban, forest, farm, military, coastal, and survival-camp asset pools, role weights, terrain colors, density/spacing, and per-asset variant counts. Each Greywood seed generates all six themes on the 280 m map, with the original city–forest route at the center and four outer theme areas. The seeded quarter-turn rotates districts, roads, water, landmarks, loot, placements, and spawn together. The coastal water strip has matching visual and navigation collision data.
+
+Every placement carries a theme and region ID. The generator validates eligible pools, full asset bounds, collider overlaps, landing clearance, landmark approaches, and a reachable approach for every authored interaction point. The generator keeps the existing enterable city-shell entrances separate from the new decorative building shells; those new interiors are not implemented in this phase. The owner should use `PHASE13-00` through `PHASE13-03` to review rotations and the [Phase 13 checklist](README.md#phase-13-playtest-checklist). The canonical schematic is `docs/world-themes.svg`.
+
+Earlier Phase 13 verification on 2026-09-29, before the second approved batch: `npm run build` passed; `npm test` passed (15 files, 56 tests); the focused world suite passed (9 tests), including 16 theme seeds, same-seed replay, interaction routes, four map rotations, and seven-cache routing. The second batch has since extended the catalog and theme pools; its current build status is recorded below. The development browser preview loaded `PHASE13-00`, deployed to Greywood, rendered at approximately 59–60 FPS after insertion, then the idle scout was downed before visual traversal. This confirms launch/deployment and renderer startup, not owner visual acceptance. A repo-wide format check still reports pre-existing review-draft files under `unapproved-assets/`; touched runtime and documentation files were formatted separately.
 
 ## Read first
 
@@ -238,8 +246,9 @@ Phase 11 adds deterministic per-run low-sun/high-moon and clear/mist/rain preset
 ## Known limits and next action
 
 - Phase 7 remains owner-accepted, but its regular-run and 10,000-agent reference-hardware profiles were not documented. The reference browser/machine and numeric final limits remain open.
-- Next: owner completes the combined Phase 10/11 checklist in `README.md` and records feedback. Do not mark either phase accepted before explicit owner approval.
-- Current follow-up: owner retests the 2026-09-27 camp, arrival/extraction, camera, NPC, operations-board, puddle, and fog revisions while continuing the combined checklist; capture later findings as additional feedback without accepting either phase early.
+- Next: owner completes the combined Phase 10/11 review and Phase 13 review in `README.md`, then records feedback in `tracker.md`. Phase 12 and 13 are **Awaiting owner playtest**; do not mark them accepted before the owner confirms the in-game appearance and navigation.
+- The Phase 13 browser check confirms Greywood deployed and rendered, but the scout was downed before inspecting every region. The four-seed owner review remains necessary for visual coherence, both camera modes, shoreline, interaction approaches, and cache routes.
+- Current Phase 10/11 follow-up: owner retests the 2026-09-27 camp, arrival/extraction, camera, NPC, operations-board, puddle, and fog revisions while continuing the combined checklist; capture later findings without accepting either phase early.
 - Stress visuals are intentionally simplified low-poly instances; this phase proves tracked simulation and horde behavior, while Phase 7 owns draw-call, memory, frame-time, and reference-hardware targets.
 - Local obstacle steering is a short deflection check rather than full route planning. The owner should flag groups that stall at blocked cells or bunch in narrow spaces.
 - The regular run still caps at seven hostiles and remains separate from the Horde Simulation Lab.

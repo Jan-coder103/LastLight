@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 520" role="img" aria-labelledby="title description">
+  <title id="title">Greywood seeded region themes</title>
+  <desc id="description">A schematic of the canonical world layout: urban districts to the west, forest to the east, farm and coast to the north, military base and survival camp to the south, with deployment near the center.</desc>
+  <defs>
+    <pattern id="water" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(24)">
+      <rect width="10" height="10" fill="#536d70" />
+      <path d="M0 3h10 M0 8h10" stroke="#78908b" stroke-width="1.2" opacity=".7" />
+    </pattern>
+    <pattern id="roads" width="10" height="10" patternUnits="userSpaceOnUse">
+      <path d="M0 5h10" stroke="#eee8d4" stroke-width="2" stroke-dasharray="3 3" />
+    </pattern>
+    <style>
+      text { font-family: system-ui, sans-serif; fill: #f7f3e7; }
+      .region { stroke: #d8d0b8; stroke-width: 1.6; stroke-dasharray: 5 4; }
+      .label { font-size: 14px; font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: #27302b; stroke-width: 3px; stroke-linejoin: round; }
+      .small { font-size: 11px; paint-order: stroke; stroke: #27302b; stroke-width: 2.5px; stroke-linejoin: round; }
+    </style>
+  </defs>
+  <rect x="36" y="38" width="528" height="432" rx="12" fill="#6d7659" stroke="#c9c1aa" stroke-width="2" />
+  <text x="38" y="24" font-size="12">N · −Z</text>
+  <path d="M555 442v-28m0 0-6 8m6-8 6 8" fill="none" stroke="#eee8d4" stroke-width="2" />
+  <text x="555" y="456" font-size="11" text-anchor="middle">N</text>
+
+  <!-- Shallow world-space water strip along the coastal region's east edge. -->
+  <rect x="526" y="70" width="38" height="72" fill="url(#water)" />
+
+  <!-- Seeded thematic footprints. The city and forest each join overlapping districts. -->
+  <ellipse class="region" cx="135" cy="191" rx="67" ry="52" fill="#888675" />
+  <ellipse class="region" cx="135" cy="309" rx="67" ry="52" fill="#888675" />
+  <ellipse class="region" cx="206" cy="250" rx="29" ry="158" fill="#888675" />
+  <ellipse class="region" cx="441" cy="191" rx="72" ry="66" fill="#667852" />
+  <ellipse class="region" cx="441" cy="309" rx="72" ry="66" fill="#667852" />
+  <ellipse class="region" cx="292" cy="89" rx="72" ry="38" fill="#827951" />
+  <ellipse class="region" cx="490" cy="89" rx="43" ry="38" fill="#a69a78" />
+  <ellipse class="region" cx="94" cy="412" rx="43" ry="40" fill="#626b5a" />
+  <ellipse class="region" cx="375" cy="412" rx="72" ry="40" fill="#74785d" />
+
+  <!-- Road and trail guides. -->
+  <path d="M40 261H564 M242 38V470 M286 78V253 M440 135V272 M196 355H278 M375 355V454" fill="none" stroke="#353a35" stroke-width="8" stroke-linecap="round" />
+  <path d="M40 261H564 M242 38V470 M286 78V253 M440 135V272 M196 355H278 M375 355V454" fill="none" stroke="url(#roads)" stroke-width="2" />
+
+  <text class="label" x="135" y="188">URBAN</text>
+  <text class="small" x="135" y="207" text-anchor="middle">shops · wrecks · streets</text>
+  <text class="label" x="441" y="247">FOREST</text>
+  <text class="small" x="441" y="266" text-anchor="middle">pine · burned trees · trails</text>
+  <text class="label" x="292" y="86">FARM</text>
+  <text class="small" x="292" y="104" text-anchor="middle">barn · silo · wind pump</text>
+  <text class="label" x="486" y="86">COAST</text>
+  <text class="small" x="489" y="104" text-anchor="middle">lighthouse · water edge</text>
+  <text class="label" x="94" y="408">MILITARY</text>
+  <text class="small" x="94" y="427" text-anchor="middle">hangar · helipad · truck</text>
+  <text class="label" x="375" y="408">SURVIVAL CAMP</text>
+  <text class="small" x="375" y="427" text-anchor="middle">tent · fire bin</text>
+
+  <circle cx="292" cy="258" r="7" fill="#d9bc73" stroke="#3a3327" stroke-width="2" />
+  <text class="small" x="306" y="254">deployment</text>
+  <text x="300" y="495" font-size="12" text-anchor="middle">Canonical schematic · every seed rotates the region layout by a quarter turn</text>
+</svg>

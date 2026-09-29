@@ -5,9 +5,12 @@ import {
   terrainBiomeBlendAt,
   validateWorld,
   WORLD_SIZE,
+  type WorldDistrict,
 } from './generateWorld';
 import { GridNavigator } from '../navigation/GridNavigator';
 import { placeLootCaches } from '../game/loot';
+import { getAsset } from '../assets/catalog';
+import { eligibleAssetIds, WORLD_THEME_DEFINITIONS, type WorldTheme } from './regionThemes';
 
 function pathLength(
   navigator: GridNavigator,
@@ -24,6 +27,26 @@ function pathLength(
     previousZ = point.z;
   }
   return path.length === 0 ? Number.POSITIVE_INFINITY : length;
+}
+
+function districtsOverlap(first: WorldDistrict, second: WorldDistrict): boolean {
+  const minX = Math.max(first.centerX - first.radiusX, second.centerX - second.radiusX);
+  const maxX = Math.min(first.centerX + first.radiusX, second.centerX + second.radiusX);
+  const minZ = Math.max(first.centerZ - first.radiusZ, second.centerZ - second.radiusZ);
+  const maxZ = Math.min(first.centerZ + first.radiusZ, second.centerZ + second.radiusZ);
+  if (minX > maxX || minZ > maxZ) return false;
+  for (let xStep = 0; xStep <= 24; xStep += 1) {
+    const x = minX + ((maxX - minX) * xStep) / 24;
+    for (let zStep = 0; zStep <= 24; zStep += 1) {
+      const z = minZ + ((maxZ - minZ) * zStep) / 24;
+      const firstScore =
+        ((x - first.centerX) / first.radiusX) ** 2 + ((z - first.centerZ) / first.radiusZ) ** 2;
+      const secondScore =
+        ((x - second.centerX) / second.radiusX) ** 2 + ((z - second.centerZ) / second.radiusZ) ** 2;
+      if (firstScore <= 1 && secondScore <= 1) return true;
+    }
+  }
+  return false;
 }
 
 describe('generateWorld', () => {
@@ -60,9 +83,15 @@ describe('generateWorld', () => {
   it('builds seed-specific districts, road variants, loot regions, and landmarks', () => {
     const alpha = generateWorld('MILL-ALPHA');
     const beta = generateWorld('MILL-BRAVO');
-    expect(alpha.districts).toHaveLength(5);
+    expect(alpha.districts).toHaveLength(9);
     expect(alpha.lootZones.reduce((count, zone) => count + zone.cacheCount, 0)).toBe(7);
-    expect(alpha.landmarks.map((landmark) => landmark.id)).toEqual(['water-tower', 'radio-mast']);
+    expect(alpha.landmarks.map((landmark) => landmark.id)).toEqual([
+      'water-tower',
+      'farm-grain-silo',
+      'radio-mast',
+      'aircraft-hangar',
+      'coastal-lighthouse',
+    ]);
     expect(beta.roads).not.toEqual(alpha.roads);
     expect(beta.lootZones).not.toEqual(alpha.lootZones);
     expect(beta.landmarks).not.toEqual(alpha.landmarks);
@@ -98,15 +127,11 @@ describe('generateWorld', () => {
           terrainBiomeBlendAt(world.districts, district.centerX, district.centerZ),
         ).toBeLessThan(0.2);
       expect(validateWorld(world)).toEqual([]);
-      for (const district of urbanDistricts)
-        expect(
-          world.placements.some(
-            (placement) =>
-              placement.assetId === 'building-shell' &&
-              Math.abs(placement.position.x - district.centerX) <= district.radiusX &&
-              Math.abs(placement.position.z - district.centerZ) <= district.radiusZ,
-          ),
-        ).toBe(true);
+      expect(
+        world.placements.some(
+          (placement) => placement.assetId === 'building-shell' && placement.theme === 'urban',
+        ),
+      ).toBe(true);
       for (const district of forestDistricts)
         expect(
           world.placements.some(
@@ -116,6 +141,72 @@ describe('generateWorld', () => {
               Math.abs(placement.position.z - district.centerZ) <= district.radiusZ,
           ),
         ).toBe(true);
+    }
+  });
+
+  it('covers every theme with eligible seeded placements and connected region footprints', () => {
+    const themes = Object.keys(WORLD_THEME_DEFINITIONS) as WorldTheme[];
+    for (let index = 0; index < 16; index += 1) {
+      const seed = `PHASE13-${String(index).padStart(2, '0')}`;
+      const world = generateWorld(seed);
+      expect(generateWorld(seed), `${seed} same-seed replay`).toEqual(world);
+      expect(validateWorld(world), `${seed} generation defects`).toEqual([]);
+      expect(new Set(world.districts.map((district) => district.kind))).toEqual(new Set(themes));
+
+      for (const theme of themes) {
+        const regions = world.districts.filter((district) => district.kind === theme);
+        const placements = world.placements.filter((placement) => placement.theme === theme);
+        for (const assetId of WORLD_THEME_DEFINITIONS[theme].requiredAssetIds)
+          expect(
+            placements.some((placement) => placement.assetId === assetId),
+            `${seed} required ${theme} asset ${assetId}`,
+          ).toBe(true);
+        for (const placement of placements) {
+          const region = regions.find((candidate) => candidate.id === placement.regionId);
+          expect(region, `${seed} ${placement.assetId} region`).toBeDefined();
+          expect(eligibleAssetIds(theme), `${seed} ${placement.assetId} eligible pool`).toContain(
+            placement.assetId,
+          );
+          expect(placement.variant).toBeLessThan(
+            WORLD_THEME_DEFINITIONS[theme].variantCounts[placement.assetId] ?? 1,
+          );
+        }
+
+        const connected = new Set<string>([regions[0]!.id]);
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (const first of regions) {
+            if (!connected.has(first.id)) continue;
+            for (const second of regions) {
+              if (connected.has(second.id)) continue;
+              if (districtsOverlap(first, second)) {
+                connected.add(second.id);
+                changed = true;
+              }
+            }
+          }
+        }
+        expect(connected.size, `${seed} ${theme} connected footprint`).toBe(regions.length);
+      }
+      const expectedAccessPoints = world.placements.reduce(
+        (count, placement) => count + getAsset(placement.assetId).interactionPoints.length,
+        0,
+      );
+      expect(world.accessPoints, `${seed} authored interaction coverage`).toHaveLength(
+        expectedAccessPoints,
+      );
+      const navigator = new GridNavigator(world);
+      for (const accessPoint of world.accessPoints) {
+        expect(
+          navigator.isWalkable(accessPoint.x, accessPoint.z),
+          `${seed} ${accessPoint.id} approach cell`,
+        ).toBe(true);
+        expect(
+          pathLength(navigator, world.spawn, accessPoint),
+          `${seed} route to ${accessPoint.id}`,
+        ).toBeLessThan(260);
+      }
     }
   });
 
@@ -195,6 +286,10 @@ describe('generateWorld', () => {
       const caches = placeLootCaches(world, navigator);
       expect(caches, seed).toHaveLength(7);
       expect(new Set(caches.map((cache) => cache.zoneId)).size, seed).toBeGreaterThanOrEqual(4);
+      const cacheThemes = new Set(
+        caches.map((cache) => world.lootZones.find((zone) => zone.id === cache.zoneId)!.theme),
+      );
+      expect(cacheThemes).toEqual(new Set(Object.keys(WORLD_THEME_DEFINITIONS)));
       for (const cache of caches)
         expect(pathLength(navigator, world.spawn, cache), `${seed} ${cache.id}`).toBeLessThan(145);
     }

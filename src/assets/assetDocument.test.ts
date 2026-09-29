@@ -13,7 +13,7 @@ afterEach(() => clearAssetDocumentOverrides());
 describe('portable authored asset definitions', () => {
   it('round-trips every shared game asset through the versioned JSON format', () => {
     const documents = listDefaultAssetDocuments();
-    expect(documents).toHaveLength(5);
+    expect(documents).toHaveLength(43);
     for (const document of documents) {
       const reopened = parseAssetDocument(JSON.parse(serializeAssetDocument(document)) as unknown);
       expect(reopened).toEqual(document);

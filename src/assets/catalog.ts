@@ -1,14 +1,96 @@
 import { Mesh, MeshStandardMaterial, type Group } from 'three';
 import type { AssetDocument, AssetMaterialSetting } from './assetDocument';
 import type { AuthoredAsset } from './assetTypes';
+import { abandonedSubstation } from './abandonedSubstation';
+import { barricadeGate } from './barricadeGate';
+import { basicCampingTent } from './basicCampingTent';
+import { ambulanceWreck } from './ambulanceWreck';
+import { aircraftHangar } from './aircraftHangar';
+import { barnShell } from './barnShell';
+import { burnedCornerStore } from './burnedCornerStore';
+import { burnedTreeCluster } from './burnedTreeCluster';
 import { boulder } from './boulder';
 import { buildingShell } from './buildingShell';
+import { cargoContainers } from './cargoContainers';
+import { cityBusWreck } from './cityBusWreck';
+import { coastalLighthouse } from './coastalLighthouse';
+import { communicationTruck } from './communicationTruck';
+import { dryDockCrane } from './dryDockCrane';
+import { electricalSubstation } from './electricalSubstation';
+import { farmTractor } from './farmTractor';
+import { fireLookout } from './fireLookout';
+import { farmGrainSilo } from './farmGrainSilo';
+import { fireBin } from './fireBin';
+import { helipad } from './helipad';
+import { lookoutPlatform } from './lookoutPlatform';
 import { pineTree } from './pineTree';
+import { portableGenerator } from './portableGenerator';
+import { powerPylon } from './powerPylon';
+import { pumpjack } from './pumpjack';
+import { radarDish } from './radarDish';
+import { rangerCabin } from './rangerCabin';
+import { portableFloodlightTower } from './portableFloodlightTower';
 import { radioMast } from './radioMast';
+import { rockOutcrop } from './rockOutcrop';
+import { rooftopWaterTank } from './rooftopWaterTank';
+import { rowHouse } from './rowHouse';
+import { scrapStation } from './scrapStation';
+import { streetLight } from './streetLight';
+import { timberStacks } from './timberStacks';
+import { totaledCar } from './totaledCar';
+import { transitShelter } from './transitShelter';
+import { vehicleCheckpoint } from './vehicleCheckpoint';
+import { waterTreatmentTanks } from './waterTreatmentTanks';
+import { weatherStation } from './weatherStation';
 import { waterTower } from './waterTower';
+import { windPump } from './windPump';
 
 export const assetCatalog: ReadonlyMap<string, AuthoredAsset> = new Map(
-  [pineTree, boulder, buildingShell, waterTower, radioMast].map((asset) => [asset.id, asset]),
+  [
+    pineTree,
+    dryDockCrane,
+    electricalSubstation,
+    abandonedSubstation,
+    fireLookout,
+    radarDish,
+    rockOutcrop,
+    rooftopWaterTank,
+    rowHouse,
+    scrapStation,
+    streetLight,
+    timberStacks,
+    vehicleCheckpoint,
+    waterTreatmentTanks,
+    barricadeGate,
+    farmTractor,
+    lookoutPlatform,
+    pumpjack,
+    rangerCabin,
+    powerPylon,
+    weatherStation,
+    portableGenerator,
+    cargoContainers,
+    boulder,
+    buildingShell,
+    waterTower,
+    radioMast,
+    ambulanceWreck,
+    barnShell,
+    burnedCornerStore,
+    burnedTreeCluster,
+    cityBusWreck,
+    communicationTruck,
+    totaledCar,
+    fireBin,
+    portableFloodlightTower,
+    farmGrainSilo,
+    aircraftHangar,
+    helipad,
+    coastalLighthouse,
+    transitShelter,
+    windPump,
+    basicCampingTent,
+  ].map((asset) => [asset.id, asset]),
 );
 
 const overrides = new Map<string, AssetDocument>();

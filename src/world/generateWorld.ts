@@ -2,6 +2,7 @@ import type { AssetPlacement, Vec3Data } from '../assets/assetTypes';
 import { getAsset } from '../assets/catalog';
 import { createRandom, hashSeed } from '../core/seededRandom';
 import { GridNavigator } from '../navigation/GridNavigator';
+import { eligibleAssetIds, WORLD_THEME_DEFINITIONS, type WorldTheme } from './regionThemes';
 
 export const WORLD_SIZE = 280;
 export const LANDING_CLEARANCE = 18;
@@ -29,7 +30,7 @@ export interface WorldCollider {
 export interface WorldDistrict {
   id: string;
   name: string;
-  kind: 'urban' | 'forest';
+  kind: WorldTheme;
   centerX: number;
   centerZ: number;
   radiusX: number;
@@ -40,6 +41,8 @@ export interface WorldDistrict {
 export interface WorldLootZone {
   id: string;
   name: string;
+  theme: WorldTheme;
+  regionId: string;
   centerX: number;
   centerZ: number;
   radius: number;
@@ -50,10 +53,21 @@ export interface WorldLandmark {
   id: string;
   name: string;
   assetId: string;
+  theme: WorldTheme;
+  regionId: string;
+  variant: number;
   x: number;
   z: number;
   approachX: number;
   approachZ: number;
+}
+
+export interface WorldWaterArea {
+  id: string;
+  centerX: number;
+  centerZ: number;
+  sizeX: number;
+  sizeZ: number;
 }
 
 export interface BuildingEntrance {
@@ -67,14 +81,30 @@ export interface BuildingEntrance {
   rotationY: number;
 }
 
+export interface WorldAccessPoint {
+  id: string;
+  assetId: string;
+  pointId: string;
+  theme: WorldTheme;
+  regionId: string;
+  placementX: number;
+  placementZ: number;
+  targetX: number;
+  targetZ: number;
+  x: number;
+  z: number;
+}
+
 export interface WorldData {
   seed: string;
   rotationQuarterTurns: number;
   size: number;
   roads: WorldRoad[];
   districts: WorldDistrict[];
+  waterAreas: WorldWaterArea[];
   lootZones: WorldLootZone[];
   landmarks: WorldLandmark[];
+  accessPoints: WorldAccessPoint[];
   entrances: BuildingEntrance[];
   placements: AssetPlacement[];
   colliders: WorldCollider[];
@@ -174,6 +204,10 @@ function createRoads(seed: string): WorldRoad[] {
       sizeZ: 5.5,
       kind: 'trail',
     },
+    { id: 'farm-lane', centerX: -3, centerZ: -59, sizeX: 5.5, sizeZ: 110, kind: 'trail' },
+    { id: 'military-access-road', centerX: -74, centerZ: 86, sizeX: 132, sizeZ: 6.5, kind: 'road' },
+    { id: 'coastal-trail', centerX: 104, centerZ: -72, sizeX: 5.5, sizeZ: 70, kind: 'trail' },
+    { id: 'camp-track', centerX: 48, centerZ: 78, sizeX: 5.5, sizeZ: 68, kind: 'trail' },
   ];
 }
 
@@ -215,51 +249,91 @@ function createDistricts(seed: string): WorldDistrict[] {
       id: 'old-quarter',
       name: 'Old Quarter',
       kind: 'urban',
-      centerX: -89 + jitter(9),
-      centerZ: -76 + jitter(11),
-      radiusX: 43,
-      radiusZ: 47,
+      centerX: -87 + jitter(7),
+      centerZ: -38 + jitter(7),
+      radiusX: 37,
+      radiusZ: 34,
       density: 0.78,
     },
     {
       id: 'mill-row',
       name: 'Mill Row',
       kind: 'urban',
-      centerX: -87 + jitter(11),
-      centerZ: 75 + jitter(11),
-      radiusX: 45,
-      radiusZ: 47,
+      centerX: -87 + jitter(7),
+      centerZ: 38 + jitter(7),
+      radiusX: 37,
+      radiusZ: 34,
       density: 0.75,
     },
     {
       id: 'junction',
       name: 'Junction Blocks',
       kind: 'urban',
-      centerX: -48 + jitter(6),
+      centerX: -48 + jitter(5),
       centerZ: jitter(12),
-      radiusX: 20,
-      radiusZ: 102,
+      radiusX: 16,
+      radiusZ: 69,
       density: 0.44,
     },
     {
       id: 'north-pines',
       name: 'Pine District A',
       kind: 'forest',
-      centerX: 82 + jitter(16),
-      centerZ: -70 + jitter(14),
-      radiusX: 60,
-      radiusZ: 65,
+      centerX: 83 + jitter(10),
+      centerZ: -39 + jitter(8),
+      radiusX: 40,
+      radiusZ: 44,
       density: 0.82,
     },
     {
       id: 'south-pines',
       name: 'Pine District B',
       kind: 'forest',
-      centerX: 82 + jitter(16),
-      centerZ: 72 + jitter(14),
-      radiusX: 60,
-      radiusZ: 60,
+      centerX: 83 + jitter(10),
+      centerZ: 39 + jitter(8),
+      radiusX: 40,
+      radiusZ: 44,
       density: 0.78,
+    },
+    {
+      id: 'highfield-farm',
+      name: 'Highfield Farm',
+      kind: 'farm',
+      centerX: jitter(8),
+      centerZ: -107 + jitter(5),
+      radiusX: 40,
+      radiusZ: 25,
+      density: WORLD_THEME_DEFINITIONS.farm.density,
+    },
+    {
+      id: 'north-coast',
+      name: 'North Coast',
+      kind: 'coastal',
+      centerX: 110 + jitter(5),
+      centerZ: -107 + jitter(5),
+      radiusX: 24,
+      radiusZ: 25,
+      density: WORLD_THEME_DEFINITIONS.coastal.density,
+    },
+    {
+      id: 'field-base',
+      name: 'Field Base',
+      kind: 'military',
+      centerX: -110 + jitter(5),
+      centerZ: 108 + jitter(5),
+      radiusX: 24,
+      radiusZ: 26,
+      density: WORLD_THEME_DEFINITIONS.military.density,
+    },
+    {
+      id: 'wayfarer-outpost',
+      name: 'Wayfarer Outpost',
+      kind: 'camp',
+      centerX: 46 + jitter(6),
+      centerZ: 108 + jitter(5),
+      radiusX: 40,
+      radiusZ: 26,
+      density: WORLD_THEME_DEFINITIONS.camp.density,
     },
   ];
 }
@@ -271,72 +345,159 @@ function createLootZones(seed: string): WorldLootZone[] {
     {
       id: 'market-block',
       name: 'Market Block',
-      centerX: -79 + jitter(8),
-      centerZ: -27 + jitter(8),
-      radius: 23,
-      cacheCount: 2,
-    },
-    {
-      id: 'mill-yard',
-      name: 'Mill Yard',
-      centerX: -76 + jitter(8),
-      centerZ: 73 + jitter(8),
-      radius: 22,
+      theme: 'urban',
+      regionId: 'old-quarter',
+      centerX: -88 + jitter(8),
+      centerZ: -35 + jitter(8),
+      radius: 20,
       cacheCount: 1,
     },
     {
-      id: 'canal-verge',
-      name: 'Canal Verge',
-      centerX: 38 + jitter(8),
-      centerZ: -43 + jitter(8),
-      radius: 24,
-      cacheCount: 2,
+      id: 'lighthouse-access',
+      name: 'Lighthouse Access',
+      theme: 'coastal',
+      regionId: 'north-coast',
+      centerX: 104 + jitter(5),
+      centerZ: -96 + jitter(5),
+      radius: 13,
+      cacheCount: 1,
+    },
+    {
+      id: 'highfield-yard',
+      name: 'Highfield Yard',
+      theme: 'farm',
+      regionId: 'highfield-farm',
+      centerX: jitter(8),
+      centerZ: -106 + jitter(8),
+      radius: 18,
+      cacheCount: 1,
     },
     {
       id: 'north-pine-loop',
       name: 'Pine Loop A',
-      centerX: 87 + jitter(9),
-      centerZ: -42 + jitter(9),
-      radius: 24,
+      theme: 'forest',
+      regionId: 'north-pines',
+      centerX: 84 + jitter(8),
+      centerZ: -38 + jitter(8),
+      radius: 19,
       cacheCount: 1,
     },
     {
       id: 'south-pine-road',
       name: 'Pine Loop B',
-      centerX: 82 + jitter(9),
-      centerZ: 61 + jitter(9),
-      radius: 23,
+      theme: 'forest',
+      regionId: 'south-pines',
+      centerX: 82 + jitter(8),
+      centerZ: 40 + jitter(8),
+      radius: 19,
+      cacheCount: 1,
+    },
+    {
+      id: 'base-perimeter',
+      name: 'Field Base Perimeter',
+      theme: 'military',
+      regionId: 'field-base',
+      centerX: -103 + jitter(6),
+      centerZ: 104 + jitter(6),
+      radius: 15,
+      cacheCount: 1,
+    },
+    {
+      id: 'wayfarer-supply',
+      name: 'Wayfarer Supply Camp',
+      theme: 'camp',
+      regionId: 'wayfarer-outpost',
+      centerX: 45 + jitter(8),
+      centerZ: 107 + jitter(8),
+      radius: 18,
       cacheCount: 1,
     },
   ];
 }
 
-function createLandmarks(seed: string): WorldLandmark[] {
+function createLandmarks(seed: string, districts: WorldDistrict[]): WorldLandmark[] {
   const random = createRandom(`${seed}:landmarks`);
-  const towerX = 105 + (random() - 0.5) * 18;
-  const towerZ = -92 + (random() - 0.5) * 18;
-  const mastX = 109 + (random() - 0.5) * 16;
-  const mastZ = 89 + (random() - 0.5) * 16;
-  return [
+  const districtById = new Map(districts.map((district) => [district.id, district]));
+  const point = (regionId: string, offsetX: number, offsetZ: number) => {
+    const district = districtById.get(regionId)!;
+    return {
+      x: district.centerX + offsetX + (random() - 0.5) * 2.4,
+      z: district.centerZ + offsetZ + (random() - 0.5) * 2.4,
+    };
+  };
+  const specs: Array<{
+    id: string;
+    name: string;
+    assetId: string;
+    theme: WorldTheme;
+    regionId: string;
+    offsetX: number;
+    offsetZ: number;
+    approachDirection: { x: number; z: number };
+  }> = [
     {
       id: 'water-tower',
       name: 'Water Tower',
       assetId: 'water-tower',
-      x: towerX,
-      z: towerZ,
-      approachX: towerX + 10,
-      approachZ: towerZ,
+      theme: 'farm',
+      regionId: 'highfield-farm',
+      offsetX: 18,
+      offsetZ: 0,
+      approachDirection: { x: 1, z: 0 },
+    },
+    {
+      id: 'farm-grain-silo',
+      name: 'Farm Grain Silo',
+      assetId: 'farm-grain-silo',
+      theme: 'farm',
+      regionId: 'highfield-farm',
+      offsetX: -17,
+      offsetZ: 0,
+      approachDirection: { x: -1, z: 0 },
     },
     {
       id: 'radio-mast',
       name: 'Relay Mast',
       assetId: 'radio-mast',
-      x: mastX,
-      z: mastZ,
-      approachX: mastX - 10,
-      approachZ: mastZ,
+      theme: 'military',
+      regionId: 'field-base',
+      offsetX: -14,
+      offsetZ: -14,
+      approachDirection: { x: -1, z: 0 },
+    },
+    {
+      id: 'aircraft-hangar',
+      name: 'Aircraft Hangar',
+      assetId: 'aircraft-hangar',
+      theme: 'military',
+      regionId: 'field-base',
+      offsetX: 0,
+      offsetZ: 0,
+      approachDirection: { x: 0, z: 1 },
+    },
+    {
+      id: 'coastal-lighthouse',
+      name: 'Coastal Lighthouse',
+      assetId: 'coastal-lighthouse',
+      theme: 'coastal',
+      regionId: 'north-coast',
+      offsetX: 9,
+      offsetZ: 0,
+      approachDirection: { x: -1, z: 0 },
     },
   ];
+
+  return specs.map((spec) => {
+    const position = point(spec.regionId, spec.offsetX, spec.offsetZ);
+    const { offsetX, offsetZ, approachDirection, ...landmark } = spec;
+    return {
+      ...landmark,
+      ...position,
+      variant: selectThemeVariant(random, spec.theme, spec.assetId),
+      approachX: position.x + approachDirection.x * 8,
+      approachZ: position.z + approachDirection.z * 8,
+    };
+  });
 }
 
 function rotateDistricts(districts: WorldDistrict[], quarterTurns: number): WorldDistrict[] {
@@ -374,6 +535,33 @@ function rotateLandmarks(landmarks: WorldLandmark[], quarterTurns: number): Worl
   });
 }
 
+function createWaterAreas(districts: WorldDistrict[]): WorldWaterArea[] {
+  const coast = districts.find((district) => district.kind === 'coastal')!;
+  return [
+    {
+      id: 'north-coast-water',
+      centerX: Math.min(coast.centerX + 22.5, HALF_WORLD - 7.5),
+      centerZ: coast.centerZ,
+      sizeX: 15,
+      sizeZ: 48,
+    },
+  ];
+}
+
+function rotateWaterAreas(areas: WorldWaterArea[], quarterTurns: number): WorldWaterArea[] {
+  return areas.map((area) => {
+    const center = rotateXZ(area.centerX, area.centerZ, quarterTurns);
+    const swap = quarterTurns % 2 === 1;
+    return {
+      ...area,
+      centerX: center.x,
+      centerZ: center.z,
+      sizeX: swap ? area.sizeZ : area.sizeX,
+      sizeZ: swap ? area.sizeX : area.sizeZ,
+    };
+  });
+}
+
 function rotatePlacements(
   placements: AssetPlacement[],
   seed: string,
@@ -407,6 +595,36 @@ export function terrainBiomeBlendAt(districts: WorldDistrict[], x: number, z: nu
   if (!Number.isFinite(forestDistance)) return 1;
   const totalDistance = urbanDistance + forestDistance;
   return totalDistance < 0.0001 ? 0.5 : forestDistance / totalDistance;
+}
+
+export interface TerrainThemeBlend {
+  primary: WorldTheme;
+  secondary: WorldTheme;
+  amount: number;
+}
+
+/** Chooses the nearest authored region and softly mixes its neighbor at transition edges. */
+export function terrainThemeBlendAt(
+  districts: WorldDistrict[],
+  x: number,
+  z: number,
+): TerrainThemeBlend {
+  const ranked = districts
+    .map((district) => ({
+      theme: district.kind,
+      distance: Math.hypot(
+        (x - district.centerX) / district.radiusX,
+        (z - district.centerZ) / district.radiusZ,
+      ),
+    }))
+    .sort((a, b) => a.distance - b.distance);
+  const first = ranked[0];
+  const second = ranked[1];
+  if (!first) return { primary: 'forest', secondary: 'forest', amount: 0 };
+  if (!second) return { primary: first.theme, secondary: first.theme, amount: 0 };
+  const difference = Math.max(0, second.distance - first.distance);
+  const amount = Math.max(0, (0.36 - difference) / 0.72);
+  return { primary: first.theme, secondary: second.theme, amount };
 }
 
 export function terrainHeightAt(seed: string, x: number, z: number): number {
@@ -450,18 +668,97 @@ function colliderFor(placement: AssetPlacement): WorldCollider | undefined {
   };
 }
 
+interface PlacementFootprint {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
+function footprintFor(placement: AssetPlacement, padding = 0): PlacementFootprint {
+  const dimensions = getAsset(placement.assetId).dimensions;
+  const cosine = Math.abs(Math.cos(placement.rotationY));
+  const sine = Math.abs(Math.sin(placement.rotationY));
+  const halfX = (cosine * dimensions.x + sine * dimensions.z) * placement.scale * 0.5 + padding;
+  const halfZ = (sine * dimensions.x + cosine * dimensions.z) * placement.scale * 0.5 + padding;
+  return {
+    minX: placement.position.x - halfX,
+    maxX: placement.position.x + halfX,
+    minZ: placement.position.z - halfZ,
+    maxZ: placement.position.z + halfZ,
+  };
+}
+
+function footprintsOverlap(a: PlacementFootprint, b: PlacementFootprint): boolean {
+  return a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ;
+}
+
+function waterCollider(area: WorldWaterArea): WorldCollider {
+  return {
+    id: area.id,
+    minX: area.centerX - area.sizeX / 2,
+    maxX: area.centerX + area.sizeX / 2,
+    minY: -3,
+    maxY: 3,
+    minZ: area.centerZ - area.sizeZ / 2,
+    maxZ: area.centerZ + area.sizeZ / 2,
+  };
+}
+
+function worldInteractionPoint(
+  placement: AssetPlacement,
+  point: Vec3Data,
+): { x: number; z: number } {
+  const cosine = Math.cos(placement.rotationY);
+  const sine = Math.sin(placement.rotationY);
+  return {
+    x: placement.position.x + (point.x * cosine + point.z * sine) * placement.scale,
+    z: placement.position.z + (-point.x * sine + point.z * cosine) * placement.scale,
+  };
+}
+
+function findAccessPoint(
+  world: WorldData,
+  navigator: GridNavigator,
+  placement: AssetPlacement,
+  point: Vec3Data,
+): { target: { x: number; z: number }; approach: { x: number; z: number } } | undefined {
+  const target = worldInteractionPoint(placement, point);
+  const candidates: Array<{ x: number; z: number; radius: number; direction: number }> = [];
+  for (const radius of [1.8, 2.6, 3.6, 4.8, 6.2]) {
+    for (let direction = 0; direction < 16; direction += 1) {
+      const angle = (direction * Math.PI) / 8;
+      const x = target.x + Math.cos(angle) * radius;
+      const z = target.z + Math.sin(angle) * radius;
+      if (
+        !navigator.isWalkable(x, z) ||
+        !world.colliders.every((collider) => distanceToCollider(x, z, collider) > 0.5)
+      )
+        continue;
+      candidates.push({ x, z, radius, direction });
+    }
+    if (candidates.length > 0) break;
+  }
+  const approach = candidates.sort((a, b) => a.direction - b.direction)[0];
+  return approach ? { target, approach: { x: approach.x, z: approach.z } } : undefined;
+}
+
 function addPlacement(
   placements: AssetPlacement[],
   assetId: string,
   seed: string,
   x: number,
   z: number,
+  theme: WorldTheme,
+  regionId: string,
   scale = 1,
   rotationY = 0,
   variant = 0,
 ): void {
   placements.push({
     assetId,
+    theme,
+    regionId,
     position: { x, y: terrainHeightAt(seed, x, z), z },
     rotationY,
     scale,
@@ -494,6 +791,9 @@ function addDistrictBuildings(
       const x = district.centerX + (random() * 2 - 1) * district.radiusX;
       const z = district.centerZ + (random() * 2 - 1) * district.radiusZ;
       if (
+        ((x - district.centerX) / district.radiusX) ** 2 +
+          ((z - district.centerZ) / district.radiusZ) ** 2 >
+          0.92 ||
         Math.abs(x) > HALF_WORLD - 13 ||
         Math.abs(z) > HALF_WORLD - 12 ||
         isOnRoad(x, z, roads, 12) ||
@@ -503,7 +803,7 @@ function addDistrictBuildings(
         continue;
       const overlapsBuilding = placements.some(
         (placement) =>
-          placement.assetId === 'building-shell' &&
+          getAsset(placement.assetId).category === 'building' &&
           Math.abs(placement.position.x - x) < 23 &&
           Math.abs(placement.position.z - z) < 20,
       );
@@ -514,9 +814,11 @@ function addDistrictBuildings(
         seed,
         x,
         z,
+        district.kind,
+        district.id,
         0.88 + random() * 0.2,
         random() < 0.5 ? 0 : Math.PI,
-        Math.floor(random() * 3),
+        selectThemeVariant(random, district.kind, 'building-shell'),
       );
       placed += 1;
     }
@@ -532,7 +834,7 @@ function addForestProps(
 ): void {
   const random = createRandom(`${seed}:forest-props`);
   const spawn = { x: 0, y: 0, z: -5 };
-  const forestProps: Array<{ x: number; z: number; radius: number }> = [];
+  const forestProps: AssetPlacement[] = [];
   const targetByDistrict = new Map([
     ['north-pines', 43],
     ['south-pines', 38],
@@ -544,6 +846,9 @@ function addForestProps(
       const x = district.centerX + (random() * 2 - 1) * district.radiusX;
       const z = district.centerZ + (random() * 2 - 1) * district.radiusZ;
       if (
+        ((x - district.centerX) / district.radiusX) ** 2 +
+          ((z - district.centerZ) / district.radiusZ) ** 2 >
+          0.92 ||
         Math.abs(x) > HALF_WORLD - 8 ||
         Math.abs(z) > HALF_WORLD - 8 ||
         isOnRoad(x, z, roads, 5) ||
@@ -551,25 +856,237 @@ function addForestProps(
         landmarks.some((landmark) => Math.hypot(x - landmark.x, z - landmark.z) < 15)
       )
         continue;
-      const nearExisting = forestProps.some(
-        (prop) => Math.hypot(x - prop.x, z - prop.z) < prop.radius + 4.6,
-      );
-      if (nearExisting || random() > district.density) continue;
-      const tree = random() > 0.24;
-      const scale = tree ? 0.74 + random() * 0.42 : 0.72 + random() * 0.5;
-      forestProps.push({ x, z, radius: tree ? 2.3 * scale : 1.8 * scale });
-      addPlacement(
-        placements,
-        tree ? 'pine-tree' : 'boulder',
-        seed,
-        x,
-        z,
+      if (random() > district.density) continue;
+      const assetId =
+        placed === 0
+          ? 'burned-tree-cluster'
+          : chooseWeightedAsset(random, WORLD_THEME_DEFINITIONS.forest.propWeights);
+      const scale =
+        assetId === 'burned-tree-cluster'
+          ? 0.82 + random() * 0.26
+          : assetId === 'pine-tree'
+            ? 0.74 + random() * 0.42
+            : 0.72 + random() * 0.5;
+      const candidate: AssetPlacement = {
+        assetId,
+        theme: district.kind,
+        regionId: district.id,
+        position: { x, y: terrainHeightAt(seed, x, z), z },
+        rotationY: random() * Math.PI * 2,
         scale,
-        random() * Math.PI * 2,
-        Math.floor(random() * 3),
-      );
+        variant: selectThemeVariant(random, district.kind, assetId),
+      };
+      if (
+        forestProps.some((prop) =>
+          footprintsOverlap(footprintFor(candidate, 0.9), footprintFor(prop)),
+        )
+      )
+        continue;
+      forestProps.push(candidate);
+      placements.push(candidate);
       placed += 1;
     }
+  }
+}
+
+function chooseWeightedAsset(
+  random: () => number,
+  weights: Readonly<Record<string, number>>,
+): string {
+  const entries = Object.entries(weights).filter(([, weight]) => weight > 0);
+  const totalWeight = entries.reduce((sum, [, weight]) => sum + weight, 0);
+  if (entries.length === 0 || totalWeight <= 0)
+    throw new Error('Asset pool has no positive weights');
+  let selection = random() * totalWeight;
+  for (const [assetId, weight] of entries) {
+    selection -= weight;
+    if (selection < 0) return assetId;
+  }
+  return entries.at(-1)![0];
+}
+
+function selectThemeVariant(random: () => number, theme: WorldTheme, assetId: string): number {
+  const variantCount = Math.max(1, WORLD_THEME_DEFINITIONS[theme].variantCounts[assetId] ?? 1);
+  return Math.floor(random() * variantCount);
+}
+
+function overlapsRoad(footprint: PlacementFootprint, roads: WorldRoad[], margin = 1.5): boolean {
+  return roads.some(
+    (road) =>
+      footprint.minX < road.centerX + road.sizeX / 2 + margin &&
+      footprint.maxX > road.centerX - road.sizeX / 2 - margin &&
+      footprint.minZ < road.centerZ + road.sizeZ / 2 + margin &&
+      footprint.maxZ > road.centerZ - road.sizeZ / 2 - margin,
+  );
+}
+
+function addUrbanSetPiece(
+  placements: AssetPlacement[],
+  seed: string,
+  districts: WorldDistrict[],
+  roads: WorldRoad[],
+  spawn: Vec3Data,
+): void {
+  const district = districts.find((entry) => entry.id === 'old-quarter');
+  if (!district) return;
+  const random = createRandom(`${seed}:urban-set-piece`);
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const x = district.centerX + 7 + (random() - 0.5) * 2.4;
+    const z = district.centerZ + 2 + (random() - 0.5) * 2.4;
+    const candidate: AssetPlacement = {
+      assetId: 'burned-corner-store',
+      theme: 'urban',
+      regionId: district.id,
+      position: { x, y: terrainHeightAt(seed, x, z), z },
+      rotationY: random() < 0.5 ? 0 : Math.PI,
+      scale: 0.96 + random() * 0.08,
+      variant: selectThemeVariant(random, 'urban', 'burned-corner-store'),
+    };
+    const footprint = footprintFor(candidate, 1.5);
+    if (
+      isClearOfLanding(x, z, spawn) &&
+      !overlapsRoad(footprint, roads) &&
+      !placements.some((placement) => footprintsOverlap(footprint, footprintFor(placement)))
+    ) {
+      placements.push(candidate);
+      return;
+    }
+  }
+}
+
+function placeAssetInTheme(
+  placements: AssetPlacement[],
+  assetId: string,
+  theme: WorldTheme,
+  seed: string,
+  random: () => number,
+  roads: WorldRoad[],
+  districts: WorldDistrict[],
+  spawn: Vec3Data,
+  maxAttempts = 1200,
+): AssetPlacement | undefined {
+  const definition = WORLD_THEME_DEFINITIONS[theme];
+  const regions = districts.filter((district) => district.kind === theme);
+  const asset = getAsset(assetId);
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const district = regions[Math.floor(random() * regions.length)];
+    if (!district) continue;
+    const angle = random() * Math.PI * 2;
+    const distance = Math.sqrt(random()) * 0.78;
+    const x = district.centerX + Math.cos(angle) * district.radiusX * distance;
+    const z = district.centerZ + Math.sin(angle) * district.radiusZ * distance;
+    const rotationY = random() * Math.PI * 2;
+    const scale = asset.category === 'building' ? 0.94 + random() * 0.1 : 0.9 + random() * 0.2;
+    const candidate: AssetPlacement = {
+      assetId,
+      theme,
+      regionId: district.id,
+      position: { x, y: terrainHeightAt(seed, x, z), z },
+      rotationY,
+      scale,
+      variant: selectThemeVariant(random, theme, assetId),
+    };
+    const footprint = footprintFor(candidate);
+    if (
+      footprint.minX < -HALF_WORLD + 2 ||
+      footprint.maxX > HALF_WORLD - 2 ||
+      footprint.minZ < -HALF_WORLD + 2 ||
+      footprint.maxZ > HALF_WORLD - 2 ||
+      !isClearOfLanding(x, z, spawn) ||
+      overlapsRoad(footprint, roads)
+    )
+      continue;
+
+    const paddedFootprint = footprintFor(candidate, definition.minSpacing);
+    if (placements.some((placement) => footprintsOverlap(paddedFootprint, footprintFor(placement))))
+      continue;
+    placements.push(candidate);
+    return candidate;
+  }
+  return undefined;
+}
+
+function addRequiredThemeAssets(
+  placements: AssetPlacement[],
+  seed: string,
+  roads: WorldRoad[],
+  districts: WorldDistrict[],
+  landmarks: WorldLandmark[],
+  spawn: Vec3Data,
+): void {
+  const random = createRandom(`${seed}:theme-placement`);
+  const themes: WorldTheme[] = ['urban', 'forest', 'farm', 'military', 'coastal', 'camp'];
+  for (const theme of themes) {
+    const definition = WORLD_THEME_DEFINITIONS[theme];
+    const fixedAssets = new Set(
+      landmarks.filter((landmark) => landmark.theme === theme).map((landmark) => landmark.assetId),
+    );
+    for (const assetId of definition.requiredAssetIds) {
+      if (
+        fixedAssets.has(assetId) ||
+        placements.some((placement) => placement.theme === theme && placement.assetId === assetId)
+      )
+        continue;
+      const placed = placeAssetInTheme(
+        placements,
+        assetId,
+        theme,
+        seed,
+        random,
+        roads,
+        districts,
+        spawn,
+        2600,
+      );
+      if (!placed)
+        throw new Error(`Could not place required ${theme} asset "${assetId}" for seed "${seed}"`);
+    }
+
+    const dressingCount = Math.round(definition.density * 1.5);
+    for (let index = 0; index < dressingCount; index += 1) {
+      if (Object.keys(definition.propWeights).length === 0) break;
+      const assetId = chooseWeightedAsset(random, definition.propWeights);
+      placeAssetInTheme(placements, assetId, theme, seed, random, roads, districts, spawn, 420);
+    }
+  }
+}
+
+function addMilitarySiteDressing(
+  placements: AssetPlacement[],
+  seed: string,
+  districts: WorldDistrict[],
+  roads: WorldRoad[],
+): void {
+  const district = districts.find((entry) => entry.id === 'field-base');
+  if (!district) return;
+  const random = createRandom(`${seed}:military-site`);
+  const anchors = [
+    { assetId: 'helipad', offsetX: 12, offsetZ: 21 },
+    { assetId: 'communication-truck', offsetX: 20, offsetZ: -5 },
+    { assetId: 'portable-floodlight-tower', offsetX: -14, offsetZ: 20 },
+  ];
+  for (const anchor of anchors) {
+    const x = district.centerX + anchor.offsetX + (random() - 0.5) * 1.2;
+    const z = district.centerZ + anchor.offsetZ + (random() - 0.5) * 1.2;
+    const candidate: AssetPlacement = {
+      assetId: anchor.assetId,
+      theme: 'military',
+      regionId: district.id,
+      position: { x, y: terrainHeightAt(seed, x, z), z },
+      rotationY: (random() - 0.5) * 0.35,
+      scale: 0.98 + random() * 0.04,
+      variant: selectThemeVariant(random, 'military', anchor.assetId),
+    };
+    const footprint = footprintFor(candidate, 0.6);
+    const withinDistrict =
+      ((x - district.centerX) / district.radiusX) ** 2 +
+        ((z - district.centerZ) / district.radiusZ) ** 2 <=
+      1;
+    const isClear =
+      withinDistrict &&
+      !overlapsRoad(footprint, roads) &&
+      !placements.some((placement) => footprintsOverlap(footprint, footprintFor(placement)));
+    if (isClear) placements.push(candidate);
   }
 }
 
@@ -579,14 +1096,41 @@ export function generateWorld(seed: string): WorldData {
   const roads = createRoads(resolvedSeed);
   const districts = createDistricts(resolvedSeed);
   const lootZones = createLootZones(resolvedSeed);
-  const landmarks = createLandmarks(resolvedSeed);
+  const landmarks = createLandmarks(resolvedSeed, districts);
+  const waterAreas = createWaterAreas(districts);
   const canonicalSpawn = { x: 0, z: -5 };
+  const canonicalSpawnPoint = {
+    x: canonicalSpawn.x,
+    y: terrainHeightAt(resolvedSeed, canonicalSpawn.x, canonicalSpawn.z),
+    z: canonicalSpawn.z,
+  };
   const placements: AssetPlacement[] = [];
 
   for (const landmark of landmarks)
-    addPlacement(placements, landmark.assetId, resolvedSeed, landmark.x, landmark.z);
+    addPlacement(
+      placements,
+      landmark.assetId,
+      resolvedSeed,
+      landmark.x,
+      landmark.z,
+      landmark.theme,
+      landmark.regionId,
+      1,
+      0,
+      landmark.variant,
+    );
+  addUrbanSetPiece(placements, resolvedSeed, districts, roads, canonicalSpawnPoint);
   addDistrictBuildings(placements, resolvedSeed, roads, districts, landmarks);
   addForestProps(placements, resolvedSeed, roads, districts, landmarks);
+  addMilitarySiteDressing(placements, resolvedSeed, districts, roads);
+  addRequiredThemeAssets(
+    placements,
+    resolvedSeed,
+    roads,
+    districts,
+    landmarks,
+    canonicalSpawnPoint,
+  );
 
   const spawnPosition = rotateXZ(canonicalSpawn.x, canonicalSpawn.z, rotationQuarterTurns);
   const spawn: Vec3Data = {
@@ -594,10 +1138,14 @@ export function generateWorld(seed: string): WorldData {
     y: terrainHeightAt(resolvedSeed, spawnPosition.x, spawnPosition.z),
   };
   const rotatedPlacements = rotatePlacements(placements, resolvedSeed, rotationQuarterTurns);
-  const colliders = rotatedPlacements.flatMap((placement) => {
-    const collider = colliderFor(placement);
-    return collider ? [collider] : [];
-  });
+  const rotatedWaterAreas = rotateWaterAreas(waterAreas, rotationQuarterTurns);
+  const colliders = rotatedPlacements
+    .flatMap((placement) => {
+      const collider = colliderFor(placement);
+      return collider ? [collider] : [];
+    })
+    .concat(rotatedWaterAreas.map(waterCollider));
+  const rotatedLandmarks = rotateLandmarks(landmarks, rotationQuarterTurns);
   const generatedWorld: WorldData = {
     seed: resolvedSeed,
     rotationQuarterTurns,
@@ -605,14 +1153,75 @@ export function generateWorld(seed: string): WorldData {
     roads: roadsForSeed(resolvedSeed),
     districts: rotateDistricts(districts, rotationQuarterTurns),
     lootZones: rotateLootZones(lootZones, rotationQuarterTurns),
-    landmarks: rotateLandmarks(landmarks, rotationQuarterTurns),
+    waterAreas: rotatedWaterAreas,
+    landmarks: rotatedLandmarks,
+    accessPoints: [],
     entrances: [],
     placements: rotatedPlacements,
     colliders,
-    objectCount: placements.length + roads.length + 1,
+    objectCount: placements.length + roads.length + rotatedWaterAreas.length + 1,
     spawn,
   };
   const entranceNavigator = new GridNavigator(generatedWorld);
+  generatedWorld.landmarks = rotatedLandmarks.map((landmark) => {
+    const asset = getAsset(landmark.assetId);
+    const clearance = Math.max(asset.dimensions.x, asset.dimensions.z) / 2 + 3;
+    const intendedAngle = Math.atan2(
+      landmark.approachZ - landmark.z,
+      landmark.approachX - landmark.x,
+    );
+    const candidates: Array<{ x: number; z: number; score: number }> = [];
+    for (const extra of [0, 2, 4, 7]) {
+      const radius = clearance + extra;
+      for (let direction = 0; direction < 16; direction += 1) {
+        const angle = intendedAngle + (direction * Math.PI) / 8;
+        const x = landmark.x + Math.cos(angle) * radius;
+        const z = landmark.z + Math.sin(angle) * radius;
+        candidates.push({
+          x,
+          z,
+          score:
+            Math.hypot(x - spawn.x, z - spawn.z) +
+            Math.abs(angle - intendedAngle) * 0.25 +
+            extra * 0.1,
+        });
+      }
+    }
+    const approach = candidates
+      .sort((a, b) => a.score - b.score)
+      .find(
+        (candidate) =>
+          entranceNavigator.isWalkable(candidate.x, candidate.z) &&
+          generatedWorld.colliders.every(
+            (collider) => distanceToCollider(candidate.x, candidate.z, collider) > 1,
+          ) &&
+          entranceNavigator.findPath(spawn.x, spawn.z, candidate.x, candidate.z).length > 0,
+      );
+    if (!approach) return landmark;
+    return { ...landmark, approachX: approach.x, approachZ: approach.z };
+  });
+  generatedWorld.accessPoints = rotatedPlacements.flatMap((placement) => {
+    const asset = getAsset(placement.assetId);
+    return asset.interactionPoints.flatMap((point) => {
+      const found = findAccessPoint(generatedWorld, entranceNavigator, placement, point.position);
+      if (!found) return [];
+      return [
+        {
+          id: `${placement.assetId}-${placement.position.x.toFixed(1)}-${placement.position.z.toFixed(1)}-${point.id}`,
+          assetId: placement.assetId,
+          pointId: point.id,
+          theme: placement.theme,
+          regionId: placement.regionId,
+          placementX: placement.position.x,
+          placementZ: placement.position.z,
+          targetX: found.target.x,
+          targetZ: found.target.z,
+          x: found.approach.x,
+          z: found.approach.z,
+        },
+      ];
+    });
+  });
   const entrances = rotatedPlacements.flatMap((placement, index) => {
     if (placement.assetId !== 'building-shell') return [];
     const doorPoint = getAsset(placement.assetId).interactionPoints.find(
@@ -668,7 +1277,7 @@ function distanceToCollider(x: number, z: number, collider: WorldCollider): numb
 
 function placementInBounds(placement: AssetPlacement, size: number): boolean {
   const asset = getAsset(placement.assetId);
-  const dimensions = asset.collider?.size ?? asset.dimensions;
+  const dimensions = asset.dimensions;
   const cosine = Math.abs(Math.cos(placement.rotationY));
   const sine = Math.abs(Math.sin(placement.rotationY));
   const halfX = (cosine * dimensions.x + sine * dimensions.z) * placement.scale * 0.5;
@@ -696,6 +1305,20 @@ export function validateWorld(world: WorldData): string[] {
       issues.push(
         `${placement.assetId} at ${placement.position.x},${placement.position.z} is out of bounds`,
       );
+
+    const region = world.districts.find((district) => district.id === placement.regionId);
+    const assetIsEligible = eligibleAssetIds(placement.theme).has(placement.assetId);
+    if (!region || region.kind !== placement.theme)
+      issues.push(`${placement.assetId} has no matching ${placement.theme} region`);
+    else if (
+      Math.hypot(
+        (placement.position.x - region.centerX) / region.radiusX,
+        (placement.position.z - region.centerZ) / region.radiusZ,
+      ) > 1
+    )
+      issues.push(`${placement.assetId} is outside its ${region.name} region`);
+    if (!assetIsEligible)
+      issues.push(`${placement.assetId} is not eligible for the ${placement.theme} pool`);
   }
 
   for (let first = 0; first < world.colliders.length; first += 1) {
@@ -712,12 +1335,50 @@ export function validateWorld(world: WorldData): string[] {
   }
 
   for (const landmark of world.landmarks) {
+    const placement = world.placements.find(
+      (entry) =>
+        entry.assetId === landmark.assetId &&
+        Math.hypot(entry.position.x - landmark.x, entry.position.z - landmark.z) < 0.01,
+    );
+    if (!placement) issues.push(`${landmark.name} has no matching placed ${landmark.assetId}`);
     if (
       !world.colliders.every(
         (collider) => distanceToCollider(landmark.approachX, landmark.approachZ, collider) > 1,
       )
     )
       issues.push(`${landmark.name} has a blocked approach point`);
+  }
+  const expectedAccessPoints = world.placements.reduce(
+    (count, placement) => count + getAsset(placement.assetId).interactionPoints.length,
+    0,
+  );
+  if (world.accessPoints.length !== expectedAccessPoints)
+    issues.push(
+      `only ${world.accessPoints.length} of ${expectedAccessPoints} authored interaction points have clear approaches`,
+    );
+  for (const accessPoint of world.accessPoints) {
+    const placement = world.placements.find(
+      (entry) =>
+        entry.assetId === accessPoint.assetId &&
+        entry.regionId === accessPoint.regionId &&
+        Math.abs(entry.position.x - accessPoint.placementX) < 0.05 &&
+        Math.abs(entry.position.z - accessPoint.placementZ) < 0.05,
+    );
+    if (!placement || placement.theme !== accessPoint.theme)
+      issues.push(`${accessPoint.id} has no matching themed placement`);
+    if (
+      world.colliders.some(
+        (collider) => distanceToCollider(accessPoint.x, accessPoint.z, collider) <= 0.5,
+      )
+    )
+      issues.push(`${accessPoint.id} has a blocked interaction approach`);
+  }
+  for (const area of world.waterAreas) {
+    if (
+      Math.abs(area.centerX) + area.sizeX / 2 > world.size / 2 ||
+      Math.abs(area.centerZ) + area.sizeZ / 2 > world.size / 2
+    )
+      issues.push(`${area.id} extends beyond the map`);
   }
   for (const road of world.roads) {
     if (

@@ -1,3 +1,5 @@
+import type { WorldTheme } from '../world/regionThemes';
+
 export interface Vec3Data {
   x: number;
   y: number;
@@ -28,6 +30,8 @@ export interface AuthoredAsset {
 
 export interface AssetPlacement {
   assetId: string;
+  theme: WorldTheme;
+  regionId: string;
   position: Vec3Data;
   rotationY: number;
   scale: number;

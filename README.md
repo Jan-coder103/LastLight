@@ -1,6 +1,6 @@
 # Last Light — procedural extraction runs
 
-A desktop browser survival run on the seeded city–forest map. Deploy from camp, search caches, carry what fits, and return to the chopper before the horde grows. A successful extraction banks carried resources; death loses cargo while camp storage stays safe.
+A desktop browser survival run on a seeded map with city, forest, farm, military, coastal, and survival-camp regions. Deploy from camp, search caches, carry what fits, and return to the chopper before the horde grows. A successful extraction banks carried resources; death loses cargo while camp storage stays safe.
 
 ## Run locally
 
@@ -65,11 +65,12 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 
 ## Source layout
 
-- `src/world/generateWorld.ts` builds seeded districts, roads, loot regions, landmarks, placements, collision boxes, chopper spawn, and terrain height without depending on rendering.
+- `src/world/generateWorld.ts` builds seeded themed districts, roads, shoreline, loot regions, landmarks, reachable interaction approaches, placements, collision boxes, chopper spawn, and terrain height without depending on rendering.
+- `src/world/regionThemes.ts` defines each region's asset pools, per-role weights, placement density and spacing, visual palette, and deterministic variant counts.
 - `src/world/buildWorld.ts` turns generated data into Three.js terrain and scene objects.
 - `src/camp/` defines the walkable camp, its navigation/services, and quartermaster transaction rules.
 - `src/interiors/interiorLayout.ts` creates reproducible room layouts, loot, encounter positions, and collision data; `src/interiors/buildInterior.ts` assembles the reusable room pieces.
-- `src/assets/` contains authored asset modules and shared versioned metadata; `helicopter.ts` builds the shared detailed camp/deployment helicopter.
+- `src/assets/` contains authored asset modules and shared versioned metadata; `docs/asset-reviews/` keeps owner-approved model review sheets; `helicopter.ts` builds the shared detailed camp/deployment helicopter.
 - `asset-editor.html` and `src/assetEditor/` provide the separate Asset Bench for reviewing and adjusting the same authored definitions.
 - `unapproved-assets/` is an isolated staging area for candidate models and includes a lightweight Three.js viewer. Its `AGENTS.md` contains the asset authoring guide, and `examples/` has copies of the current building and water tower modules. Nothing in this folder is loaded by the game.
 - `src/player/PlayerController.ts` owns direct third-person movement, top-down route following, and dash movement; `src/player/playerVisual.ts` builds the shared gameplay scout model used by the staging viewer too.
@@ -85,7 +86,7 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 
 ## Asset Bench
 
-From the camp panel, open **Asset Bench**. Select one of the five catalog assets (pine tree, boulder, building shell, water tower, or radio mast), orbit or zoom the preview, and compare the near and far camera presets. Edit placement bounds, collision, interaction points, or named material color/roughness/metalness. The inspector limits values and blocks saving when metadata is invalid. The Bench previews source-defined geometry; its JSON format only edits metadata and materials for an asset already in the catalog. It does not create or import a new mesh.
+From the camp panel, open **Asset Bench**. Select any of the 43 catalog assets, orbit or zoom the preview, and compare the near and far camera presets. Edit placement bounds, collision, interaction points, or named material color/roughness/metalness. The inspector limits values and blocks saving when metadata is invalid. The Bench previews source-defined geometry; its JSON format only edits metadata and materials for an asset already in the catalog. It does not create or import a new mesh.
 
 **Save JSON** exports a versioned `last-light-authored-asset` document. **Open JSON** validates and reopens that file. **Try in Game** stores the validated document for this browser and opens Last Light; start a run to use the edited bounds, collision, materials, or building interaction point. **Restore Source** clears the saved game override and resets the selected asset in the editor.
 
@@ -93,11 +94,26 @@ From the camp panel, open **Asset Bench**. Select one of the five catalog assets
 
 Create a small module in `src/assets/` that exports an `AuthoredAsset` with a stable ID, schema version, dimensions, optional collider, interaction points, named materials, and a visual factory. Register it in `src/assets/catalog.ts`, then place its ID from `src/world/generateWorld.ts`; keep generated position/rotation/scale/variant values in `AssetPlacement`, not in the asset definition. Add deterministic coverage if the placement changes generation behavior.
 
-### Candidate assets (staged, not in the game)
+## Generated world regions
+
+Each seeded Greywood run contains six connected region themes. The full region layout rotates through four orientations by seed; roads, water, terrain color, cache zones, landmarks, and authored placement rotate together. The existing city–forest route remains the core map, with farm, field-base, coastal, and survival-camp areas along the outer routes. The Military Base destination shown as unavailable at camp is still a later full destination; the field-base sector here is part of Greywood.
+
+| Region        | Generated set pieces and dressing                                                            |
+| ------------- | -------------------------------------------------------------------------------------------- |
+| Urban         | City shells, row house, burned corner store, utility plant, street props, and vehicle wrecks |
+| Forest        | Pine trees, boulders, burned trees, fire lookout, ranger cabin, and timber props             |
+| Farm          | Barn, grain silo, wind pump, tractor, and oil pumpjack                                       |
+| Military      | Hangar, helipad, communications truck, floodlights, radar, checkpoint, and barricade         |
+| Coastal       | Lighthouse, dry dock crane, containers, and a blocked water edge                             |
+| Survival camp | Tent, fire bin, generator, and abandoned substation                                          |
+
+Every placement carries its region ID and theme. The centralized pools in [`regionThemes.ts`](src/world/regionThemes.ts) restrict which assets can appear in each theme and set the region's dressing weights, density, spacing, palette, and variant range. The generator checks full asset bounds and collision boxes, keeps authored interaction approaches walkable, and rejects the map if a required set piece cannot be placed. The schematic and seed checklist are in [`docs/world-themes.md`](docs/world-themes.md) and [`docs/world-themes.svg`](docs/world-themes.svg).
+
+### Candidate assets and approved models
 
 New model work belongs in [`unapproved-assets/`](unapproved-assets/). Read its [`AGENTS.md`](unapproved-assets/AGENTS.md) before authoring; it documents the project's geometry conventions, scale, palette, review files, and staging boundary. The `examples/` subfolder contains copies of `buildingShell.ts` and `waterTower.ts` from `src/assets/` as style and structure references.
 
-The current game builds authored models from Three.js geometry and materials in TypeScript modules. Candidate modules and their review notes stay in `unapproved-assets/`; the world generator, asset catalog, Asset Bench, and game do not read that folder. A candidate is not approved just because it is complete or committed. Phase 12 in `plan.md` is the later owner review and integration gate. The draft author may make local Git commits limited to `unapproved-assets/` so candidate history is reviewable; those commits must not change or register live game assets.
+The game builds authored models from Three.js geometry and materials in TypeScript modules. Review-pending candidates and their notes stay in `unapproved-assets/`; the runtime does not read that folder. On 2026-09-29, the owner approved 16 models in the first batch and 22 more in a second batch. The approved sources are in `src/assets/`, registered in the catalog, and their review sheets are in `docs/asset-reviews/`. Phase 13 places the approved set into seeded urban, forest, farm, military, coastal, and survival-camp regions; the themes rotate with the layout and use separate eligible asset pools. The abandoned substation is a distinct placement ID that reuses the electrical yard's stripped visual variant.
 
 To preview the reference models and top-level `candidate-*.ts` drafts, start `npm run dev` and open `/unapproved-assets/viewer.html`. Drag to orbit, scroll to zoom, and use the X/Y/Z sliders to move the directional key light. The exact gameplay scout model is shown beside each asset by default; toggle it or adjust its safe distance from the asset center. The page uses the game's base camp renderer settings and daylight; it omits gameplay weather and effects. Refresh after adding a candidate module.
 
@@ -167,6 +183,13 @@ To preview the reference models and top-level `candidate-*.ts` drafts, start `np
 4. Toggle rain particles and audio cues separately during an active run. Confirm each option takes effect immediately. Set a new lighting/weather preset during that run; it should not change until the next deployment.
 5. Adjust impact shake from 0% to a comfortable value. Reload the page and confirm options persist; if the operating system requests reduced motion and no saved choice exists, confirm the reduced-motion default is respected.
 6. Open **Horde Simulation Lab**, start 10,000 agents, and inspect weather/effects with diagnostics visible. Record browser, viewport, camera, frame-time p95, JS/GPU timing, draw calls, triangles, heap, and active effects. Compare stress and normal scenes; report stutter, visual obstruction, discomfort, or audio issues.
+
+## Phase 13 playtest checklist
+
+1. Start Greywood with `PHASE13-00` through `PHASE13-03`. Confirm all six regions appear in each map and rotate through the four seed orientations. Reload each seed and compare the terrain, roads, water edge, landmarks, and prop positions.
+2. Visit the city wrecks/store plus the row house, substations, water plant, rooftop tank, scrap station, and street lights; the forest lookout, ranger cabin, rock, timber, platform, weather hut, and pylon; the farm tractor and pumpjack; the military radar, checkpoint, and barricade; the coastal crane and containers; and the camp generator and abandoned substation. Check both camera views and confirm each appears in its intended theme.
+3. Walk to each landmark approach and authored door or service point. Check the barn, silo, hangar, lighthouse, crane, water plant, lookout tower, cabin, tent, tractor, generator, checkpoint, and service props for blocked approaches or overlapping collision boxes.
+4. Follow caches across the themed areas and verify each route is reachable from the chopper. Report any set piece on a road, in the water, outside its district, or crowding an entrance or approach.
 
 ## Combined Phase 10 + 11 owner playtest (in progress)
 

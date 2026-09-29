@@ -65,8 +65,10 @@ export function createCampWorld(): WorldData {
     size: 64,
     roads: [],
     districts: [],
+    waterAreas: [],
     lootZones: [],
     landmarks: [],
+    accessPoints: [],
     entrances: [...campEntrances],
     placements: [],
     colliders: [
