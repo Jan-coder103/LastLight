@@ -28,6 +28,14 @@ import {
 import type { Vec3Data } from '../assets/assetTypes';
 import './style.css';
 
+type LodStage = 'near' | 'low' | 'very-low';
+
+const lodStageLabels: Record<LodStage, string> = {
+  near: 'HIGH DETAIL · 0 M',
+  low: 'LOW DETAIL · 58 M',
+  'very-low': 'ULTRA-LOW · 200 M',
+};
+
 const canvas = document.querySelector<HTMLCanvasElement>('#asset-canvas');
 const library = document.querySelector<HTMLElement>('#asset-list');
 const inspector = document.querySelector<HTMLElement>('#inspector');
@@ -90,6 +98,8 @@ const baseAssetDocuments = listDefaultAssetDocuments();
 const baseAssets = baseAssetDocuments.map((document) => assetCatalog.get(document.asset.assetId)!);
 let selectedDocument = baseAssetDocuments[0]!;
 let selectedVariant = 0;
+let lodStage: LodStage = 'near';
+let sourceVisual: Group | undefined;
 let currentVisual: Group | undefined;
 let orbitYaw = 0.72;
 let orbitPitch = 0.28;
@@ -279,28 +289,71 @@ function setCameraRange(range: 'near' | 'far'): void {
   updateCamera();
 }
 
-function renderVisual(): void {
+function disposePreviewVisuals(): void {
+  const previousVisual = currentVisual;
+  const previousSource = sourceVisual;
+  if (previousVisual) {
+    scene.remove(previousVisual);
+    if (previousVisual !== previousSource) disposeVisual(previousVisual);
+  }
+  if (previousSource && previousSource !== previousVisual) {
+    scene.remove(previousSource);
+    disposeVisual(previousSource);
+  }
+  currentVisual = undefined;
+  sourceVisual = undefined;
+}
+
+function renderLodVisual(): void {
+  const source = sourceVisual;
+  if (!source) return;
   if (currentVisual) {
     scene.remove(currentVisual);
-    disposeVisual(currentVisual);
+    if (currentVisual !== source) disposeVisual(currentVisual);
+    currentVisual = undefined;
   }
+
   const base = currentBaseAsset();
-  currentVisual = base.createVisual(selectedVariant);
-  applyAssetMaterialSettings(currentVisual, selectedDocument.asset.materials);
-  currentVisual.traverse((object) => {
-    if (object instanceof Mesh) {
-      object.castShadow = true;
-      object.receiveShadow = true;
-    }
+  let visual: Group | undefined = source;
+  if (lodStage === 'low') {
+    visual = base.createLowDetailVisual?.(selectedVariant, source);
+  } else if (lodStage === 'very-low') {
+    visual = base.createVeryLowDetailVisual?.(selectedVariant, source);
+  }
+
+  if (!visual) throw new Error(`The ${lodStage} LOD is not available for ${base.name}.`);
+  if (visual !== source) {
+    applyAssetMaterialSettings(visual, selectedDocument.asset.materials);
+  }
+  visual.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    object.receiveShadow = true;
+    if (visual === source) object.castShadow = true;
   });
+
+  currentVisual = visual;
   scene.add(currentVisual);
-  const bounds = new Box3().setFromObject(currentVisual);
+  document.querySelectorAll<HTMLButtonElement>('[data-lod-stage]').forEach((button) => {
+    const selected = button.dataset.lodStage === lodStage;
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
+  document.querySelector<HTMLElement>('#lod-stage-label')!.textContent = lodStageLabels[lodStage];
+}
+
+function renderVisual(): void {
+  disposePreviewVisuals();
+  const base = currentBaseAsset();
+  sourceVisual = base.createVisual(selectedVariant);
+  applyAssetMaterialSettings(sourceVisual, selectedDocument.asset.materials);
+  const bounds = new Box3().setFromObject(sourceVisual);
   const size = bounds.getSize(new Vector3());
   const target = bounds.getCenter(new Vector3());
   scene.userData.previewTarget = target;
   const radius = Math.max(size.x, size.y, size.z, 1) * 0.5;
   nearDistance = Math.max(4, radius * 3.6);
   farDistance = Math.max(nearDistance * 2.4, radius * 8.5);
+  renderLodVisual();
   setCameraRange(cameraRange);
 }
 
@@ -536,6 +589,14 @@ document
     selectedVariant = Number((event.target as HTMLSelectElement).value);
     renderVisual();
   });
+document.querySelectorAll<HTMLButtonElement>('[data-lod-stage]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const stage = button.dataset.lodStage;
+    if (stage !== 'near' && stage !== 'low' && stage !== 'very-low') return;
+    lodStage = stage;
+    renderLodVisual();
+  });
+});
 document.querySelectorAll<HTMLButtonElement>('[data-distance]').forEach((button) => {
   button.addEventListener('click', () =>
     setCameraRange(button.dataset.distance === 'far' ? 'far' : 'near'),

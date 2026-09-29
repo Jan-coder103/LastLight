@@ -53,6 +53,15 @@
                   <option value="2">03</option>
                 </select>
               </label>
+              <div class="lod-toggle" role="group" aria-label="Model detail stage">
+                <button type="button" data-lod-stage="near" class="selected" aria-pressed="true">
+                  HIGH
+                </button>
+                <button type="button" data-lod-stage="low" aria-pressed="false">LOW · 58 M</button>
+                <button type="button" data-lod-stage="very-low" aria-pressed="false">
+                  ULTRA-LOW · 200 M
+                </button>
+              </div>
               <div class="camera-toggle" role="group" aria-label="Preview camera distance">
                 <button type="button" data-distance="near" class="selected">NEAR</button>
                 <button type="button" data-distance="far">FAR</button>
@@ -61,7 +70,10 @@
           </div>
           <div id="preview-wrap" class="preview-wrap">
             <canvas id="asset-canvas" aria-label="Drag to orbit the 3D asset preview"></canvas>
-            <div class="preview-tag"><span class="status-dot"></span> LIVE PREVIEW</div>
+            <div class="preview-tag">
+              <span class="status-dot"></span> LIVE PREVIEW
+              <span id="lod-stage-label" class="lod-stage-label">HIGH DETAIL · 0 M</span>
+            </div>
             <div class="preview-hint">DRAG TO ORBIT <span>·</span> SCROLL TO ZOOM</div>
           </div>
           <div class="preview-caption">

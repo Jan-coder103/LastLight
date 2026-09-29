@@ -195,8 +195,14 @@ select:focus-visible {
 
 .asset-list {
   display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 5px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #485041 transparent;
+  scrollbar-gutter: stable;
 }
 
 .asset-option {
@@ -282,10 +288,18 @@ select:focus-visible {
 
 .preview-toolbar {
   display: flex;
-  flex: 0 0 82px;
+  min-height: 82px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
+  padding: 10px 0;
+}
+
+.preview-heading {
+  min-width: 0;
+  flex: 1 1 135px;
 }
 
 .preview-heading h1 {
@@ -298,7 +312,11 @@ select:focus-visible {
 
 .preview-tools {
   display: flex;
+  min-width: 0;
+  flex: 1 1 220px;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -329,7 +347,17 @@ select:focus-visible {
   background: #181d18;
 }
 
-.camera-toggle button {
+.lod-toggle {
+  display: flex;
+  max-width: 100%;
+  padding: 2px;
+  border: 1px solid var(--editor-border);
+  border-radius: 3px;
+  background: #181d18;
+}
+
+.camera-toggle button,
+.lod-toggle button {
   min-height: 25px;
   padding: 0 8px;
   border: 0;
@@ -340,7 +368,12 @@ select:focus-visible {
   cursor: pointer;
 }
 
-.camera-toggle button.selected {
+.lod-toggle button {
+  white-space: nowrap;
+}
+
+.camera-toggle button.selected,
+.lod-toggle button.selected {
   color: #f0e4bf;
   background: rgba(210, 181, 111, 0.16);
 }
@@ -388,6 +421,10 @@ select:focus-visible {
 .preview-tag .status-dot {
   width: 5px;
   height: 5px;
+}
+
+.preview-tag .lod-stage-label {
+  color: var(--editor-accent);
 }
 
 .preview-hint {
@@ -689,10 +726,13 @@ select:focus-visible {
     display: none;
   }
   .asset-list {
+    min-height: auto;
+    flex: 0 0 auto;
     flex-direction: row;
     gap: 5px;
     margin-top: 10px;
     overflow-x: auto;
+    overflow-y: hidden;
   }
   .asset-option {
     min-width: 140px;
@@ -702,7 +742,7 @@ select:focus-visible {
     padding: 0 14px 12px;
   }
   .preview-toolbar {
-    flex-basis: 72px;
+    min-height: 72px;
   }
   .preview-wrap {
     min-height: 330px;
@@ -745,6 +785,10 @@ select:focus-visible {
   }
   .preview-tools {
     gap: 5px;
+  }
+  .lod-toggle button {
+    padding: 0 5px;
+    font-size: 7px;
   }
   .variant-control span {
     display: none;
