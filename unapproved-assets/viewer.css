@@ -140,6 +140,9 @@ h1 {
 .variant-picker {
   width: 76px;
 }
+.detail-picker {
+  width: 148px;
+}
 select,
 .quiet-button,
 .small-button {
@@ -244,7 +247,13 @@ select {
 
 .control-panel {
   display: flex;
+  max-height: calc(100vh - 102px);
+  min-height: 0;
   flex-direction: column;
+  align-self: start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .control-section {
   padding: 18px 16px;
@@ -377,7 +386,9 @@ input[type='range'] {
   .control-panel {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: none;
     margin-top: 10px;
+    overflow: visible;
   }
   .control-section {
     padding: 14px;

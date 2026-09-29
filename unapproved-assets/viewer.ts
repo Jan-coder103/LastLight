@@ -20,6 +20,10 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildingShell } from './examples/buildingShell';
 import { waterTower } from './examples/waterTower';
 import { createPlayerVisual } from '../src/player/playerVisual';
+import {
+  createLowDetailVisual as simplifyLowDetailVisual,
+  createVeryLowDetailVisual as simplifyVeryLowDetailVisual,
+} from '../src/assets/lowDetailVisual';
 import './viewer.css';
 
 interface PreviewAsset {
@@ -28,6 +32,8 @@ interface PreviewAsset {
   category?: string;
   dimensions?: { x: number; y: number; z: number };
   createVisual: (variant?: number) => Group;
+  createLowDetailVisual?: (variant?: number, sourceVisual?: Group) => Group;
+  createVeryLowDetailVisual?: (variant?: number, sourceVisual?: Group) => Group;
 }
 
 interface PreviewChoice {
@@ -36,6 +42,14 @@ interface PreviewChoice {
   asset: PreviewAsset;
 }
 
+type DetailStage = 'near' | 'low' | 'very-low';
+
+const detailStageLabels: Record<DetailStage, string> = {
+  near: 'NEAR · 0 M',
+  low: 'LOW · 58 M',
+  'very-low': 'ULTRA-LOW · 200 M',
+};
+
 type ModuleExports = Record<string, unknown>;
 
 const candidateModules = import.meta.glob<ModuleExports>('./candidate-*.ts', { eager: true });
@@ -43,6 +57,7 @@ const canvas = document.querySelector<HTMLCanvasElement>('#preview-canvas');
 const stage = document.querySelector<HTMLElement>('#preview-stage');
 const assetSelect = document.querySelector<HTMLSelectElement>('#asset-select');
 const variantSelect = document.querySelector<HTMLSelectElement>('#variant-select');
+const detailSelect = document.querySelector<HTMLSelectElement>('#detail-select');
 const fitButton = document.querySelector<HTMLButtonElement>('#fit-button');
 const lightReset = document.querySelector<HTMLButtonElement>('#light-reset');
 const playerVisibleInput = document.querySelector<HTMLInputElement>('#player-visible');
@@ -69,6 +84,7 @@ if (
   !stage ||
   !assetSelect ||
   !variantSelect ||
+  !detailSelect ||
   !fitButton ||
   !lightReset ||
   !playerVisibleInput ||
@@ -152,7 +168,9 @@ for (const [path, module] of Object.entries(candidateModules)) {
 }
 
 let selectedChoice: PreviewChoice | undefined;
+let sourceVisual: Group | undefined;
 let currentVisual: Group | undefined;
+let currentVisualUsesGeneratedGeometry = false;
 let currentAssetBounds: Box3 | undefined;
 let previewRadius = 2;
 
@@ -233,41 +251,121 @@ function disposeVisual(root: Group): void {
   });
 }
 
+function disposeGeneratedGeometry(root: Group): void {
+  root.traverse((object) => {
+    if (object instanceof Mesh) object.geometry.dispose();
+  });
+}
+
+function selectedDetailStage(): DetailStage {
+  return detailSelect!.value as DetailStage;
+}
+
+function showSelectedDetail(): void {
+  if (!selectedChoice || !sourceVisual || !currentAssetBounds) return;
+
+  if (currentVisual) {
+    scene.remove(currentVisual);
+    if (currentVisual !== sourceVisual && currentVisualUsesGeneratedGeometry) {
+      disposeGeneratedGeometry(currentVisual);
+    }
+    currentVisual = undefined;
+  }
+
+  const choice = selectedChoice;
+  const stage = selectedDetailStage();
+  const variant = Number(variantSelect!.value);
+  let visual = sourceVisual;
+  let meshCount = 0;
+  currentVisualUsesGeneratedGeometry = false;
+
+  try {
+    if (stage === 'low') {
+      if (choice.asset.createLowDetailVisual) {
+        visual = choice.asset.createLowDetailVisual(variant, sourceVisual);
+      } else {
+        visual = simplifyLowDetailVisual(sourceVisual, choice.asset.id);
+        currentVisualUsesGeneratedGeometry = true;
+      }
+    } else if (stage === 'very-low') {
+      if (choice.asset.createVeryLowDetailVisual) {
+        visual = choice.asset.createVeryLowDetailVisual(variant, sourceVisual);
+      } else {
+        visual = simplifyVeryLowDetailVisual(sourceVisual, choice.asset.id);
+        currentVisualUsesGeneratedGeometry = true;
+      }
+    }
+
+    visual.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      if (object.visible) meshCount += 1;
+      if (stage === 'near') {
+        object.castShadow = true;
+        object.receiveShadow = true;
+      }
+    });
+    scene.add(visual);
+    currentVisual = visual;
+    if (meshCount === 0) {
+      loadMessage!.textContent = `No geometry remains in the ${detailStageLabels[stage]} stage.`;
+      loadMessage!.classList.add('visible');
+    } else {
+      loadMessage!.classList.remove('visible');
+    }
+    const skipped =
+      moduleErrors.length > 0 ? ` · ${moduleErrors.length} candidate module(s) skipped` : '';
+    assetCaption!.textContent = `${choice.asset.name} · ${choice.asset.category ?? 'ASSET'}`;
+    status(
+      `${choices.length} model${choices.length === 1 ? '' : 's'} available${skipped} · ${choice.label} · ${detailStageLabels[stage]}${meshCount === 0 ? ' · empty stage' : ''}`,
+      moduleErrors.length > 0,
+    );
+  } catch (error) {
+    if (visual !== sourceVisual && currentVisualUsesGeneratedGeometry) {
+      disposeGeneratedGeometry(visual);
+    }
+    currentVisualUsesGeneratedGeometry = false;
+    const message = error instanceof Error ? error.message : 'Unknown model error.';
+    loadMessage!.textContent = `Could not render ${detailStageLabels[stage]} for ${choice.label}.\n${message}`;
+    loadMessage!.classList.add('visible');
+    status(`LOD preview failed: ${message}`, true);
+  }
+}
+
 function loadChoice(choice: PreviewChoice): void {
   if (currentVisual) {
     scene.remove(currentVisual);
-    disposeVisual(currentVisual);
+    if (currentVisual !== sourceVisual && currentVisualUsesGeneratedGeometry) {
+      disposeGeneratedGeometry(currentVisual);
+    }
     currentVisual = undefined;
+  }
+  if (sourceVisual) {
+    scene.remove(sourceVisual);
+    disposeVisual(sourceVisual);
+    sourceVisual = undefined;
   }
   try {
     const variant = Number(variantSelect!.value);
-    currentVisual = choice.asset.createVisual(variant);
-    currentVisual.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      object.castShadow = true;
-      object.receiveShadow = true;
-    });
-    scene.add(currentVisual);
-    const bounds = new Box3().setFromObject(currentVisual);
+    sourceVisual = choice.asset.createVisual(variant);
+    const bounds = new Box3().setFromObject(sourceVisual);
     if (bounds.isEmpty()) throw new Error('The model did not create any visible geometry.');
     currentAssetBounds = bounds;
     setSafePlayerDistance(bounds);
     fitCamera(bounds);
     const dimensions = bounds.getSize(new Vector3());
-    assetCaption!.textContent = `${choice.asset.name} · ${choice.asset.category ?? 'ASSET'}`;
     boundsCaption!.textContent = `MODEL ${dimensions.x.toFixed(1)} × ${dimensions.y.toFixed(1)} × ${dimensions.z.toFixed(1)} M`;
-    loadMessage!.classList.remove('visible');
-    const skipped =
-      moduleErrors.length > 0 ? ` · ${moduleErrors.length} candidate module(s) skipped` : '';
-    status(
-      `${choices.length} model${choices.length === 1 ? '' : 's'} available${skipped} · ${choice.label}`,
-      moduleErrors.length > 0,
-    );
+    showSelectedDetail();
   } catch (error) {
     if (currentVisual) {
       scene.remove(currentVisual);
-      disposeVisual(currentVisual);
+      if (currentVisual !== sourceVisual && currentVisualUsesGeneratedGeometry) {
+        disposeGeneratedGeometry(currentVisual);
+      }
       currentVisual = undefined;
+    }
+    if (sourceVisual) {
+      disposeVisual(sourceVisual);
+      sourceVisual = undefined;
     }
     currentAssetBounds = undefined;
     const message = error instanceof Error ? error.message : 'Unknown model error.';
@@ -334,6 +432,7 @@ assetSelect.addEventListener('change', () => {
 variantSelect.addEventListener('change', () => {
   if (selectedChoice) loadChoice(selectedChoice);
 });
+detailSelect.addEventListener('change', showSelectedDetail);
 fitButton.addEventListener('click', () => {
   if (currentAssetBounds) fitCamera(currentAssetBounds);
 });
