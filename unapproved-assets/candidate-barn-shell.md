@@ -9,15 +9,39 @@ A broad rural building with sliding doors, faded siding, and a broken roof secti
 alongside the grain silo (#18), the wind pump (#20), and the timber stacks (#15) — the four of them
 together are a farmstead.
 
+## Revision: the roof was turned 90 degrees (owner feedback)
+
+The first draft built each roof plane as a **full-width slab rotated about X**, so the roof shed
+toward the gable ends while the gable triangles and the building's proportions described a ridge
+running along Z — the whole roof was this barn's roof turned a quarter turn. The ridge cap ran
+across the slope instead of along it, and the slope constants (4.7 m of run against a 6 m
+half-width, apex 0.4 m above the gable apex) never described the wall line at all.
+
+The roof is rebuilt as two proper gable planes: each one slab rotated about Z by the slope angle,
+centred on the slope line from the ridge (x = 0, now 7.2 m) to 0.15 m past the eaves at x = ±6,
+with a 0.3 m overhang at each gable end. The ridge height is chosen so the planes spring from the
+wall top (5.1 m) and meet the gable apexes exactly; the old RIDGE of 6.4 m sat 0.4 m below them.
+The ridge cap now runs along Z. The lost 3.4 m section is a hole along the ridge on the right
+plane (x > 0), keeping its three exposed rafters and gaining a parallel dark under-panel so the
+hole shows a shadowed roof space; the left plane is intact.
+
+Measured (vertex-accurate): **12.64 × 7.45 × 12.30 m**. Declared `dimensions` updated to
+12.8 × 7.5 × **15.0** — the old z of 12.3 had clipped the fallen roof piece all along (it reaches
+z = 7.45, and the footprint is asymmetric about the pivot).
+
+**Previewed in WebGL renders** (headless Chromium against a standalone three.js page built from
+the emitted module): front, side, three-quarter, and top-down views confirm both planes spring
+from the ridge, the cap runs along it, and the hole reads as rafters over a dark under-panel.
+
 ## Dimensions and scale
 
-- Declared `dimensions`: 12.8 × 7.1 × 12.3 m
-- Measured: 12.70 × 6.92 × 12.18 m, identical across all three variants
-- 12 m wide, 9 m deep, 4.7 m to the eaves, 6.4 m to the ridge. **3.3 scout heights.**
+- Declared `dimensions`: 12.8 × 7.5 × 15.0 m (see the revision above for the z correction)
+- Measured (vertex-accurate, all variants identical): 12.64 × 7.45 × 12.30 m
+- 12 m wide, 9 m deep, 5.1 m to the wall top, 7.2 m to the ridge. **3.5 scout heights.**
 - The width-to-height ratio of roughly 2:1 is what makes it read as a **broad** barn rather than a
   gable house, which is the idea's word.
-- The 12.18 m depth is mostly the fallen roof section, which reaches to z = 7.45 — 3 m out from
-  the front wall. The building itself is 9 m plus overhang.
+- The footprint depth beyond the building is mostly the fallen roof section, which reaches to
+  z = 7.45 — about 3 m out from the front wall. The building itself is 9 m plus overhang.
 
 ## Pivot and front direction
 
@@ -71,12 +95,9 @@ makes it read as _sliding_ rather than hinged. That is the idea's word and it to
 
 ## The broken roof section is a real hole
 
-The back slope is intact. The front slope is split into two pieces with a **3.4 m gap** between them
-at x -1.6..1.8, spanned by three exposed rafters, with a dark loft panel behind so the gap shows a
-space rather than the inside of the far wall.
-
-Verified looking down through the gap: the ray hits `timber-board` at y = 5.45 (a rafter) then
-`interior-dark` at y = 4.46 (the loft). No roof slab is hit, which is the point.
+The left plane (x < 0) is intact. The right plane is split into two pieces with a **3.4 m gap**
+between them at z -1.7..1.7, spanned by three exposed rafters, with a dark under-panel set below
+the plane so the gap shows a shadowed roof space rather than the sky through the barn.
 
 The fallen roof section lies on the ground in front at z = 6.3, rotated. It is 1 mesh and it is what
 turns "a hole in a roof" into "this building is falling apart".
@@ -166,18 +187,18 @@ The door assembly is 5 of the 33 meshes, and it earns all five.
 ## Validation performed
 
 - `tsc --strict` typecheck clean, including `noUnusedLocals`.
-- All 3 variants built in Node; bounding boxes measured **vertex-accurately** and confirmed inside
-  the declared `dimensions`; `minY` 0 after raising the fallen roof piece.
+- All 3 variants built and rendered in headless Chromium with the project's three.js; bounds
+  measured **vertex-accurately** (world-space vertices, not transformed AABB corners, which
+  over-estimate rotated meshes) and confirmed inside the declared `dimensions`; `minY` 0.
+- **Roof orientation confirmed by render** from front, side, three-quarter, and top-down views
+  after the revision: both planes spring from the ridge along Z, the cap runs along the ridge,
+  and the hole shows rafters over the dark under-panel.
 - Sliding door gap confirmed by raycast (8.7 m of interior depth, door panel blocking the covered
-  span), front pier and lintel confirmed solid, and the roof hole confirmed by a downward raycast
-  hitting a rafter then the loft.
+  span), front pier and lintel confirmed solid.
 - `createVisual` called twice per variant and compared mesh-by-mesh: identical. No unseeded
-  randomness, no animation, no lights.
+  randomness, no animation, no lights, no `NaN` positions.
 - Confirmed no two meshes share a material _name_ while using different material _instances_.
-- All geometry positions checked for `NaN`.
-- Prettier clean. Vite dev server serves the module with no transform errors.
-- **Not viewed in a browser or in game.** Whether the 2:1 proportion reads as "broad barn" is the
-  design premise and it needs a real look.
+- **Viewed in WebGL renders from five angles** (not yet in the game engine).
 
 ## Licensing
 

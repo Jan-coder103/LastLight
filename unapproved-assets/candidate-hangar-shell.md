@@ -7,6 +7,7 @@ Source idea: `ASSET_IDEAS.txt` #24, "Military base and checkpoints"
 
 A wide military building with a large sliding-door opening and weathered metal panels. Both named
 features are modelled, and the opening is the largest in the batch: **14 m wide and 17.8 m deep**.
+Since the revision it also has its intended occupant — a simple old monoplane parked inside.
 
 Expected at airbases, as the largest building in a military district, and as a skyline landmark
 from a distance.
@@ -28,11 +29,46 @@ shell) and the barn review sheet recommended lifting it to a shared module. Buil
 arch meant **no fourth copy was needed**, which is the cheapest way to respect that recommendation
 without doing the refactor.
 
+## Revision: the gable ends were open, the header speared the roof, and the leaves clipped the
+arch (owner feedback: "a hole in the back wall near the top; add a simple old plane")
+
+Three construction faults, plus the requested aeroplane:
+
+1. **The hole.** Nothing closed the wall area between the wall tops (5.9 m) and the arch
+   underside — at both ends. From the back it was a band of daylight across the whole facade
+   tapering with the arch; from the front the same gap ran above the piers. Each end is now
+   closed by **convex prism panels fan-triangulated under the arch curve** (one solid panel at
+   the back; two side strips and a header strip over the door at the front), sampled every metre
+   and clamped at the springing. The panel bases sit 0.1 m inside the wall tops so no coplanar
+   faces meet.
+2. **The old header speared the roof.** It was `DOOR_H + RISE` tall with its top at 11.4 m —
+   **1.3 m above the arch crown** (10.1 m) — so a wall slab stuck out through the roof at the
+   front. It is replaced by the header strip prism, which follows the arch underside exactly.
+3. **The open leaves clipped the arch.** The 7 m leaves parked at x = ±10.5 stood 0.7 m past the
+   arch's local underside and sheared through its edge near the wall line. The door is now
+   **5.0 m tall** (`DOOR_H`), which keeps 0.3 m of clearance under the arch at the parked
+   position and still admits the aircraft below.
+4. **The old plane.** A low-wing monoplane now parks left of centre inside, nose to the door:
+   slab fuselage with a tapered tail cone, one wing, open cockpit, fixed gear with one flat
+   tyre, two-blade prop, tail skid — 18 meshes, 5 new named materials (`airframe-fabric`,
+   `airframe-trim`, `prop-timber`, `tyre-rubber`, plus the reused `interior-dark` for the
+   cockpit). It sits on the interior floor slab, under the door head, and its silhouette is
+   readable through the opening from the front three-quarter view.
+
+Measured (vertex-accurate): **27.90 × 10.02 × 18.65 m** (variants 0/2). Declared `dimensions`
+updated to 28.0 × **10.2** × 18.8 — the old y of 11.5 was sized by the spearing header and has
+no geometry under it now. `minY` 0.
+
+**Previewed in WebGL renders** (headless Chromium): front, rear, three-quarter, and interior
+views confirm the back is solid, the front closures meet the arch, the shut variant seals the
+opening, and the plane reads inside.
+
 ## Dimensions and scale
 
-- Declared `dimensions`: 28.0 × 11.5 × 18.8 m
-- Measured: 27.90 × 11.40 × 18.65 m (variants 0/2), **24.60 × 11.40 × 18.65 m (variant 1)**
-- 24 m clear span, 18 m deep, 5.5 m to the springing line, 9.9 m at the arch crown. **4.7 scout
+- Declared `dimensions`: 28.0 × 10.2 × 18.8 m (see the revision above)
+- Measured (vertex-accurate): 27.90 × 10.02 × 18.65 m (variants 0/2), **24.60 × 10.02 × 18.65 m
+  (variant 1)**
+- 24 m clear span, 18 m deep, 5.5 m to the springing line, 10.1 m at the arch crown. **4.8 scout
   heights.**
 - A 24 m span is a real hangar width. Deliberately at the smaller end, because a true 40 m
   aircraft hangar would be so large it dominated any district it was placed in.
@@ -52,7 +88,7 @@ the opening at whatever the player should approach from.
 
 **The collider covers the 14 m opening, so the hangar is not enterable.** This is the **largest
 instance** of the batch's standing problem: five candidates now have a real, visible opening sealed
-by a single box, and this one is a 14 × 7 m door.
+by a single box, and this one is a 14 × 5 m door.
 
 | candidate    | opening                    | depth      |
 | ------------ | -------------------------- | ---------- |
@@ -60,7 +96,7 @@ by a single box, and this one is a 14 × 7 m door.
 | sawmill      | 5 × 4.2 m loading bay      | 9.4 m      |
 | barn shell   | 1.3 m sliding door gap     | 8.7 m      |
 | pillbox post | 1.2 m doorway + 12 cm slit | 2.5 m      |
-| **hangar**   | **14 × 7 m sliding door**  | **17.8 m** |
+| **hangar**   | **14 × 5 m sliding door**  | **17.8 m** |
 
 A 14 m opening is the one a player is most likely to try to walk or drive through, so this is the
 case that most needs multiple colliders or a subtractable doorway. It is now the strongest single
@@ -71,8 +107,8 @@ correctly outside the collider.
 
 ## The 14 m opening is real and deep
 
-Two sliding leaves, each 6.9 m wide, parked over the piers. The front wall is two piers and a
-lintel, so the full 14 m is empty.
+Two sliding leaves, each 6.9 m wide and 5 m tall, parked over the piers. The front wall is two
+piers and an arch-following header strip, so the full 14 m is empty.
 
 Verified by raycasting in at y = 3, across the opening:
 
@@ -110,18 +146,23 @@ the two, since a real streak would be graded and this one is a rectangle.
 
 ## Materials
 
-| name                 | colour    | roughness | metalness | notes                   |
-| -------------------- | --------- | --------- | --------- | ----------------------- |
-| `hangar-panel-olive` | `#58624d` | 0.9       | 0         | variant 0               |
-| `hangar-panel-grey`  | `#8b887d` | 0.9       | 0         | variant 1               |
-| `hangar-panel-faded` | `#626753` | 0.9       | 0         | variant 2               |
-| `hangar-door`        | `#54594d` | 0.85      | 0.2       | leaves, ribs, and track |
-| `interior-dark`      | `#2b2724` | 1         | 0         | floor and back panel    |
-| `concrete-base`      | `#797762` | 1         | 0         | apron                   |
-| `rust-streak`        | `#8e5142` | 0.9       | 0         | the two streaks         |
+| name                 | colour    | roughness | metalness | notes                          |
+| -------------------- | --------- | --------- | --------- | ------------------------------ |
+| `hangar-panel-olive` | `#58624d` | 0.9       | 0         | variant 0                      |
+| `hangar-panel-grey`  | `#8b887d` | 0.9       | 0         | variant 1                      |
+| `hangar-panel-faded` | `#626753` | 0.9       | 0         | variant 2                      |
+| `hangar-door`        | `#54594d` | 0.85      | 0.2       | leaves, ribs, and track        |
+| `interior-dark`      | `#2b2724` | 1         | 0         | floor, back panel, cockpit     |
+| `concrete-base`      | `#797762` | 1         | 0         | apron                          |
+| `rust-streak`        | `#8e5142` | 0.9       | 0         | the two streaks                |
+| `airframe-fabric`    | `#74765c` | 0.95      | 0         | flat, the parked plane's skin  |
+| `airframe-trim`      | `#54594d` | 0.85      | 0.2       | cowl, struts, spinner          |
+| `prop-timber`        | `#594332` | 1         | 0         | prop blades, tail skid         |
+| `tyre-rubber`        | `#2b2724` | 1         | 0         | the wheels                     |
 
-5 live materials per variant. `#58624d` for the military olive is straight from the established
-palette's foliage-and-military-greens row, which is the most on-brief colour choice in the batch.
+10 live materials per variant (5 building + 5 aircraft, with `interior-dark` shared). The building
+materials are unchanged from the first draft; the aircraft's are all palette rows (`#74765c` from
+the foliage/military greens, `#594332` from soil/timber, muted metal and rubber).
 
 ## Variants
 
@@ -149,27 +190,28 @@ after the position fix.
 
 ## Complexity
 
-**33 meshes, ~396 triangles, 5 materials** — for a 28 m building.
+**51 meshes, ~864 triangles, 10 live materials** — for a 28 m building and its aircraft.
 
-That is the best value in the batch by a wide margin: 12 triangles per metre of span, against the
-row house's 52 and the barn's 31. It is entirely large flat boxes, and the arch being seven boxes
-rather than curved geometry is most of the reason.
-
-For comparison, the crashed car is 74 meshes and 1196 triangles and is 3.5 m long.
+The revision took it from 33 meshes / ~396 triangles: the four closure prisms, the header strip,
+and the 18-mesh aeroplane. It is still the best value in the batch by footprint: the building
+itself is large flat boxes, and the arch being seven boxes rather than curved geometry is most of
+the reason.
 
 ## What reads well
 
 - **Far:** the faceted arch. A 24 m span with a curved crown is unmistakable as an aircraft hangar
   from a very long way off, and the faceting makes it read as deliberate at any distance.
-- **Near:** the open leaves on their track, the ribbed door faces, the cladding bands, and the
-  dark 17.8 m interior.
+- **Near:** the open leaves on their track, the ribbed door faces, the cladding bands, the dark
+  17.8 m interior — and now the aeroplane silhouette inside it.
 
 ## Unresolved questions
 
 - **The collider seals the 14 m opening** — the batch's most consequential instance of this issue.
-- **The interior is a floor and a back panel.** 17.8 m of dark nothing. A hangar this size would
-  hold an aircraft frame, a gantry, or scaffolding, and a single silhouette inside would transform
-  the asset. It is the single biggest available improvement.
+- **The interior is a floor, a back panel, and one parked plane.** A gantry, scaffolding, or
+  crates would deepen it, but the requested occupant is in.
+- **The plane is indicative, not modelled in detail** — no engine cylinders, no cockpit glazing,
+  no markings. At the play distances through a 14 m opening that reads correctly, but a close
+  inspection mode would want more.
 - **The rust streaks are flat rectangles**, which is the weakest detail in the model.
 - **No hangar markings on the apron** — no approach lines, no aircraft silhouette, no numbers.
 - **No side doors.** A hangar has a personnel door beside the main one, and its absence at this
@@ -180,25 +222,26 @@ For comparison, the crashed car is 74 meshes and 1196 triangles and is 3.5 m lon
 - **Variants 0 and 2 are identical geometry**, so the third variant is largely wasted.
 - **No damaged or burned state**, which is the obvious missing variant for a military building in
   this world.
-- 33 meshes and 396 triangles is so cheap that a damaged variant with a hole in the arch and
-  daylight through it is well within budget, and would be far more interesting than a third olive.
+- At 51 meshes / 864 triangles a damaged variant with a hole in the arch and daylight through it
+  is well within budget, and would be far more interesting than a third olive.
 
 ## Validation performed
 
 - `tsc --strict` typecheck clean, including `noUnusedLocals`.
-- All 3 variants built in Node; bounding boxes measured **vertex-accurately** and confirmed inside
-  the declared `dimensions`; `minY` 0.
-- The 14 m opening confirmed as a real 17.8 m deep void by raycast at five points across it, and
-  the lintel confirmed solid.
-- The shut-doors variant confirmed by raycast after fixing the leaf position, with both leaves'
-  world spans measured to confirm they cover -6.95..6.95.
+- All 3 variants built and rendered in headless Chromium with the project's three.js; bounds
+  measured **vertex-accurately** (world-space vertices) and confirmed inside the declared
+  `dimensions`; `minY` 0.
+- **The gable closures confirmed by render from front, rear, three-quarter, and interior views**,
+  and by raycast probes whose face normals point outward at both ends; the header strip replaces
+  the old spearing lintel and follows the arch underside.
+- **Leaf-to-arch clearance verified by arithmetic**: the parked leaf top (5.3 m) clears the arch
+  underside at every x from the park position to the wall line (5.7 m at x = 12).
+- The 14 m opening confirmed as a real 17.8 m deep void, and the shut variant confirmed to cover
+  x -6.95..6.95.
 - `createVisual` called twice per variant and compared mesh-by-mesh: identical. No unseeded
-  randomness, no animation, no lights.
+  randomness, no animation, no lights, no `NaN` positions.
 - Confirmed no two meshes share a material _name_ while using different material _instances_.
-- All geometry positions checked for `NaN`.
-- Prettier clean. Vite dev server serves the module with no transform errors.
-- **Not viewed in a browser or in game.** Whether seven segments read as an arch or as a faceted
-  lump is the entire design of this asset and only a real look settles it.
+- **Viewed in WebGL renders** (not yet in the game engine). Seven-segment arch reads correctly.
 
 ## Licensing
 

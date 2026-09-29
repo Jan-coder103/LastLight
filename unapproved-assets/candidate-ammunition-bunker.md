@@ -41,10 +41,44 @@ A rotation-sign bug found and fixed during the rework: the rear prism initially 
 z ∈ [0, 1.7] — entirely inside the chamber — until the rotation direction was corrected so the
 wedge actually rises from the back wall.
 
+## Revision: the front furniture was buried and the roof fought the concrete (owner feedback:
+"flickery, glitchy")
+
+Two separate defects, both confirmed by arithmetic and by render:
+
+1. **The whole blast-door assembly was invisible.** The chamber is a solid box whose front face
+   sits at z = 2.5, but the door leaf (front at z = 2.37), the wheel, the hinges, and the dark
+   recess were all placed at offsets IN FRONT OF the face — i.e. inside the concrete. The owner
+   was looking at a blank face with a floating frame. The front is rebuilt as a surface-mounted
+   door the way real magazines are built: a dark backing plate bedded into the face, the leaf
+   standing proud of it (z 2.50..2.66), wheel and spokes proud of the leaf, hinges spanning from
+   inside the concrete through the leaf, and the frame bedded against the face with no gap.
+2. **The roof mound cut through the chamber.** The earth ridge's base sat at y = 2.55, five
+   centimetres below the chamber top (2.6), which made the ridge's front and back faces coplanar
+   with the chamber faces over a 5 cm band — the flickering stripes — and let the chamber's top
+   corners poke through the mound sides as concrete strips. The ridge and turf cap now sit
+   exactly ON the chamber top (turf lifted a further 2 cm so its hidden bottom face cannot share
+   the earth prism's plane), and the berm tops rose to meet the new base edge. The grass tufts
+   are re-seated on the regraded slope (three of the old four were below the surface), the
+   placards moved flat onto the face clear of the frame posts (they floated 0.28 m out and
+   clipped the frame), and the retaining kerbs shifted forward so they no longer butt into the
+   berm toes.
+
+The amber placards, the closed door, and the kerbs are unchanged in intent. Measured
+(vertex-accurate): **7.80 × 3.42 × 9.00 m**; declared `dimensions` corrected to 7.8 × 3.5 ×
+**10.4** — the footprint is asymmetric (rear toe z = -5.2, kerbs z = 3.8) and the old z of 8.8
+left the toe outside the placement bounds. `minY` is exactly 0 (the new backing plate originally
+dipped 2 cm below ground and was trimmed).
+
+**Previewed in WebGL renders** (headless Chromium, head-on and three-quarter views beside the
+scout): the door, wheel, placards, and kerbs are all visible and seated; no z-fighting stripes
+remain at the roof edges.
+
 ## Dimensions and scale
 
-- Declared `dimensions`: 7.8 × 3.5 × 8.8 m
-- Measured (vertex-accurate): 7.80 × 3.42 × 8.75 m, identical across all three variants
+- Declared `dimensions`: 7.8 × 3.5 × 10.4 m (z corrected; see the revision above)
+- Measured (vertex-accurate): 7.80 × 3.42 × 9.00 m, identical across all three variants; the z
+  bounds are asymmetric about the pivot (rear wedge toe to z = -5.2, kerbs to z = 3.8)
 - The mound is 7.8 m across at the toes and 3.42 m at the turf apex. **1.6 scout heights** — a
   buried structure should be a mound, not a building. The concrete face (2.6 m) is the only
   architecture that breaks the skyline.
@@ -68,8 +102,8 @@ for an obstacle to err in.
 | ------------- | ----------- | --------- |
 | `bunker-door` | Bunker Door | 0, 0, 3.7 |
 
-In front of the door, just outside the collider's front face (z = 3.5). The first draft's point
-at z = 4.4 no longer matches the shorter footprint.
+In front of the door, between the retaining kerbs and just outside the collider's front face
+(z = 3.5).
 
 ## Materials
 
@@ -126,18 +160,21 @@ chamber is 1 box, so the mound itself costs almost nothing.
 ## Validation performed
 
 - `tsc --strict` typecheck clean, including `noUnusedLocals`.
-- All 3 variants built in Node with the project's three.js; vertex-accurate bounds measured and
-  confirmed inside the declared `dimensions`; `minY` exactly 0.
-- **Face-versus-berm intersection eliminated by construction**: the concrete face plane
-  (z = 2.5) stands clear of every earth surface; the closest earth (wedge inner edges) is
-  flush with the chamber walls, never in front of the face. Confirmed in head-on renders.
+- All 3 variants built and rendered in headless Chromium with the project's three.js; bounds
+  measured **vertex-accurately** (world-space vertices) and confirmed inside the declared
+  `dimensions`; `minY` exactly 0.
+- **Face-versus-berm and concrete-versus-mound interpenetration eliminated by construction**: the
+  roof ridge and berm tops now meet the chamber top plane exactly, and no earth prism shares a
+  front/back face plane with the chamber over an overlapping band. Confirmed in head-on renders
+  before and after.
+- **Front furniture visibility confirmed by render**: the leaf, wheel, hinges, placards, and
+  frame all stand proud of the face; the placards sit clear of the frame posts.
 - Placard count confirmed: 2 in variant 0, **1 in variant 1**.
 - `createVisual` called twice per variant and compared mesh-for-mesh and triangle-for-triangle:
   identical. No unseeded randomness, no animation, no lights, no `NaN` positions.
-- **Previewed in the staging viewer** (`viewer.html`) in headless Chromium with software WebGL:
-  head-on, three-quarter, and rear views, variants 0 and 1. The wall-in-front-of-a-mound read of
-  the old build was confirmed head-on, and the flush portal read of the rework confirmed from
-  all three angles. Not viewed in the game engine.
+- **Previewed in WebGL renders** (head-on, three-quarter, and rear views, variant 0): the buried
+  door of the old build and the z-fighting bands were confirmed by arithmetic, and the
+  surface-mounted front confirmed gone from all angles. Not viewed in the game engine.
 
 ## Licensing
 

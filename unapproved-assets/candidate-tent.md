@@ -36,18 +36,34 @@ halfWidth)`), a ridge cap, groundsheet, and four guy lines to pegs. The panel ro
 convention that took two attempts last time is asserted in a code comment and still holds:
 `rotation.z = side * panelAngle` with magnitude `PI/2 - alpha`.
 
+## Revision: sized for the scout, not for a catalogue (owner feedback: "way too small")
+
+The A-frame was authored full-size and then shrunk by `TENT_SCALE = 0.72`, which put the ridge at
+**1.24 m** — waist height beside the 2.1 m gameplay scout, a tent a scout could wear as a hat.
+The scale factor is gone and the shell is authored directly at final size:
+
+- **3.5 m wide, 2.05 m ridge, 3.5 m deep** — a roomy two-person canvas ridge tent whose peak
+  comes to the scout's head. The door opening grew with it (0.84 × 1.25 m), as did the vent
+  triangle, the guy-line anchors (now seated on the panel surface at `widthAt(1.15)` rather than
+  floating 0.35 m off the fabric), and the peg field.
+- Measured (vertex-accurate): **4.11 × 2.11 × 4.89 m** including pegs and the open flap.
+  Declared `dimensions`: 4.3 × 2.15 × 5.3. Collider `center {0, 1.0, 0}`, `size {3.4, 2.0, 3.4}`
+  over the fly; pegs, guys, and flap stay outside it. The `tent-door` point moved out to
+  z = 1.95.
+- Mesh count 21 and materials 6 live, unchanged — only the numbers and the guy anchors moved.
+
+**Previewed in WebGL renders** (headless Chromium, three-quarter view beside the scout): the
+ridge reads at scout height and the tent reads as shelter rather than as equipment.
+
 ## Dimensions and scale
 
-- Declared `dimensions`: 2.4 × 1.37 × 2.7 m
-- Measured: 2.16 × 1.28 × 2.61 m
-- The tent is authored full-size (2.9 m long, 2.9 m wide, 1.72 m ridge) and reduced by a single
-  `TENT_SCALE = 0.72`. On the 2.1 m scout the 1.28 m ridge sits at chest height.
-- The extra declared depth (was 2.3) covers the **open door flap**, which extends the footprint
-  about 0.15 m past the back wall's symmetric bound toward +Z. The pivot itself stays centred;
-  the flap is fabric and is outside the collider.
-
-`TENT_SCALE` is the only size knob; `dimensions`, `collider`, and the interaction point all
-derive from it.
+- Declared `dimensions`: 4.3 × 2.15 × 5.3 m
+- Measured (vertex-accurate): 4.11 × 2.11 × 4.89 m
+- The shell is authored directly at final size: 3.5 m long, 3.5 m wide, 2.05 m ridge. On the
+  2.1 m scout the ridge sits at head height — see the revision above for what it replaced.
+- The extra declared depth covers the **open door flap** and the front pegs, which extend the
+  footprint asymmetrically toward +Z (flap tip z = 2.49, back pegs z = -2.46). The pivot itself
+  stays centred; the flap is fabric and is outside the collider.
 
 ## Pivot and front direction
 
@@ -56,7 +72,7 @@ and zip strips are on the +Z gable, and the `tent-door` interaction point sits t
 
 ## Collider proposal
 
-`center {0, 0.65, 0}`, `size {2.09, 1.3, 2.3}`. A single box over the fly footprint — the player
+`center {0, 1.0, 0}`, `size {3.4, 2.0, 3.4}`. A single box over the fly footprint — the player
 cannot walk into a tent. The flap, guy lines, and pegs are outside the collider, which is
 correct: staked fabric should not block movement.
 
@@ -64,7 +80,7 @@ correct: staked fabric should not block movement.
 
 | id          | label | position   |
 | ----------- | ----- | ---------- |
-| `tent-door` | Tent  | 0, 0, 1.33 |
+| `tent-door` | Tent  | 0, 0, 1.95 |
 
 ## Materials
 
@@ -88,14 +104,14 @@ now the gables follow the fly colour, which the old fixed dark end-wall could no
 
 ## Complexity
 
-21 meshes, ~128 triangles, 6 live materials. Cheaper than the previous revision (23 / 184) while
-gaining real gables: the custom triangles replace a dozen boxes.
+21 meshes, ~189 triangles, 6 live materials. Same mesh count as the previous revision — the size
+change moved numbers, not meshes.
 
 ## Reads at distance
 
-The triangle silhouette is unchanged from the angled top-down camera. Head-on, the tent now has
-a legible front (opening + flap) and a legible back (clean triangle + vent) instead of two ends
-that read as construction frames.
+The triangle silhouette is unchanged from the angled top-down camera. Head-on, the tent has
+a legible front (opening + flap) and a legible back (clean triangle + vent), and at the new size
+both survive at the third-person distances.
 
 ## Unresolved questions
 
@@ -110,14 +126,16 @@ that read as construction frames.
 ## Validation performed
 
 - `tsc --strict` typecheck clean, including `noUnusedLocals`.
-- All 3 variants built in Node with the project's three.js; vertex-accurate bounds measured and
-  matched to `dimensions` / `collider`; `minY` exactly 0.
+- All 3 variants built and rendered in headless Chromium with the project's three.js;
+  vertex-accurate bounds measured (world-space vertices) and matched to `dimensions` /
+  `collider`; `minY` exactly 0.
+- **Guy-line anchors verified against the panel surface** after the resize: each anchor sits
+  within 0.02 m of the fly fabric at its height (the old anchors floated 0.35 m off it).
 - `createVisual` called twice per variant and compared mesh-for-mesh and triangle-for-triangle:
   identical. No unseeded randomness, no animation, no lights, no `NaN` positions.
-- **Previewed in the staging viewer** (`viewer.html`) in headless Chromium with software WebGL,
-  from a head-on front view and a head-on back view at scout-scale reference distance. The old
-  shelf-bar/picture-frame ends were confirmed visible in the old build and confirmed gone in
-  this one. Not viewed in the game engine.
+- **Previewed in WebGL renders** (headless Chromium, three-quarter view with the gameplay scout
+  at reference distance): the resized tent reads at scout height, with the flap open and the peg
+  field seated. Not viewed in the game engine.
 
 ## Licensing
 

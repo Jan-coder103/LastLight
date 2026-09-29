@@ -1,4 +1,11 @@
-import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial } from 'three';
+import {
+  BoxGeometry,
+  CylinderGeometry,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  Vector3,
+} from 'three';
 import type { AuthoredAsset } from './assetTypes';
 
 // Draft candidate. Not registered in the live catalog.
@@ -49,6 +56,10 @@ const TOWER_H = 14.0;
 const BRACE_Y = [3.2, 7.0, 10.8];
 const DECK_Y = 14.6;
 const CABIN_HALF = 1.6;
+// The legs continue through the deck slab and 0.11 m into the cabin base, so the cabin is
+// carried by the frame instead of hovering over it.
+const LEG_EXTEND = 0.75;
+const LEG_TOP_Y = TOWER_H + LEG_EXTEND;
 
 function halfAt(y: number): number {
   return BASE_HALF + ((TOP_HALF - BASE_HALF) * y) / TOWER_H;
@@ -59,7 +70,9 @@ export const candidateFireLookout: AuthoredAsset = {
   id: 'candidate-fire-lookout',
   name: 'Fire Lookout Tower',
   category: 'landmark',
-  dimensions: { x: 4.7, y: 19.4, z: 4.7 },
+  // Measured (vertex-accurate) 4.4 x 19.3 x 4.4 across all three variants; declared with a small
+  // margin over the deck rails (4.4) and the finial (19.25).
+  dimensions: { x: 4.5, y: 19.4, z: 4.5 },
   // Solid from the ground to the cabin, covering the leg volume. This is the same judgement as the
   // collapsed bridge: a 3.8 m square of four legs cannot be half-solid with one box, and walking
   // through a visible leg is a worse lie than not being able to walk under the tower.
@@ -73,28 +86,52 @@ export const candidateFireLookout: AuthoredAsset = {
     const cabinMaterial = cabinMaterials[variant % cabinMaterials.length]!;
     const missingBrace = variant === 2;
 
-    // Four splayed legs. Each is one tapered 6-sided cylinder, so the taper lives in the geometry
-    // instead of in eight separate posts.
+    // Four converging legs. The tower narrows from BASE_HALF at grade to TOP_HALF at the head, and
+    // halfAt() is that leg line, so the lean must bring the leg top INBOARD: a Y-axis point
+    // rotated about Z by a positive angle moves its top to -x (hence +sx), and about X it moves
+    // the top to +z (hence -sz). The earlier negative signs splayed the tops outward, which left
+    // every brace ring floating past or short of the legs and the deck standing on nothing.
+    const legLean = Math.atan((BASE_HALF - halfAt(LEG_TOP_Y)) / LEG_TOP_Y);
+    const legCenter = (BASE_HALF + halfAt(LEG_TOP_Y)) / 2;
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
-        const leg = new Mesh(new CylinderGeometry(0.17, 0.24, TOWER_H, 6), legMaterial);
-        leg.position.set(
-          (sx * (BASE_HALF + TOP_HALF)) / 2,
-          TOWER_H / 2 + 0.05,
-          (sz * (BASE_HALF + TOP_HALF)) / 2,
+        const leg = new Mesh(
+          new CylinderGeometry(0.17, 0.24, LEG_TOP_Y - 0.05, 6),
+          legMaterial,
         );
-        leg.rotation.z = -sx * 0.08;
-        leg.rotation.x = sz * 0.08;
+        leg.position.set(sx * legCenter, 0.05 + (LEG_TOP_Y - 0.05) / 2, sz * legCenter);
+        leg.rotation.z = sx * legLean;
+        leg.rotation.x = -sz * legLean;
         leg.castShadow = true;
         tower.add(leg);
+        // Knee brace from the leg up to the deck's underside corner, carrying the catwalk
+        // overhang the way a real lookout does.
+        const kneeFrom = new Vector3(sx * halfAt(12.9), 12.9, sz * halfAt(12.9));
+        const kneeTo = new Vector3(sx * 2.0, DECK_Y - 0.12, sz * 2.0);
+        const knee = new Mesh(
+          new BoxGeometry(0.12, kneeFrom.distanceTo(kneeTo) + 0.12, 0.12),
+          legMaterial,
+        );
+        knee.position.copy(kneeFrom).add(kneeTo).multiplyScalar(0.5);
+        knee.quaternion.setFromUnitVectors(
+          new Vector3(0, 1, 0),
+          kneeTo.clone().sub(kneeFrom).normalize(),
+        );
+        knee.castShadow = true;
+        tower.add(knee);
       }
     }
 
-    // Horizontal brace rings, one diagonal per level on the +X face. The diagonal spans from the
-    // level below to this level, so its angle and length are derived from the actual rise and the
-    // face width at that height rather than hard-coded as a 45 degree bar.
-    for (const y of BRACE_Y) {
+    // Horizontal brace rings on the leg line, one per level, plus a true panel diagonal on the
+    // +X face: a rod from the lower level's corner to this level's far corner, so both ends land
+    // on the frame instead of ending in mid air.
+    for (let level = 0; level < BRACE_Y.length; level++) {
+      const y = BRACE_Y[level]!;
       const h = halfAt(y);
+      // The lowest diagonal starts 5 cm up the leg: centred exactly on grade, its own 0.12 m
+      // section tips below the ground plane.
+      const yPrev = level === 0 ? 0.05 : BRACE_Y[level - 1]!;
+      const hPrev = level === 0 ? halfAt(0.05) : halfAt(yPrev);
       for (const sz of [-1, 1]) {
         const bar = new Mesh(new BoxGeometry(h * 2, 0.16, 0.14), legMaterial);
         bar.position.set(0, y, sz * h);
@@ -108,16 +145,14 @@ export const candidateFireLookout: AuthoredAsset = {
         tower.add(bar);
       }
       if (!missingBrace || y !== BRACE_Y[1]) {
-        const rise = y - (y === BRACE_Y[0] ? 0 : BRACE_Y[BRACE_Y.indexOf(y) - 1]!);
-        const run = h * 2;
-        const diag = new Mesh(new BoxGeometry(0.11, Math.hypot(rise, run), 0.11), legMaterial);
-        // A brace lying ON the +X face must tilt WITHIN that face, i.e. in the ZY plane, so it is
-        // rotated about X. Rotating it about Z instead tilts it across the face and throws the
-        // ends out to x = 3.6, well past the 2.2 m deck.
-        // Lifted 6 cm: the lowest diagonal reaches grade, and its own 0.11 m section tips 4 cm
-        // through the ground if it is centred exactly on the rise.
-        diag.position.set(h, y - rise / 2 + 0.06, 0);
-        diag.rotation.x = Math.atan2(run, rise);
+        const from = new Vector3(hPrev, yPrev, hPrev);
+        const to = new Vector3(h, y, -h);
+        const diag = new Mesh(
+          new BoxGeometry(0.12, from.distanceTo(to), 0.12),
+          legMaterial,
+        );
+        diag.position.copy(from).add(to).multiplyScalar(0.5);
+        diag.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), to.clone().sub(from).normalize());
         diag.castShadow = true;
         tower.add(diag);
       }
@@ -125,21 +160,22 @@ export const candidateFireLookout: AuthoredAsset = {
 
     // Switchback stair: three flights inside the leg footprint, so the asset does not sprawl. A
     // single straight flight was measured at 14.3 m of Z extent, which is not a landmark footprint.
+    // The top flight runs 4.85 m so its last tread lands inside the deck slab instead of 0.2 m
+    // short of it.
     const FLIGHTS = [
-      { z: 0.6, dir: 1, y0: 0.3 },
-      { z: -0.6, dir: -1, y0: 5.0 },
-      { z: 0.6, dir: 1, y0: 9.7 },
+      { z: 0.6, dir: 1, y0: 0.3, rise: 4.7 },
+      { z: -0.6, dir: -1, y0: 5.0, rise: 4.7 },
+      { z: 0.6, dir: 1, y0: 9.7, rise: 4.85 },
     ];
     const FLIGHT_RUN = 2.2;
-    const FLIGHT_RISE = 4.7;
     for (const flight of FLIGHTS) {
       const stringer = new Mesh(
-        new BoxGeometry(0.14, Math.hypot(FLIGHT_RUN, FLIGHT_RISE), 0.14),
+        new BoxGeometry(0.14, Math.hypot(FLIGHT_RUN, flight.rise), 0.14),
         legMaterial,
       );
-      stringer.position.set(0, flight.y0 + FLIGHT_RISE / 2, flight.z);
+      stringer.position.set(0, flight.y0 + flight.rise / 2, flight.z);
       // dir = 1 climbs toward +X, which needs a negative rotation about Z.
-      stringer.rotation.z = -flight.dir * Math.atan2(FLIGHT_RUN, FLIGHT_RISE);
+      stringer.rotation.z = -flight.dir * Math.atan2(FLIGHT_RUN, flight.rise);
       stringer.castShadow = true;
       tower.add(stringer);
       for (let i = 1; i <= 3; i++) {
@@ -147,7 +183,7 @@ export const candidateFireLookout: AuthoredAsset = {
         const tread = new Mesh(new BoxGeometry(0.7, 0.1, 0.34), legMaterial);
         tread.position.set(
           flight.dir * (-FLIGHT_RUN / 2 + FLIGHT_RUN * t),
-          flight.y0 + FLIGHT_RISE * t,
+          flight.y0 + flight.rise * t,
           flight.z,
         );
         tread.castShadow = true;

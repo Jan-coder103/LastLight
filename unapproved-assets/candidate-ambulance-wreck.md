@@ -12,15 +12,39 @@ city traffic debris.
 Deliberately **not** the same family as the car candidate. It reads as a boxy van on a short
 wheelbase, not as a saloon with a roof box, and it is banded rather than smoothly curved.
 
+## Revision: 10% bigger and properly dressed as a wreck (owner feedback)
+
+- **Scaled to 1.1×.** The whole wreck builds inside a child group carrying a single
+  `WRECK_SCALE = 1.1` constant (the crashed car's pattern), with `dimensions`, `collider`, and the
+  interaction point all derived from it, so the metadata cannot drift. Measured
+  (vertex-accurate): **2.95 × 3.05 × 6.72 m** — the swung rear door reaches x = -1.62 and the new
+  drop step z = -3.53, and the footprint is asymmetric about the pivot, so the declared bounds
+  are 3.0 × 3.2 × 7.1 (the old z of 6.38 clipped the step).
+- **More wreck detail**, all pre-scale geometry inside the scaled group: a roof vent behind the
+  beacon; a side window in the box body on each side (one still glazed, one boarded over with a
+  dark panel); grille slats and lights on the nose (one glass headlight, one dark empty socket);
+  a rear bumper with a **drop step** under the open door; **rust streaks** over panel seams
+  (`rust-streak`, `#6b3f30`, the crashed car's rust swatch); and a **tipped stretcher frame**
+  just inside the open rear doorway — two rails, three cross slats — so the opening shows a load
+  rather than a dark recess panel.
+- Mesh count 23 → **41**, triangles ~388 → **604**, 8 → 9 live materials. The stretcher finally
+  resolves this sheet's own "no stretcher, no roof equipment, no rear step" note; the open door
+  now reveals something worth searching.
+
+**Previewed in WebGL renders** (headless Chromium, front three-quarter and rear views beside the
+scout): the wreck reads bigger and busier at both distances, and the stretcher is visible through
+the open door.
+
 ## Dimensions and scale
 
-- Declared `dimensions`: 2.7 × 2.9 × 5.8 m
-- Measured: 2.68 × 2.77 × 5.74 m, identical across all three variants
-- 5.7 m long, 2.1 m wide, 2.65 m to the beacon bar. A van-based ambulance, and about 1.3 scout
+- Declared `dimensions`: 3.0 × 3.2 × 7.1 m (scaled; see the revision above)
+- Measured (vertex-accurate): 2.95 × 3.05 × 6.72 m, identical across all three variants; the
+  footprint is asymmetric about the pivot (door to x = -1.62, step to z = -3.53)
+- 6.3 m long, 2.3 m wide, 2.9 m to the beacon bar. A van-based ambulance, and about 1.45 scout
   heights — noticeably shorter than the 12 m bus, so the two do not compete.
-- **The x extent (2.68 m) exceeds the 2.1 m body** because the rear door hangs open to x = -1.47.
+- **The x extent (2.95 m) exceeds the 2.3 m body** because the rear door hangs open to x = -1.62.
   See the collider section.
-- 2.9 m declared height covers the beacon bar at 2.77 m.
+- 3.2 m declared height covers the beacon bar at 3.05 m.
 
 ## Pivot and front direction
 
@@ -37,10 +61,10 @@ by it. Again, a box is an accurate volume for a solid vehicle.
 
 | id          | label     | position    |
 | ----------- | --------- | ----------- |
-| `rear-door` | Rear Door | 0, 0, -3.25 |
+| `rear-door` | Rear Door | 0, 0, -3.58 |
 
-Behind the open rear doors, clear of the collider. Reads as a searchable medical supply point,
-which is the most obvious gameplay hook on the model.
+Behind the open rear doors, clear of the collider (scaled from -3.25 by `WRECK_SCALE`). Reads as a
+searchable medical supply point, which is the most obvious gameplay hook on the model.
 
 ## Materials
 
@@ -57,8 +81,9 @@ which is the most obvious gameplay hook on the model.
 | `body-metal`                 | `#64675d` | 0.8       | 0.25      | bumper, mirrors           |
 | `beacon-lens`                | `#78908b` | 0.3       | 0.05      | emissive `#243632` @ 0.2  |
 | `beacon-broken`              | `#3a3630` | 0.9       | 0         | the dead beacon           |
+| `rust-streak`                | `#6b3f30` | 1         | 0         | the three rust panels     |
 
-8 live materials per variant.
+9 live materials per variant.
 
 **The body colours are deliberately not white.** The style guide rules out pure white surfaces, and
 a bright white ambulance would be the single most saturated thing in a muted city. `#a29b88` is a
@@ -85,14 +110,16 @@ markings fade differently from its paint would be odd.
 
 - **Front-right wheel missing**, replaced by an exposed hub, so the vehicle sits on a collapsed
   corner.
-- **Rear left door open on a hinge**, 0.4 rad. Verified: the door group spans x -1.47 to -1.03 and
-  z -2.79 to -1.88, so it genuinely swings out and clear of the body side at -1.05.
+- **Rear left door open on a hinge**, 0.4 rad. Verified: the door group swings out and clear of
+  the body side, to x = -1.62 at full scale.
 - **One dead beacon.** The roof bar carries one `beacon-lens` and one `beacon-broken`, so the bar
   reads as a light bar with half of it destroyed rather than as two working lamps.
 - **Windscreen cracked**, with an offset shard leaning in the frame.
+- **Revision additions** (see above): boarded side window, dead headlight socket, rust streaks,
+  rear step, roof vent, and the tipped stretcher in the doorway.
 
-No crumpled panels, no burnt-out roof, no flat tyre. A 23-mesh budget does not leave room for much
-and the "wreck" read here is carried by the missing wheel, the open door, and the dead beacon.
+The "wreck" read is now carried by the missing wheel, the open door with the stretcher in it, the
+dead beacon, the boarded window, and the rust.
 
 ## Bug found and fixed: the cross was floating off the back
 
@@ -109,8 +136,9 @@ would have.
 
 ## Complexity
 
-23 meshes, ~388 triangles, 8 live materials. The cheapest vehicle in the batch per metre of
-length. Triangle cost is dominated by the three 10-sided wheels.
+41 meshes, ~604 triangles, 9 live materials. Up from 23 / ~388 with the revision's dressing, still
+the cheapest vehicle in the batch per metre of length. Triangle cost is dominated by the three
+10-sided wheels.
 
 The wheel centres sit at y = 0.40 rather than 0.42, because a 10-sided cylinder does not reach its
 true radius at a vertex: at 0.42 the tyres floated 2 cm above the ground. This was measured, not
@@ -139,22 +167,24 @@ guessed.
   and would need the same owner decision the street light raised.
 - The raked windscreen is a single rotated box, so from directly in front it is a flat angled
   plane rather than a wrapped screen. Acceptable at this scale, and unlikely to be noticed.
-- No stretcher, no roof medical equipment, no rear step. All cheap to add and all of which would
-  make the silhouette more specific.
+- The stretcher is a frame, not a canvas — at a glance through the doorway it reads correctly, but
+  a close inspection mode would want a fabric plane.
 
 ## Validation performed
 
 - `tsc --strict` typecheck clean, including `noUnusedLocals`.
-- All 3 variants built in Node; bounding boxes measured and confirmed inside the declared
-  `dimensions`; `minY` 0.001 (the 10-gon wheel adjustment described above).
-- Rear door swing confirmed by measuring the door group's world bounds; the rear cross confirmed
-  on the door face by raycast from behind.
+- All 3 variants built and rendered in headless Chromium with the project's three.js; bounds
+  measured **vertex-accurately** (world-space vertices) and confirmed inside the declared
+  `dimensions`; `minY` 0 (the 10-gon wheel adjustment described above keeps the tyres seated).
+- Rear door swing confirmed by measuring the door group's world bounds at full scale; the rear
+  cross confirmed on the door face by raycast from behind.
+- **Revision confirmed by render** (front three-quarter and rear views beside the scout): the
+  1.1× scale reads, and the stretcher, grille, boarded window, vent, and rust are all visible at
+  their intended distances.
 - `createVisual` called twice per variant and compared mesh-by-mesh: identical. No unseeded
-  randomness, no animation, no lights (checked explicitly).
+  randomness, no animation, no lights (checked explicitly), no `NaN` positions.
 - Confirmed no two meshes share a material _name_ while using different material _instances_.
-- All geometry positions checked for `NaN`.
-- Prettier clean. Vite dev server serves the module with no transform errors.
-- **Not viewed in a browser or in game.**
+- **Viewed in WebGL renders** (not yet in the game engine).
 
 ## Licensing
 

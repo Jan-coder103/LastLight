@@ -13,16 +13,10 @@ import type { AuthoredAsset } from './assetTypes';
 
 // Draft candidate. Not registered in the live catalog.
 
-// A-frame cross-section. Authored in metres at a full-size ridge tent and then reduced by
-// a single constant, so the triangle geometry and the declared bounds stay in agreement.
-const TENT_SCALE = 0.72;
-
-const scaled = (value: number): number => Math.round(value * TENT_SCALE * 100) / 100;
-const scaledVec = (value: { x: number; y: number; z: number }) => ({
-  x: scaled(value.x),
-  y: scaled(value.y),
-  z: scaled(value.z),
-});
+// A-frame cross-section, authored directly in final metres. The first draft built a full-size
+// ridge tent and then shrank it by 0.72, which put the ridge at 1.24 m — knee height beside the
+// 2.1 m gameplay scout. Revision sizes it as a roomy canvas tent: 3.5 m wide, ridge 2.05 m
+// (about scout height), 3.5 m deep.
 
 const flyMaterials = [
   new MeshStandardMaterial({
@@ -87,25 +81,23 @@ export const candidateTent: AuthoredAsset = {
   id: 'candidate-tent',
   name: 'Basic Camping Tent',
   category: 'prop',
-  // 2.4 m ridge tent, the size of a real 2-3 person tent, before the reduction above. The depth
-  // includes the door flap swung open on its hinge, which makes the footprint slightly asymmetric
-  // toward +Z (about 0.15 m after scaling) while the pivot itself stays at the tent's centre.
-  dimensions: scaledVec({ x: 3.34, y: 1.9, z: 3.75 }),
+  // The depth includes the door flap swung open on its hinge, which makes the footprint slightly
+  // asymmetric toward +Z (about 1.1 m) while the pivot itself stays at the tent's centre. The
+  // guy-line pegs set the x and -z extents.
+  dimensions: { x: 4.3, y: 2.15, z: 5.3 },
   collider: {
-    center: scaledVec({ x: 0, y: 0.9, z: 0 }),
-    size: scaledVec({ x: 2.9, y: 1.8, z: 3.2 }),
+    center: { x: 0, y: 1.0, z: 0 },
+    size: { x: 3.4, y: 2.0, z: 3.4 },
   },
-  interactionPoints: [
-    { id: 'tent-door', label: 'Tent', position: scaledVec({ x: 0, y: 0, z: 1.85 }) },
-  ],
+  interactionPoints: [{ id: 'tent-door', label: 'Tent', position: { x: 0, y: 0, z: 1.95 } }],
   createVisual(variant = 0) {
     const tent = new Group();
     const fly = flyMaterials[variant % flyMaterials.length]!;
 
-    // Authored full-size, then reduced. Half-width, ridge height, and length.
-    const halfWidth = 1.45;
-    const ridge = 1.72;
-    const length = 2.9;
+    // Half-width, ridge height, and length.
+    const halfWidth = 1.75;
+    const ridge = 2.05;
+    const length = 3.5;
     const halfLength = length / 2;
     // A-frame slope: the panel is as long as the hypotenuse of the triangle. It is shortened
     // very slightly and raised off the base line, because at the true slope angle the panel's
@@ -114,7 +106,6 @@ export const candidateTent: AuthoredAsset = {
     const slopeAngle = Math.atan2(ridge, halfWidth);
 
     const structure = new Group();
-    structure.scale.setScalar(TENT_SCALE);
     tent.add(structure);
 
     const groundsheet = new Mesh(new BoxGeometry(halfWidth * 2, 0.08, length), floorMaterial);
@@ -146,8 +137,8 @@ export const candidateTent: AuthoredAsset = {
 
     // Gable ends are real triangles cut from the A-frame profile. The front one carries a
     // rectangular door opening; the back one is solid with a small vent near the apex.
-    const doorHalfWidth = 0.35;
-    const doorTop = 1.05;
+    const doorHalfWidth = 0.42;
+    const doorTop = 1.25;
     const shoulder = widthAt(doorTop);
 
     const frontGable = new Group();
@@ -190,9 +181,9 @@ export const candidateTent: AuthoredAsset = {
     // Vent: a small dark triangle just proud of the back gable, under the apex.
     const vent = triangleMesh(
       [
-        [-0.16, 1.26],
-        [0.16, 1.26],
-        [0, 1.5],
+        [-0.18, 1.52],
+        [0.18, 1.52],
+        [0, 1.8],
       ],
       trimMaterial,
     );
@@ -226,8 +217,9 @@ export const candidateTent: AuthoredAsset = {
     // Four guy lines to pegs. The bounds in the asset contract include these pegs.
     for (const side of [-1, 1]) {
       for (const end of [-1, 1]) {
-        const from = new Vector3(side * 1.0, 0.95, end * 1.2);
-        const to = new Vector3(side * 1.45, 0.14, end * 1.5);
+        // Anchored just off the panel surface at this height (widthAt(1.15) = 0.77).
+        const from = new Vector3(side * 0.78, 1.15, end * 1.45);
+        const to = new Vector3(side * 2.0, 0.14, end * 2.35);
         const direction = to.clone().sub(from);
         const guy = new Mesh(new BoxGeometry(0.035, direction.length(), 0.035), metalMaterial);
         guy.position.copy(from).add(to).multiplyScalar(0.5);

@@ -43,11 +43,16 @@ const DEPTH = 9;
 const HALF_W = WIDTH / 2;
 const HALF_D = DEPTH / 2;
 const EAVES = 4.7;
-const RIDGE = 6.4;
-const ROOF_RUN = 4.7;
-const ROOF_RISE = RIDGE - EAVES;
+// Wall top (footing 0.4 + wall height), where the roof planes spring from.
+const WALL_TOP = EAVES + 0.4;
+const RIDGE = 7.2;
+// The ridge runs along Z (the gable ends stand at z = +/- HALF_D), so each roof plane runs from
+// the ridge at x = 0 down to the eaves at x = +/- HALF_W.
+const ROOF_RUN = HALF_W;
+const ROOF_RISE = RIDGE - WALL_TOP;
 const SLOPE = Math.atan2(ROOF_RISE, ROOF_RUN);
 const SLOPE_LENGTH = Math.sqrt(ROOF_RUN * ROOF_RUN + ROOF_RISE * ROOF_RISE);
+const EAVE_DROP = 0.15;
 const DOOR_W = 3.6;
 const DOOR_H = 3.8;
 
@@ -100,7 +105,10 @@ export const candidateBarnShell: AuthoredAsset = {
   id: 'candidate-barn-shell',
   name: 'Barn Shell',
   category: 'building',
-  dimensions: { x: 12.8, y: 7.1, z: 12.3 },
+  // Measured (vertex-accurate): 12.64 x 7.45 x 12.3. The z bounds are asymmetric about the pivot:
+  // the fallen roof section lies out to z = 7.45 in front, so the declared z covers twice that
+  // offset; the earlier 12.3 clipped the debris.
+  dimensions: { x: 12.8, y: 7.5, z: 15.0 },
   // The barn body. Note the consequence: the single box covers the sliding door opening too, so
   // the barn is not enterable. See the review sheet — the ranger cabin and sawmill have the same
   // issue, and it is the strongest argument in this batch for multiple-box colliders.
@@ -146,11 +154,11 @@ export const candidateBarnShell: AuthoredAsset = {
 
     for (const end of [1, -1]) {
       const gable = makeGable(HALF_W, ROOF_RISE, 0.26, sidingMaterial);
-      gable.position.set(0, EAVES + 0.4, end * (HALF_D - 0.13));
+      gable.position.set(0, WALL_TOP, end * (HALF_D - 0.13));
       barn.add(gable);
     }
 
-    // Faded siding: three plank bands a side, and one across the gable above the door. Seven
+    // Faded siding: three plank bands a side, and one across the lintel above the door. Seven
     // shallow boxes standing proud is the whole "board-and-batten" read.
     for (const sx of [-1, 1]) {
       for (const y of [1.3, 2.7, 4.1]) {
@@ -160,42 +168,56 @@ export const candidateBarnShell: AuthoredAsset = {
       }
     }
     const gableBand = new Mesh(new BoxGeometry(WIDTH - 0.4, 0.22, 0.1), sidingMaterial);
-    gableBand.position.set(0, 4.2, HALF_D + 0.04);
+    gableBand.position.set(0, 4.65, HALF_D + 0.04);
     barn.add(gableBand);
 
-    // Roof. The back half is intact; the front half has lost a 3.4 m section, leaving rafters and
-    // a dark loft visible through the hole.
-    const backSlab = new Mesh(new BoxGeometry(WIDTH + 0.6, 0.22, SLOPE_LENGTH), roofMaterial);
-    backSlab.position.set(0, EAVES + ROOF_RISE / 2, -ROOF_RUN / 2);
-    backSlab.rotation.x = -SLOPE;
+    // Roof: two gable planes whose ridge runs along Z. Each plane is one slab rotated about Z by
+    // the slope angle, centred on the slope line from the ridge (x = 0, RIDGE) to just past the
+    // eaves at x = +/- HALF_W. The earlier draft built full-width slabs rotated about X, which is
+    // this roof turned 90 degrees: it shed toward the gable ends instead of toward the side walls.
+    const slabLengthZ = DEPTH + 0.6;
+    const slabCenterX = ROOF_RUN / 2 + EAVE_DROP * Math.cos(SLOPE);
+    const slabCenterY = WALL_TOP + ROOF_RISE / 2 - EAVE_DROP * Math.sin(SLOPE);
+    // The left plane (x < 0) is intact. The right plane has lost its middle 3.4 m along the ridge
+    // direction (z), leaving two slabs, exposed rafters, and a dark under-panel through the hole.
+    const backSlab = new Mesh(
+      new BoxGeometry(SLOPE_LENGTH + 0.3, 0.22, slabLengthZ),
+      roofMaterial,
+    );
+    backSlab.position.set(-slabCenterX, slabCenterY, 0);
+    backSlab.rotation.z = SLOPE;
     backSlab.castShadow = true;
     backSlab.receiveShadow = true;
     barn.add(backSlab);
 
-    for (const [x, w] of [
-      [-3.95, 4.7],
-      [4.05, 4.5],
-    ] as const) {
-      const frontSlab = new Mesh(new BoxGeometry(w, 0.22, SLOPE_LENGTH), roofMaterial);
-      frontSlab.position.set(x, EAVES + ROOF_RISE / 2, ROOF_RUN / 2);
-      frontSlab.rotation.x = SLOPE;
-      frontSlab.castShadow = true;
-      frontSlab.receiveShadow = true;
-      barn.add(frontSlab);
+    for (const z of [3.25, -3.25]) {
+      const slab = new Mesh(new BoxGeometry(SLOPE_LENGTH + 0.3, 0.22, 3.1), roofMaterial);
+      slab.position.set(slabCenterX, slabCenterY, z);
+      slab.rotation.z = -SLOPE;
+      slab.castShadow = true;
+      slab.receiveShadow = true;
+      barn.add(slab);
     }
-    for (const x of [-1.0, 0.1, 1.2]) {
-      const rafter = new Mesh(new BoxGeometry(0.14, 0.16, SLOPE_LENGTH), boardMaterial);
-      rafter.position.set(x, EAVES + ROOF_RISE / 2 - 0.2, ROOF_RUN / 2);
-      rafter.rotation.x = SLOPE;
+    for (const z of [-1.0, 0.1, 1.2]) {
+      const rafter = new Mesh(new BoxGeometry(SLOPE_LENGTH - 0.1, 0.14, 0.16), boardMaterial);
+      rafter.position.set(slabCenterX, slabCenterY - 0.22, z);
+      rafter.rotation.z = -SLOPE;
+      rafter.castShadow = true;
       barn.add(rafter);
     }
-    // Dark loft ceiling behind the hole, so it shows a space rather than the inside of the far wall.
-    const loft = new Mesh(new BoxGeometry(3.4, 0.12, 3.4), interiorMaterial);
-    loft.position.set(0.1, 4.4, 2.3);
-    barn.add(loft);
+    // Dark under-panel set below the missing section, so the hole shows a shadowed roof space
+    // rather than the sky through the barn.
+    const underPanel = new Mesh(new BoxGeometry(SLOPE_LENGTH - 0.5, 0.1, 3.4), interiorMaterial);
+    underPanel.position.set(
+      slabCenterX + Math.sin(SLOPE) * 0.35,
+      slabCenterY - Math.cos(SLOPE) * 0.35,
+      0.1,
+    );
+    underPanel.rotation.z = -SLOPE;
+    barn.add(underPanel);
 
-    const ridgeCap = new Mesh(new BoxGeometry(WIDTH + 0.7, 0.16, 0.3), roofMaterial);
-    ridgeCap.position.y = RIDGE + 0.44;
+    const ridgeCap = new Mesh(new BoxGeometry(0.6, 0.18, DEPTH + 0.7), roofMaterial);
+    ridgeCap.position.y = RIDGE + 0.16;
     ridgeCap.castShadow = true;
     barn.add(ridgeCap);
 

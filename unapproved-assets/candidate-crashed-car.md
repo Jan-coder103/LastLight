@@ -10,11 +10,13 @@ place was violent" landmark and a piece of cover. It is a static obstacle, not a
 
 ## Dimensions and scale
 
-- Declared `dimensions`: 3.50 × 2.29 × 5.50 m
-- Measured model bounds (all 3 variants): 3.47 × 2.25 × 5.50 m
+- Declared `dimensions`: 4.30 × 2.29 × 5.70 m (corrected in revision 6; see above)
+- Measured model bounds (vertex-accurate, all 3 variants): 3.47 × 2.12 × 5.50 m — the footprint is
+  asymmetric about the pivot (the open door reaches x = 2.12, the nose z = 2.73, the boot
+  z = -2.77), so the declared x/z cover twice the largest offset per axis.
 - Width and height are larger than a closed car because the driver door stands swung open and
   the bonnet is popped up. The roof is still 1.76 m; the extra height is the raised bonnet
-  standing to 2.25 m, roughly 1.2x the roof.
+  standing to about 1.88 m world, roughly 1.07x the roof after revision 6 re-seated the hinge.
 - The roof now sits at 1.76 m, which is 0.84 × the 2.1 m gameplay scout — the same
   roof-to-human ratio a real sedan has against a real 1.8 m adult (1.51 / 1.8 = 0.84). The car
   now reads as car-sized beside the scout rather than as a real-world-scale object dropped next
@@ -66,6 +68,28 @@ monotonically rising top surface:
 
 The front is pushed down and the rear stays high, which is the intended caved silhouette. Before
 the fix this profile was inverted end for end.
+
+### Revision 6: the bonnet hinge floated above the cowl (owner feedback)
+
+The raised bonnet was hinged at (y 1.02, z 0.78) with its slab offset 0.3 m up the hinge arm, so
+the panel's rear edge swung to (y 1.24, z 0.56) — 0.32 m above the cowl top (0.92) and hanging
+over the windscreen base in mid air. The connection to the car was the complaint, and it was
+correct: nothing touched.
+
+The hinge now sits at the cowl itself — (y 0.94, z 0.84), 0.02 above the cowl top at the cowl
+line — and the bonnet slab's **rear edge sits on the hinge point**, so the raised panel stays
+attached at whatever angle. The opening angle is -0.58 rad and the far tip now lands at
+y ≈ 1.61 authored (1.88 m world), slightly lower and calmer than the old 1.82. A **prop rod**
+from the cowl to the bonnet underside was added as a child of the hinge (1 mesh), and the crumple
+panel moved out to the raised leading edge.
+
+Measured (vertex-accurate): 3.47 × 2.12 × 5.50 m. Declared `dimensions` corrected to
+3.68 × 1.96 × 4.87 authored (4.30 × 2.29 × 5.70 world) — the old declared x of 3.50 world clipped
+the swung driver door (it reaches x = 2.12 world), a pre-existing error this revision finally
+measured properly.
+
+**Previewed in a WebGL render** (headless Chromium, three-quarter view beside the scout): the
+bonnet reads as hinged at the cowl with the engine bay visible below it.
 
 ## Pivot and front direction
 
@@ -178,11 +202,11 @@ Cost: 74 meshes and ~1196 triangles, up from 55 / 968.
 
 ## Complexity
 
-74 meshes, ~1196 triangles, 9 materials. The heaviest of the four candidates by a wide margin, and
-the only one using custom `BufferGeometry` (the windshield shard strip). The increase from
-47 / 860 is the open door and bonnet, the carved engine bay and doorway, the bent pillar, and the
-roof dent. Carving real openings is what costs the triangles, and it is what makes the car read as
-opened rather than decorated.
+75 meshes, ~1220 triangles, 9 materials (revision 6 added the prop rod). The heaviest of the batch
+by a wide margin, and the only one using custom `BufferGeometry` (the windshield shard strip). The
+increase from 47 / 860 is the open door and bonnet, the carved engine bay and doorway, the bent
+pillar, and the roof dent. Carving real openings is what costs the triangles, and it is what makes
+the car read as opened rather than decorated.
 
 **This is now the one to watch.** The open door and raised bonnet roughly triple the collider
 footprint in width, and this asset is the most likely of the four to be scattered repeatedly
@@ -214,18 +238,19 @@ pays off up close, and it is cheap enough to keep.
 ## Validation performed
 
 - `tsc --strict` typecheck clean (including `noUnusedLocals` / `noUnusedParameters`).
-- All 3 variants built in Node; bounding boxes measured with `Box3.setFromObject` and matched
+- All 3 variants built and rendered in headless Chromium with the project's three.js; bounds
+  measured **vertex-accurately** (world-space vertices, not transformed AABB corners) and matched
   against the declared `dimensions` and `collider`.
 - After each rescale, all geometry was re-confirmed to be parented under the scaled group, so no
   part was left at the old size.
 - **The inverted roof was confirmed by raycast**, sampling the top surface down the roof
   centreline; the profile now rises from the windshield header to the tail as intended.
+- **Revision 6's bonnet connection confirmed by render** from a three-quarter view beside the
+  scout: the raised panel meets the cowl line with the engine bay visible below it.
 - `createVisual(1)` called twice and compared mesh-by-mesh: identical, so placement is
-  deterministic.
-- Prettier clean against the repo `.prettierrc.json`.
-- Vite dev server serves the module with no transform errors.
-- Not previewed in the browser viewer and not seen in game. Silhouette and the tyre question
-  still need a human eye.
+  deterministic. No `NaN` positions in any variant.
+- **Viewed in WebGL renders** (not yet in the game engine). The collapsed-tyre question below
+  still needs a human eye at a low angle.
 
 ## Licensing
 

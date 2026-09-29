@@ -11,10 +11,43 @@ edge of a forest, beside a track, or as the anchor of a rural work site.
 It pairs with `candidate-timber-stacks` (#15): the log pile inside this shed is the same idea at a
 different scale, and a world generator placing a sawmill would want a log yard next to it.
 
+## Revision: a working mill's worth of equipment (owner feedback: "needs generally more sawmill
+stuff and detail")
+
+The first draft was a shed with a blade, a conveyor, and a stack — the sheet's own "machinery:
+four things, no more" section was the gap the owner pointed at. Added, all original geometry and
+palette materials:
+
+- **A log ramp** feeding the bay from the front left: a tilted timber deck on four posts with
+  three logs waiting on it, each seated on the deck surface. The mill now reads as a place logs
+  move through, not just a shed with logs in it.
+- **A sawdust heap** under the blade — a low 7-sided pale-tan mound (`sawdust`, `#a99e83`), the
+  one new material. The cheapest possible "this machine runs" cue, and the sheet's own first
+  unresolved-question suggestion.
+- **Two plank stacks** beside the right wall on runner battens — the mill's output, pairing with
+  the log input (`plank-timber`, `#655744`).
+- **Interior machinery** the bay opening now frames: **carriage rails and a log carriage** (frame,
+  back head, dogs post) on the shed floor, and a **workbench on trestles** along the right wall.
+  The 9 m dark room is no longer empty.
+- **A boiler** behind the shed — a horizontal rivetted shell with two bands on saddle blocks, next
+  to the exhaust stack it would feed.
+- **A personnel door** on the left wall, **two windows** on the right wall (`window-glass`,
+  `#65766d`), and a **roof vent** — the shed now reads as worked-in rather than sealed.
+
+Measured (vertex-accurate): **15.20 × 8.03 × 13.75 m**. Declared `dimensions` corrected to
+15.4 × 8.2 × **16.5** — the additions extend the footprint to z = 8.25 in front (the ramp) while
+the boiler sits at z = -5.5 behind, and the old z of 11.8 was sized before any of this existed and
+is asymmetric about the pivot.
+
+**Previewed in WebGL renders** (headless Chromium, three-quarter view and straight-on bay view
+beside the scout): the ramp, heap, stacks, windows, and vent all read at both distances; the
+carriage rails are visible through the bay.
+
 ## Dimensions and scale
 
-- Declared `dimensions`: 15.4 × 8.2 × 11.8 m
-- Measured: 15.20 × 8.03 × 11.64 m (variants 0/1), 15.20 × 8.03 × 11.61 m (variant 2)
+- Declared `dimensions`: 15.4 × 8.2 × 16.5 m (see the revision above)
+- Measured (vertex-accurate): 15.20 × 8.03 × 13.75 m; the z bounds are asymmetric about the pivot
+  (ramp to z = 8.25, boiler to z = -5.5)
 - 14 m of wall width, 10 m deep, 5.5 m to the eaves — a real small sawmill, and about 2.6 scout
   heights. Deliberately **low and wide**, which is what makes it read as industrial rather than as
   another cabin.
@@ -84,18 +117,21 @@ building's one open feature.
 
 ## Materials
 
-| name               | colour    | roughness | metalness | notes                       |
-| ------------------ | --------- | --------- | --------- | --------------------------- |
-| `shed-timber`      | `#514437` | 1         | 0         | variant 0                   |
-| `shed-timber-dark` | `#4b4035` | 1         | 0         | variant 1                   |
-| `shed-timber-worn` | `#594332` | 1         | 0         | variant 2                   |
-| `roof-sheet`       | `#626753` | 0.95      | 0         | flat, broad roof and fascia |
-| `interior-dark`    | `#2a251f` | 1         | 0         | floor, inner wall faces     |
-| `machine-frame`    | `#54594d` | 0.85      | 0.2       | saw frame, conveyor, stack  |
-| `saw-blade`        | `#64675d` | 0.55      | 0.35      | the band saw blade          |
-| `stone-base`       | `#797762` | 1         | 0         | footing course              |
+| name               | colour    | roughness | metalness | notes                                  |
+| ------------------ | --------- | --------- | --------- | -------------------------------------- |
+| `shed-timber`      | `#514437` | 1         | 0         | variant 0                              |
+| `shed-timber-dark` | `#4b4035` | 1         | 0         | variant 1                              |
+| `shed-timber-worn` | `#594332` | 1         | 0         | variant 2                              |
+| `roof-sheet`       | `#626753` | 0.95      | 0         | flat, broad roof, fascia, vent         |
+| `interior-dark`    | `#2a251f` | 1         | 0         | floor, inner wall faces                |
+| `machine-frame`    | `#54594d` | 0.85      | 0.2       | saw frame, conveyor, stack, boiler, rails |
+| `saw-blade`        | `#64675d` | 0.55      | 0.35      | the band saw blade                     |
+| `stone-base`       | `#797762` | 1         | 0         | footing course                         |
+| `window-glass`     | `#65766d` | 0.3       | 0.05      | the two side windows                   |
+| `sawdust`          | `#a99e83` | 1         | 0         | the heap under the blade               |
+| `plank-timber`     | `#655744` | 1         | 0         | plank stacks, bench top and trestles   |
 
-5 live materials in variant 2 (the missing blade drops `saw-blade`), 6 otherwise.
+8 live materials in variant 2 (the missing blade drops `saw-blade`), 9 otherwise.
 
 `saw-blade` at metalness 0.35 is the **most metallic surface in the entire batch** — everything
 else sits at 0.2–0.25 or lower. That is a deliberate exception for a bare steel blade and it is
@@ -110,69 +146,66 @@ still within the "mildly metallic" guidance.
 | 2       | `#594332` | **missing, frame only** |
 
 Variant 2 is the meaningful one: the blade is gone and only the frame remains, which reads as a
-stripped site rather than a colour change. It drops the asset to 26 meshes and 5 materials.
+stripped site rather than a colour change. It drops the asset to 66 meshes and 8 live materials.
 
 The roof is deliberately **flat**, not pitched. A gable would need a triangular-prism helper (the
 third copy the row house review sheet warns about), and a broad flat roof with a deep overhang is
 both the cheaper and the more industrial-looking answer.
 
-## Machinery: four things, no more
+## Machinery: the yard reads as worked
 
-The idea asks for "simple exterior machinery", and that is literally what this is:
-
-- **A band saw blade** — a 10-sided cylinder, 1.24 m across, on a frame beside the bay. The most
-  metallic object in the batch.
-- **A conveyor stub** — one raking box with two legs, feeding toward the bay.
-- **An exhaust stack** — an 8-sided cylinder through the roof, with a cap.
-- **The log pile** inside, seven 6-sided logs in two courses.
-
-There is no engine, no control panel, no water line, and no sawdust. At this budget the machinery
-is a silhouette read, not a mechanism, and that is stated rather than implied.
+The first draft had four things (blade, conveyor, stack, log pile). The revision adds the ramp,
+sawdust heap, plank stacks, interior carriage and bench, boiler, door, windows, and vent listed
+above, so the mill now has an input (log ramp and pile), a process (blade, carriage rails,
+boiler), an output (plank stacks), and its debris (sawdust). There is still no engine detail, no
+control panel, and no water line — at this budget the machinery is a silhouette read, not a
+mechanism, and that is stated rather than implied.
 
 ## Complexity
 
-27 meshes, ~476 triangles, 5–6 materials. Efficient for a 15 m building — it is cheaper than the
-7 m row house in triangles, because it is almost entirely large flat boxes.
+67 meshes, ~1068 triangles, 8–9 materials. Up from 27 / ~476 with the revision's additions — the
+ramp, stacks, carriage, bench, boiler, and dressing cost 40 cheap meshes, almost all large flat
+boxes. Still cheaper per footprint than the crashed car by a wide margin.
 
 ## What reads well
 
-- **Far:** the broad flat roof with its deep overhang, and the exhaust stack. The wide low
-  proportion is the read.
-- **Near:** the dark bay opening with the log pile inside it, the saw blade, the conveyor.
+- **Far:** the broad flat roof with its deep overhang, the exhaust stack, and the log ramp with
+  its waiting logs. The wide low proportion is the read.
+- **Near:** the dark bay opening with the log pile and carriage rails inside it, the sawdust heap,
+  the saw blade, the conveyor, the plank stacks, the windows.
 
 ## Unresolved questions
 
-- **The conveyor, saw, and stack are not solid.** The conveyor in particular is a 1.5 × 5.2 m
-  object the player will walk through. Acceptable here more than elsewhere, because the shed body
-  already keeps the player out of the interesting space.
-- **No sawdust, offcuts, or debris around the yard.** A sawmill in operation leaves a lot, and its
-  absence makes the yard read as tidy rather than abandoned. This is the cheapest possible
-  improvement: a few flat boxes of offcuts.
+- **The conveyor, saw, stack, ramp, and boiler are not solid.** The conveyor in particular is a
+  1.5 × 5.2 m object the player will walk through. Acceptable here more than elsewhere, because
+  the shed body already keeps the player out of the interesting space.
 - **The blade is a plain disc.** No teeth, no guard, no frame detail. At 0.35 metalness it will
   catch light, which is most of what it needs to do.
 - **Only the timber tone and the blade vary.** There is no collapsed-roof state, which is the
   obvious "abandoned" read for an industrial building, and no state where the building has burned.
-- **No interior beyond a dark shell.** The bay shows a 9 m dark room with no machinery in it. The
-  log pile is the only thing inside.
 - **The log pile duplicates `candidate-timber-stacks`.** Seven cylinder logs here versus a
   nine-log pile module. Worth deciding whether the sawmill should reference the pile candidate
   instead of carrying its own, though at integration time they would be separate meshes anyway.
 - The roof overhangs 0.8 m at the front and 0.6 m at the sides, which is a lot of unsupported
   roof on a 15 m span. It reads fine and a purist would want a beam.
+- The plank stacks echo `candidate-timber-stacks` even more directly than the log pile does; same
+  decision applies.
 
 ## Validation performed
 
 - `tsc --strict` typecheck clean, including `noUnusedLocals`.
-- All 3 variants built in Node; bounding boxes measured **vertex-accurately** and confirmed inside
-  the declared `dimensions`; `minY` 0.
+- All 3 variants built and rendered in headless Chromium with the project's three.js; bounds
+  measured **vertex-accurately** (world-space vertices) and confirmed inside the declared
+  `dimensions`; `minY` 0.
 - Loading bay opening and depth confirmed by raycast (9.4 m to the interior panel), and the front
-  pier confirmed solid, as quoted above.
+  pier confirmed solid.
+- **Revision additions confirmed by render** (three-quarter and straight-on bay views): the ramp
+  logs rest on the deck, the heap reads at both distances, and the carriage rails are visible
+  through the bay.
 - `createVisual` called twice per variant and compared mesh-by-mesh: identical. No unseeded
-  randomness, no animation, no lights.
+  randomness, no animation, no lights, no `NaN` positions.
 - Confirmed no two meshes share a material _name_ while using different material _instances_.
-- All geometry positions checked for `NaN`.
-- Prettier clean. Vite dev server serves the module with no transform errors.
-- **Not viewed in a browser or in game.**
+- **Viewed in WebGL renders** (not yet in the game engine).
 
 ## Licensing
 

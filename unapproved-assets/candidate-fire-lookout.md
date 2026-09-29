@@ -13,16 +13,54 @@ Expected on ridges and high ground, and as a horizon landmark visible from the l
 it is **the tallest candidate in the batch**, deliberately 3 m above the existing 16 m water
 tower, because a lookout has to see over things.
 
+## Revision: the legs leaned the wrong way and the cabin stood on nothing (owner feedback: "the
+hut on top is disconnected from the tower")
+
+The same sign error this sheet's "two bugs" section once caught in the diagonals was still live in
+the **legs themselves**: they were rotated with negated signs, so instead of converging from a
+3.8 m base square to the 2.7 m top square that `halfAt()` and the taper geometry described, they
+converged to a 2.1 m base and **splayed outward to 4.3 m at the top**. Everything the sheet
+claimed about the frame was true of the intended geometry and false of the built one:
+
+- The **brace rings follow `halfAt(y)`** — the intended leg line — so they ended in mid air:
+  hanging 0.4 m past the legs at the first level, half a metre short of them at the top.
+- The **leg tops stopped 0.45 m below the deck**, at corners that only coincidentally neared the
+  deck's. The deck, catwalk, cabin, and roof — the "hut" — stood on nothing, which is exactly the
+  disconnection the owner saw.
+
+Fixed by construction:
+
+- The leg lean now takes **`+sx` about Z and `-sz` about X**, so each top moves inboard onto the
+  `halfAt()` line; rings land on the legs at every level by construction, and the taper geometry
+  (thick at the bottom) is the right way up again.
+- The legs are **extended 0.75 m through the deck slab and into the cabin base**, so the cabin is
+  now physically carried by the frame.
+- Four **knee braces** run from each leg up to the deck's underside corners, carrying the catwalk
+  overhang the way a real lookout does (4 meshes).
+- The **panel diagonals were rebuilt as true corner-to-corner struts**: each runs from the lower
+  level's brace corner to the level's far corner on the +X face, so both ends land on the frame
+  (the old in-face diagonal ended mid-air at its foot). The lowest starts 5 cm up the leg so its
+  section stays above ground.
+- The **top stair flight runs 4.85 m** instead of 4.7 so its last tread lands inside the deck slab
+  rather than 0.2 m short of it.
+
+Measured (vertex-accurate): **4.40 × 19.25 × 4.40 m**, identical across all three variants — the
+old 4.66 m width was the splay, not the catwalk. Declared `dimensions` updated to
+4.5 × 19.4 × 4.5. `minY` exactly 0.
+
+**Previewed in WebGL renders** (headless Chromium, three-quarter view beside the scout): the
+frame reads as one continuous structure from footpads to cabin, rings and diagonals seated on the
+legs, deck carried on knee braces.
+
 ## Dimensions and scale
 
-- Declared `dimensions`: 4.7 × 19.4 × 4.7 m
-- Measured: 4.66 × 19.23 × 4.70 m, identical across variants 0/1; 4.66 × 19.23 × 4.70 in variant 2
-  (one brace missing)
-- 4.66 m across, 19.2 m tall: **9.2 scout heights**, and a base-to-top ratio of about 4:1, which is
+- Declared `dimensions`: 4.5 × 19.4 × 4.5 m (see the revision above)
+- Measured (vertex-accurate): 4.40 × 19.25 × 4.40 m, identical across all three variants
+- 4.4 m across, 19.25 m tall: **9.2 scout heights**, and a base-to-top ratio of about 4:1, which is
   what "slender" means in practice.
-- The leg footprint is a 3.8 m square at the ground, tapering to 2.7 m at the top. The 4.66 m
-  overall width is the catwalk deck at 4.4 m plus the rail.
-- The 19.2 m is the pyramid roof's ridge finial.
+- The leg footprint is a 3.8 m square at the ground, tapering to 2.7 m at the head; the legs
+  continue through the deck into the cabin base. The 4.4 m overall width is the catwalk deck.
+- The 19.25 m is the pyramid roof's ridge finial.
 
 ## Pivot and front direction
 
@@ -130,13 +168,13 @@ real ones. The fire lookout and the parking ramp are the two most rotation-sensi
 
 ## Complexity
 
-55 meshes, ~720 triangles, 4 live materials. **The heaviest asset in the batch by mesh count after
+59 meshes, ~768 triangles, 4 live materials. **The heaviest asset in the batch by mesh count after
 the crashed car**, and the tallest by a factor of two.
 
-Where the 55 goes: 4 legs, 12 brace bars, 3 diagonals, 14 stair meshes, 1 deck, 4 rails, 8 rail
-posts, 9 cabin meshes, 2 roof pieces. The rail posts are 8 meshes of 0.1 m square — the same
-lesson as the fire escape's balusters, where 12 such meshes were cut. If this needs trimming, the
-stair treads (9) and the rail posts (8) are the two reducible groups.
+Where the 59 goes: 4 legs, 4 foot-to-deck knee braces, 12 brace bars, 3 diagonals, 14 stair
+meshes, 1 deck, 4 rails, 8 rail posts, 9 cabin meshes, 2 roof pieces — plus the extension of the
+legs, which cost no meshes. If this needs trimming, the stair treads (9) and the rail posts (8)
+are the two reducible groups.
 
 It is expensive for a prop, but this is a `landmark` placed rarely, and 19 m of braced tower is not
 something a cheaper silhouette would sell.
@@ -169,17 +207,19 @@ something a cheaper silhouette would sell.
 ## Validation performed
 
 - `tsc --strict` typecheck clean, including `noUnusedLocals`.
-- All 3 variants built in Node; bounding boxes measured **vertex-accurately** and confirmed inside
-  the declared `dimensions`; `minY` 0.019.
-- Switchback stair confirmed inside the footprint by raycast, and the true depth confirmed as
-  4.70 m after the straight-flight version measured 14.27 m.
+- All 3 variants built and rendered in headless Chromium with the project's three.js; bounds
+  measured **vertex-accurately** (world-space vertices) and confirmed inside the declared
+  `dimensions`; `minY` exactly 0 after lifting the lowest diagonal's foot 5 cm.
+- **Leg geometry verified against `halfAt()`**: the corrected leg tops land on the brace-ring
+  plane within 0.01 m, the leg tops pass through the deck slab into the cabin base, and the knee
+  braces run leg-to-deck-corner.
+- Switchback stair confirmed inside the footprint, and the top flight now lands in the deck slab.
 - `createVisual` called twice per variant and compared mesh-by-mesh: identical. No unseeded
-  randomness, no animation, no lights.
+  randomness, no animation, no lights, no `NaN` positions.
 - Confirmed no two meshes share a material _name_ while using different material _instances_.
-- All geometry positions checked for `NaN`.
-- Prettier clean. Vite dev server serves the module with no transform errors.
-- **Not viewed in a browser or in game, and never seen from a distance.** For a 19 m landmark the
-  silhouette is the entire design and it is completely unverified.
+- **Viewed in WebGL renders** from three-quarter and high angles, variants 0 and 2 (not yet in
+  the game engine). The disconnected-cabin fault of the old build was confirmed by arithmetic and
+  the connected frame confirmed in render.
 
 ## Licensing
 

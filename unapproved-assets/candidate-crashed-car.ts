@@ -152,9 +152,11 @@ export const candidateCrashedCar: AuthoredAsset = {
   id: 'candidate-crashed-car',
   name: 'Totaled Crashed Car',
   category: 'prop',
-  // Bounds are authored pre-scale and cover the swung-open driver door and the raised
-  // bonnet, both of which stand proud of the body shell.
-  dimensions: scaledVec({ x: 2.99, y: 1.96, z: 4.7 }),
+  // Bounds are authored pre-scale and cover the swung-open driver door and the raised bonnet,
+  // both of which stand proud of the body shell. Measured (vertex-accurate): 3.47 x 2.12 x 5.5 —
+  // the open door reaches x = 2.12 and the nose z = 2.73, so the declared x/z cover twice those
+  // offsets; the earlier x of 3.5 clipped the swung door.
+  dimensions: scaledVec({ x: 3.68, y: 1.96, z: 4.87 }),
   collider: {
     center: scaledVec({ x: 0, y: 0.98, z: 0 }),
     size: scaledVec({ x: 2.95, y: 1.96, z: 4.62 }),
@@ -398,23 +400,33 @@ export const candidateCrashedCar: AuthoredAsset = {
     rearDoorHinge.add(rearDoor);
     rearDoorHinge.rotation.y = 0.22;
 
-    // Bonnet unlatched and popped at the rear, hinged at the cowl. A flat bent panel reads as
-    // merely dented; a raised one reads as a car somebody crawled out of. The angle is chosen
-    // so the far tip lands near y = 1.72, keeping the wreck under about 1.8x the roof height;
-    // a fully vertical bonnet would stand 2.5 m tall and dominate both the silhouette and the
-    // placement footprint.
+    // Bonnet unlatched and popped at the rear, hinged at the cowl. The hinge sits 0.02 above the
+    // cowl top (0.92) at the cowl line (z 0.84), and the slab's rear edge sits ON the hinge point,
+    // so the raised panel stays connected to the car; the earlier draft hung it 0.1 higher and
+    // 0.06 behind the cowl, which left the rear edge swinging over the windscreen base in mid air.
+    // The angle is chosen so the far tip lands near y = 1.61, keeping the open bonnet below about
+    // 1.1x the roof height; a fully vertical bonnet would stand 2.5 m tall and dominate both the
+    // silhouette and the placement footprint.
     const bonnetHinge = new Group();
-    bonnetHinge.position.set(0, 1.02, 0.78);
+    bonnetHinge.position.set(0, 0.94, 0.84);
     body.add(bonnetHinge);
-    const bonnetAngle = -0.52;
+    const bonnetAngle = -0.58;
     const bonnet = new Mesh(new BoxGeometry(1.6, 0.09, 1.16), paint);
-    bonnet.position.set(0, 0.3, 0.5);
+    bonnet.position.set(0, 0.045, 0.58);
     bonnet.castShadow = true;
     bonnetHinge.add(bonnet);
     const bonnetCrumple = new Mesh(new BoxGeometry(1.5, 0.1, 0.3), paint);
-    bonnetCrumple.position.set(0, 0.33, 0.96);
+    bonnetCrumple.position.set(0, 0.05, 1.26);
     bonnetCrumple.rotation.x = -0.5;
     bonnetHinge.add(bonnetCrumple);
+    // Prop rod from the cowl to the bonnet underside, a child of the hinge so it stays attached.
+    addRod(
+      bonnetHinge,
+      metalMaterial,
+      new Vector3(0.45, -0.08, 0.1),
+      new Vector3(0.45, -0.01, 0.56),
+      0.025,
+    );
     bonnetHinge.rotation.x = bonnetAngle;
 
     // Bent B-pillar, the consequence of a side impact: it leans inboard, so the cabin has

@@ -33,10 +33,47 @@ The rework rebuilds the head and the base so the pump is one machine:
 - Each **blade sits in a pivot group with 0.38 rad of pitch**, and a low-segment **torus rim
   band** closes the wheel, which is what makes it read as a wheel rather than a spoke star.
 
+## Revision: the mast was upside down and the top floated (owner feedback: "a little
+disconnected")
+
+The first rework's own numbers were checked, but the leg lean was not: the four legs were rotated
+with the signs **negated**, so instead of narrowing from 1.05 m at grade to 0.42 m at the head,
+they narrowed from 0.42 m at grade and splayed OUTWARD to 1.05 m at the top — the taper geometry
+was upside down along with them. Consequences, all visible:
+
+- The **head plate (half-width 0.48) never reached the leg tops (at ±1.05)** — the plate, bearing,
+  axle, rotor, and tail hovered a clear hand-width above the frame. This was the disconnection.
+- The **brace rings follow `halfAt(y)`** (the intended leg line), so with the legs splayed the
+  rings ended mid-air: past the legs at y = 1.5, half a metre short of them at y = 4.75.
+
+The lean signs are corrected (`+sx` about Z, `-sz` about X, so each top moves inboard), and the
+rings now land on the legs by construction. Also fixed in the same pass:
+
+- **Foot pads** under all four legs (the old sheet's own suggestion), so the legs meet the ground
+  on something.
+- The **tail rods now bolt into the hub disc** (front ends embedded in it) instead of starting in
+  the air behind the bearing.
+- The **pipe run was clipping the tank**: the horizontal run crossed the rim 1.5 cm below its top
+  and the spout pierced the tank wall below the rim. The run now crosses 10 cm above the rim and
+  the spout angles down inside it, discharging over the water surface.
+- The **tank hoops** were buried inside the staves (a single radius against a tapering body); each
+  hoop now takes its own radius just proud of the wall at its height.
+- The axle was lengthened so it is seated in the bearing block at the back and the hub at the
+  front rather than kissing both.
+
+Measured (vertex-accurate): **2.69 × 6.74 × 3.77 m**. Declared `dimensions` corrected to
+3.0 × 6.9 × **4.7** — the footprint is asymmetric about the pivot (tank out to z = 2.33 behind
+the frame at z = 0), and the old z of 3.9 had cut the tank off.
+
+**Previewed in WebGL renders** (headless Chromium, three-quarter view beside the scout): the
+frame closes onto the head plate, the wheel and tail sit on the mast, and the pipe clears the
+rim.
+
 ## Dimensions and scale
 
-- Declared `dimensions`: 2.9 × 6.9 × 3.9 m
-- Measured (vertex-accurate): 2.69 × 6.74 × 3.77 m (variants 0/1), 3.43 m deep (variant 2)
+- Declared `dimensions`: 3.0 × 6.9 × 4.7 m (see the revision above for the z correction)
+- Measured (vertex-accurate): 2.69 × 6.74 × 3.77 m (variants 0/1), 3.43 m deep (variant 2); the
+  z bounds are asymmetric about the pivot — the frame stands at z = 0 and the tank behind it
 - Wheel diameter 2.7 m, hub at 5.42 m. **3.2 scout heights.**
 
 ## Pivot and front direction
@@ -90,11 +127,12 @@ reads as a stripped pump from any distance. Blade count verified by measurement:
 
 ## Complexity
 
-48 meshes / ~543 triangles (v0), 44 / 511 (v1), 43 / 503 (v2). 6 materials.
+52 meshes / ~1064 triangles (v0), 48 / ~532 (v1), ~47 / ~524 (v2). Still 6 live materials — the
+foot pads and hoop corrections reuse the existing frame and hub materials.
 
-Higher than the first draft (39) because the wheel gained a rim band and pitched blades and the
-base gained a pipe run — the parts that fix the broken read. If trimming is ever needed, the
-three brace levels can drop to two (−4 meshes) without hurting the silhouette.
+Higher than the first rework (48) because of the four foot pads and the reseated pipe run. If
+trimming is ever needed, the three brace levels can drop to two (−4 meshes) without hurting the
+silhouette.
 
 ## What reads well
 
@@ -115,15 +153,16 @@ three brace levels can drop to two (−4 meshes) without hurting the silhouette.
 ## Validation performed
 
 - `tsc --strict` typecheck clean, including `noUnusedLocals`.
-- All 3 variants built in Node with the project's three.js; vertex-accurate bounds measured and
-  confirmed inside the declared `dimensions`; `minY` exactly 0 (the leaning tank lid originally
-  dipped 0.11 m below ground and was re-seated).
+- All 3 variants built and rendered in headless Chromium with the project's three.js;
+  vertex-accurate bounds measured (world-space vertices) and confirmed inside the declared
+  `dimensions`; `minY` exactly 0.
+- **Leg lean signs verified by trigonometry against `halfAt()`**: the corrected tops land within
+  0.01 m of the brace-ring plane, and the head plate overlaps the leg tops.
 - `createVisual` called twice per variant and compared mesh-for-mesh and triangle-for-triangle:
   identical. No unseeded randomness, no animation, no lights, no `NaN` positions.
-- **Previewed in the staging viewer** (`viewer.html`) in headless Chromium with software WebGL,
-  from the default three-quarter view, a pure side view, and head-on, for variants 0 and 2. The
-  floating-rotor and skewered-tank faults were confirmed visible in the old build and confirmed
-  gone in this one. Not viewed in the game engine.
+- **Previewed in WebGL renders** (headless Chromium, three-quarter view, variants 0 and 2): the
+  floating head and splayed legs of the previous build were confirmed by arithmetic, and the
+  corrected mast confirmed in render beside the scout. Not viewed in the game engine.
 
 ## Licensing
 

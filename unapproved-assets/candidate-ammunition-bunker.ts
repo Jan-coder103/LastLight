@@ -84,7 +84,10 @@ export const candidateAmmunitionBunker: AuthoredAsset = {
   id: 'candidate-ammunition-bunker',
   name: 'Ammunition Bunker',
   category: 'building',
-  dimensions: { x: 7.8, y: 3.5, z: 8.8 },
+  // Measured (vertex-accurate): 7.8 x 3.42 x 9.0. The z bounds are asymmetric about the pivot —
+  // the rear wedge toe runs to z = -5.2 while the kerbs stop at z = 3.8 — so the declared z
+  // covers twice the largest offset; the earlier 8.8 left the toe outside the placement bounds.
+  dimensions: { x: 7.8, y: 3.5, z: 10.4 },
   collider: { center: { x: 0, y: 1.7, z: -0.5 }, size: { x: 7.4, y: 3.4, z: 8.0 } },
   interactionPoints: [
     { id: 'bunker-door', label: 'Bunker Door', position: { x: 0, y: 0, z: 3.7 } },
@@ -94,7 +97,9 @@ export const candidateAmmunitionBunker: AuthoredAsset = {
     const concreteMaterial = concreteMaterials[variant % concreteMaterials.length]!;
     const placardsIntact = variant !== 1;
 
-    // Concrete chamber: the whole structure. Its front wall at +Z is the door face.
+    // Concrete chamber: the whole structure. Its front wall at +Z is the door face, and its top
+    // at y = 2.6 is the plane the roof mound and berm tops meet (CHAMBER_TOP below), so no earth
+    // surface can cut through concrete or share its plane.
     const chamber = new Mesh(new BoxGeometry(4.4, 2.6, BACK_Z * -1 + FACE_Z), concreteMaterial);
     chamber.position.set(0, 1.3, (FACE_Z + BACK_Z) / 2);
     chamber.castShadow = true;
@@ -102,13 +107,14 @@ export const candidateAmmunitionBunker: AuthoredAsset = {
     bunker.add(chamber);
 
     // Earth berms: two side wedges rising against the chamber walls, and a rear wedge across the
-    // back. Toes at 3.9 m from the centre give the mound its footprint.
+    // back. Toes at 3.9 m from the centre give the mound its footprint; the tops stop exactly at
+    // the chamber top so they tuck under the roof ridge's base edge.
     for (const side of [-1, 1]) {
       const wedge = prism(
         [
           [side * 2.2, 0],
           [side * 3.9, 0],
-          [side * 2.2, 2.55],
+          [side * 2.2, 2.6],
         ],
         BACK_Z,
         FACE_Z,
@@ -122,7 +128,7 @@ export const candidateAmmunitionBunker: AuthoredAsset = {
       [
         [3.5, 0],
         [5.2, 0],
-        [3.5, 2.55],
+        [3.5, 2.6],
       ],
       -2.2,
       2.2,
@@ -136,13 +142,14 @@ export const candidateAmmunitionBunker: AuthoredAsset = {
     rear.receiveShadow = true;
     bunker.add(rear);
 
-    // Roof mound: an earth ridge over the chamber with a steeper turf layer on top, inset from
-    // the ridge's front and back edges. The turf meets the earth exactly at the base corners, so
-    // the green cap reads as grass over earth from above.
+    // Roof mound: an earth ridge sitting exactly ON the chamber top with a steeper turf cap
+    // above it, inset from the ridge's front and back edges and lifted 2 cm so the two prisms'
+    // hidden bottom faces cannot share a plane. The earlier base of 2.55 cut 5 cm into the
+    // chamber, which put coplanar earth/concrete bands across the top of both end faces.
     const roofEarth = prism(
       [
-        [-2.2, 2.55],
-        [2.2, 2.55],
+        [-2.2, 2.6],
+        [2.2, 2.6],
         [0, 3.05],
       ],
       BACK_Z,
@@ -154,8 +161,8 @@ export const candidateAmmunitionBunker: AuthoredAsset = {
     bunker.add(roofEarth);
     const roofTurf = prism(
       [
-        [-2.2, 2.55],
-        [2.2, 2.55],
+        [-2.2, 2.62],
+        [2.2, 2.62],
         [0, 3.42],
       ],
       BACK_Z + 0.1,
@@ -166,69 +173,76 @@ export const candidateAmmunitionBunker: AuthoredAsset = {
     roofTurf.receiveShadow = true;
     bunker.add(roofTurf);
 
-    // Grass tufts on the side berms, deterministic placement only.
-    for (const [x, y, z] of [
-      [2.95, 1.25, 0.9],
-      [3.4, 0.5, -1.5],
-      [-2.8, 1.6, 1.6],
-      [-3.3, 0.65, -2.0],
+    // Grass tufts on the side berms, seated on the wedge slope (y = 2.6 * (3.9 - |x|) / 1.7),
+    // deterministic placement only.
+    for (const [x, z] of [
+      [3.1, 0.9],
+      [3.5, -1.5],
+      [-2.9, 1.6],
+      [-3.4, -2.0],
     ] as const) {
       const tuft = new Mesh(new CylinderGeometry(0.02, 0.11, 0.24, 5), turfMaterial);
-      tuft.position.set(x, y + 0.06, z);
+      tuft.position.set(x, (2.6 * (3.9 - Math.abs(x))) / 1.7 + 0.04, z);
       bunker.add(tuft);
     }
 
-    // Door recess, so the heavy door sits inside a frame rather than on the face.
-    const recess = new Mesh(new BoxGeometry(DOOR_W - 0.16, DOOR_H - 0.12, 0.1), textMaterial);
-    recess.position.set(0, DOOR_H / 2, FACE_Z - 0.31);
-    bunker.add(recess);
+    // Dark backing plate bedded INTO the face behind the door, so the leaf sits on shadow rather
+    // than on painted concrete. Kept 2 cm above the ground so nothing shows below the slab edge.
+    const backing = new Mesh(
+      new BoxGeometry(DOOR_W + 0.04, DOOR_H - 0.04, 0.06),
+      textMaterial,
+    );
+    backing.position.set(0, DOOR_H / 2, FACE_Z);
+    bunker.add(backing);
 
-    // Heavy blast door: leaf, hinges, and a wheel handle. Closed, and that is the correct state
-    // for an ammunition store.
+    // Heavy blast door: leaf, hinges, and a wheel handle, all surface-mounted PROUD of the face.
+    // The first draft placed every one of these parts in front of z = 2.5 minus an offset, which
+    // buried the whole assembly inside the solid chamber where it could not be seen.
     const door = new Mesh(new BoxGeometry(DOOR_W - 0.1, DOOR_H - 0.08, 0.16), doorMaterial);
-    door.position.set(0, DOOR_H / 2, FACE_Z - 0.21);
+    door.position.set(0, DOOR_H / 2, FACE_Z + 0.08);
     door.castShadow = true;
     bunker.add(door);
     const wheel = new Mesh(new CylinderGeometry(0.28, 0.28, 0.08, 10), doorMaterial);
-    wheel.position.set(0.42, DOOR_H / 2, FACE_Z - 0.08);
+    wheel.position.set(0.42, DOOR_H / 2, FACE_Z + 0.22);
     wheel.rotation.x = Math.PI / 2;
     wheel.castShadow = true;
     bunker.add(wheel);
     for (let i = 0; i < 3; i++) {
       const spoke = new Mesh(new BoxGeometry(0.5, 0.06, 0.05), doorMaterial);
-      spoke.position.set(0.42, DOOR_H / 2, FACE_Z - 0.08);
+      spoke.position.set(0.42, DOOR_H / 2, FACE_Z + 0.22);
       spoke.rotation.z = (i / 3) * Math.PI;
       bunker.add(spoke);
     }
     for (const y of [0.5, 1.1, 1.7]) {
       const hinge = new Mesh(new BoxGeometry(0.12, 0.18, 0.2), doorMaterial);
-      hinge.position.set(-(DOOR_W / 2) + 0.02, y, FACE_Z - 0.21);
+      hinge.position.set(-(DOOR_W / 2) + 0.02, y, FACE_Z + 0.08);
       bunker.add(hinge);
     }
-    // Door frame standing proud of the face.
+    // Door frame standing proud of the face, bedded against it.
     for (const [w, h, x, y] of [
       [0.18, DOOR_H + 0.3, -(DOOR_W / 2) - 0.09, (DOOR_H + 0.3) / 2],
       [0.18, DOOR_H + 0.3, DOOR_W / 2 + 0.09, (DOOR_H + 0.3) / 2],
       [DOOR_W + 0.36, 0.18, 0, DOOR_H + 0.15],
     ] as const) {
       const frame = new Mesh(new BoxGeometry(w, h, 0.26), concreteMaterial);
-      frame.position.set(x, y, FACE_Z + 0.19);
+      frame.position.set(x, y, FACE_Z + 0.13);
       frame.castShadow = true;
       bunker.add(frame);
     }
 
-    // Warning placards either side of the door. The amber is the only warm colour and it is a
-    // functional warning, which is the sanctioned use.
+    // Warning placards either side of the door, flat on the face and clear of the frame posts.
+    // The amber is the only warm colour and it is a functional warning, which is the sanctioned
+    // use.
     for (const side of [-1, 1]) {
       if (!placardsIntact && side < 0) continue;
       const placard = new Mesh(new BoxGeometry(0.5, 0.7, 0.05), placardMaterial);
-      placard.position.set(side * 1.1, 1.5, FACE_Z + 0.31);
+      placard.position.set(side * 1.35, 1.5, FACE_Z + 0.065);
       placard.castShadow = true;
       bunker.add(placard);
       // Three bars standing in for stencilled text: this runtime builds geometry, not textures.
       for (let i = 0; i < 3; i++) {
         const bar = new Mesh(new BoxGeometry(0.34 - i * 0.06, 0.07, 0.03), textMaterial);
-        bar.position.set(side * 1.1, 1.66 - i * 0.16, FACE_Z + 0.34);
+        bar.position.set(side * 1.35, 1.66 - i * 0.16, FACE_Z + 0.095);
         bunker.add(bar);
       }
     }
@@ -241,9 +255,11 @@ export const candidateAmmunitionBunker: AuthoredAsset = {
     const ventCap = new Mesh(new CylinderGeometry(0.34, 0.28, 0.12, 8), doorMaterial);
     ventCap.position.set(1.0, 3.31, -1.2);
     bunker.add(ventCap);
+    // Buttressed retaining kerbs flanking the approach, just clear of the berm toes (which end
+    // at z = 2.5).
     for (const x of [-2.05, 2.05]) {
       const kerb = new Mesh(new BoxGeometry(0.5, 0.7, 1.3), concreteMaterial);
-      kerb.position.set(x, 0.35, 2.9);
+      kerb.position.set(x, 0.35, 3.15);
       kerb.castShadow = true;
       kerb.receiveShadow = true;
       bunker.add(kerb);

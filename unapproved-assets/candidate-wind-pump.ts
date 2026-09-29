@@ -68,7 +68,10 @@ export const candidateWindPump: AuthoredAsset = {
   id: 'candidate-wind-pump',
   name: 'Wind Pump',
   category: 'prop',
-  dimensions: { x: 2.9, y: 6.9, z: 3.9 },
+  // Measured (vertex-accurate): 2.81 x 6.74 x 3.77. The z bounds are asymmetric about the pivot
+  // (the frame stands at z = 0 and the tank is behind it, out to z = 2.33), so the declared z
+  // covers twice the largest offset. The earlier 3.9 cut the tank off.
+  dimensions: { x: 3.0, y: 6.9, z: 4.7 },
   // The water tank only. The frame is open lattice and the wheel is overhead, so the player can
   // walk under the pump, which is what makes it a pleasant roadside object rather than a wall.
   collider: { center: { x: 0, y: 0.75, z: TANK_Z }, size: { x: 1.6, y: 1.5, z: 1.6 } },
@@ -81,7 +84,10 @@ export const candidateWindPump: AuthoredAsset = {
     const missingVane = variant === 2;
 
     // Splayed lattice frame: four tapered legs with three brace levels, closing to a head plate
-    // that carries the wheel bearing.
+    // that carries the wheel bearing. The legs NARROW going up, from BASE_HALF at grade to
+    // TOP_HALF at the head: a Y-axis point rotated about Z by +lean moves its top to -x, so the
+    // sign must be +sx (negating it splays the tops outward, off the head plate). Rotation about
+    // X moves the top to +z for a positive angle, hence -sz.
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
         const lean = Math.atan((BASE_HALF - TOP_HALF) / TOWER_H);
@@ -91,10 +97,15 @@ export const candidateWindPump: AuthoredAsset = {
           TOWER_H / 2,
           (sz * (BASE_HALF + TOP_HALF)) / 2,
         );
-        leg.rotation.z = -sx * lean;
-        leg.rotation.x = sz * lean;
+        leg.rotation.z = sx * lean;
+        leg.rotation.x = -sz * lean;
         leg.castShadow = true;
         pump.add(leg);
+        // Foot pad, so the leg meets the ground on something rather than a point.
+        const pad = new Mesh(new BoxGeometry(0.26, 0.08, 0.26), frameMaterial);
+        pad.position.set(sx * BASE_HALF, 0.04, sz * BASE_HALF);
+        pad.receiveShadow = true;
+        pump.add(pad);
       }
     }
     for (const y of [1.5, 3.2, 4.75]) {
@@ -123,12 +134,12 @@ export const candidateWindPump: AuthoredAsset = {
     bearing.castShadow = true;
     pump.add(bearing);
 
-    // Rotor: hub disc on a short axle, a rim band, and a ring of pitched flat slats. Twelve blades
-    // is the most that still reads as a wheel at play distance; variant 1 is down to eight, which
-    // reads as a stripped unit.
-    const axle = new Mesh(new CylinderGeometry(0.07, 0.07, 0.5, 6), hubMaterial);
+    // Rotor: hub disc on a short axle held in the bearing block, a rim band, and a ring of
+    // pitched flat slats. Twelve blades is the most that still reads as a wheel at play
+    // distance; variant 1 is down to eight, which reads as a stripped unit.
+    const axle = new Mesh(new CylinderGeometry(0.07, 0.07, 0.55, 6), hubMaterial);
     axle.rotation.x = Math.PI / 2;
-    axle.position.set(0, WHEEL_Y, WHEEL_Z - 0.3);
+    axle.position.set(0, WHEEL_Y, 0.18);
     pump.add(axle);
     const hub = new Mesh(new CylinderGeometry(0.22, 0.22, 0.16, 10), hubMaterial);
     hub.position.set(0, WHEEL_Y, WHEEL_Z);
@@ -153,13 +164,14 @@ export const candidateWindPump: AuthoredAsset = {
       pump.add(pivot);
     }
 
-    // Tail frame behind the rotor: two angle rods back to a vane with cross bars. Its absence in
-    // variant 2 is what says the pump has been stripped for parts.
+    // Tail frame behind the rotor: two angle rods bolted INTO the hub disc and running back to a
+    // vane with cross bars. Its absence in variant 2 is what says the pump has been stripped for
+    // parts.
     if (!missingVane) {
       const vaneZ = -1.35;
       for (const sx of [-1, 1]) {
-        const rod = new Mesh(new BoxGeometry(0.05, 0.05, 1.35), frameMaterial);
-        rod.position.set(sx * 0.2, WHEEL_Y, vaneZ / 2);
+        const rod = new Mesh(new BoxGeometry(0.05, 0.05, 1.8), frameMaterial);
+        rod.position.set(sx * 0.2, WHEEL_Y, -0.45);
         rod.rotation.x = sx * 0.04;
         pump.add(rod);
       }
@@ -183,8 +195,14 @@ export const candidateWindPump: AuthoredAsset = {
     tank.castShadow = true;
     tank.receiveShadow = true;
     pump.add(tank);
-    for (const y of [0.45, 1.0]) {
-      const hoop = new Mesh(new CylinderGeometry(0.745, 0.745, 0.06, 10), hubMaterial);
+    // Hoops follow the staves' taper: the body narrows from 0.78 at the base to 0.72 at the rim,
+    // so each hoop's radius is set just proud of the wall radius at its own height. A single
+    // radius left the lower hoop buried inside the staves.
+    for (const [y, r] of [
+      [0.45, 0.775],
+      [1.0, 0.752],
+    ] as const) {
+      const hoop = new Mesh(new CylinderGeometry(r, r, 0.06, 10), hubMaterial);
       hoop.position.set(0, y, TANK_Z);
       pump.add(hoop);
     }
@@ -200,23 +218,26 @@ export const candidateWindPump: AuthoredAsset = {
     lid.castShadow = true;
     pump.add(lid);
 
-    // Pump head under the wheel and the pipe run down the frame, elbowing over the tank rim.
-    const pumpHead = new Mesh(new BoxGeometry(0.36, 0.4, 0.5), rustMaterial);
+    // Pump head under the wheel and the pipe run down the frame. The horizontal run crosses the
+    // tank's near wall ABOVE the rim (1.62 vs rim top 1.465), then a short spout angles down
+    // inside the rim and discharges over the water — the pipe clears the timber instead of
+    // clipping through it.
+    const pumpHead = new Mesh(new BoxGeometry(0.36, 0.5, 0.5), rustMaterial);
     pumpHead.position.set(0, TOWER_H - 0.25, 0.1);
     pumpHead.castShadow = true;
     pump.add(pumpHead);
-    const downPipe = new Mesh(new CylinderGeometry(0.05, 0.05, 3.3, 6), frameMaterial);
-    downPipe.position.set(0, 3.0, 0.1);
+    const downPipe = new Mesh(new CylinderGeometry(0.05, 0.05, 2.95, 6), frameMaterial);
+    downPipe.position.set(0, 3.08, 0.1);
     downPipe.castShadow = true;
     pump.add(downPipe);
-    const elbow = new Mesh(new CylinderGeometry(0.05, 0.05, 1.15, 6), frameMaterial);
+    const elbow = new Mesh(new CylinderGeometry(0.05, 0.05, 1.16, 6), frameMaterial);
     elbow.rotation.x = Math.PI / 2;
-    elbow.position.set(0, 1.45, (0.1 + TANK_Z - 0.35) / 2 + 0.08);
+    elbow.position.set(0, 1.62, 0.7);
     elbow.castShadow = true;
     pump.add(elbow);
-    const spout = new Mesh(new CylinderGeometry(0.05, 0.07, 0.4, 6), frameMaterial);
-    spout.rotation.x = 0.5;
-    spout.position.set(0, 1.3, TANK_Z - 0.28);
+    const spout = new Mesh(new CylinderGeometry(0.05, 0.07, 0.42, 6), frameMaterial);
+    spout.rotation.x = -0.62;
+    spout.position.set(0, 1.51, 1.365);
     pump.add(spout);
 
     pump.userData.assetId = 'candidate-wind-pump';
