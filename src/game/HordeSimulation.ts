@@ -1,9 +1,15 @@
-import { createRandom } from '../core/seededRandom';
+import { createRandom, hashSeed } from '../core/seededRandom';
 import type { GridNavigator } from '../navigation/GridNavigator';
 import { terrainHeightAt, type WorldData } from '../world/generateWorld';
 
 export type HordeSpawnPattern = 'ring' | 'clusters' | 'grid';
 export type HordeTier = 0 | 1 | 2;
+export type HordeBehavior = 'dormant' | 'roaming' | 'investigating' | 'focused' | 'defeated';
+
+export interface HordeSimulationOptions {
+  /** Keeps far agents asleep until they enter the local activation radius. */
+  dormantActivation?: boolean;
+}
 
 export interface HordeTierCounts {
   near: number;
@@ -18,10 +24,16 @@ export interface HordeAgentSnapshot {
   health: number;
   alive: boolean;
   tier: HordeTier;
+  behavior: HordeBehavior;
 }
 
 const nearRange = 34;
 const midRange = 92;
+const activationRadius = 92;
+const maximumAwarenessRadius = 140;
+const noiseDecayPerSecond = 0.12;
+const investigationDuration = 1.1;
+const focusDecayDuration = 1.6;
 const tierIntervals = [1 / 30, 0.16, 0.5] as const;
 const attackRange = 1.7;
 const attackInterval = 1.3;
@@ -30,13 +42,16 @@ const cellSize = 4;
 const maximumNeighbors = 12;
 const transformChanged = 1;
 const colorChanged = 2;
+const dormantState = 0;
+const roamingState = 1;
+const investigatingState = 2;
+const focusedState = 3;
+const defeatedState = 4;
 
-/**
- * A benchmark-only horde with stable array-index identity. LOD only changes update cadence;
- * health and world position stay in the same arrays when an agent changes tier.
- */
+/** A seeded horde with stable array-index identity across behavior and render tiers. */
 export class HordeSimulation {
   readonly count: number;
+  activeCount = 0;
   readonly ids: Uint32Array;
   readonly x: Float32Array;
   readonly y: Float32Array;
@@ -46,18 +61,38 @@ export class HordeSimulation {
   readonly alive: Uint8Array;
   readonly tier: Uint8Array;
   readonly attacks: Uint16Array;
+  readonly behavior: Uint8Array;
   private readonly cooldown: Float32Array;
   private readonly tierAccumulator: Float32Array;
+  private readonly behaviorTimer: Float32Array;
+  private readonly focusRemaining: Float32Array;
+  private readonly roamTargetX: Float32Array;
+  private readonly roamTargetZ: Float32Array;
+  private readonly roamAnchorX: Float32Array;
+  private readonly roamAnchorZ: Float32Array;
+  private readonly roamRandomState: Uint32Array;
   private readonly visualChangeFlags: Uint8Array;
   private pendingVisualChanges: number[] = [];
   private readonly nextInCell: Int32Array;
   private readonly cellHeads: Int32Array;
+  private readonly dormantNext: Int32Array;
+  private readonly dormantPrevious: Int32Array;
+  private readonly dormantCellHeads: Int32Array;
+  private readonly activeIndices: number[] = [];
+  private readonly activeIndexByAgent: Int32Array;
   private readonly gridWidth: number;
   private readonly gridOrigin: number;
   private readonly world: WorldData;
   private readonly navigator: GridNavigator;
+  private readonly dormantActivationEnabled: boolean;
+  private seed = 'HORDE-01';
+  private random: () => number = () => 0.5;
   private tierRefreshRemaining = 0;
   private tierCounts: HordeTierCounts = { near: 0, mid: 0, far: 0 };
+  private dormantCountValue = 0;
+  private noiseLevelValue = 0;
+  private noiseX = 0;
+  private noiseZ = 0;
   playerHealth = 100;
   totalPlayerHits = 0;
   lastStepMs = 0;
@@ -68,12 +103,15 @@ export class HordeSimulation {
     pattern: HordeSpawnPattern,
     world: WorldData,
     navigator: GridNavigator,
+    initialCount = count,
+    options: HordeSimulationOptions = {},
   ) {
     if (!Number.isInteger(count) || count < 1 || count > 10_000)
       throw new RangeError('Horde count must be an integer from 1 to 10,000.');
     this.count = count;
     this.world = world;
     this.navigator = navigator;
+    this.dormantActivationEnabled = options.dormantActivation ?? false;
     this.ids = new Uint32Array(count);
     this.x = new Float32Array(count);
     this.y = new Float32Array(count);
@@ -83,52 +121,130 @@ export class HordeSimulation {
     this.alive = new Uint8Array(count);
     this.tier = new Uint8Array(count);
     this.attacks = new Uint16Array(count);
+    this.behavior = new Uint8Array(count);
     this.cooldown = new Float32Array(count);
     this.tierAccumulator = new Float32Array(count);
+    this.behaviorTimer = new Float32Array(count);
+    this.focusRemaining = new Float32Array(count);
+    this.roamTargetX = new Float32Array(count);
+    this.roamTargetZ = new Float32Array(count);
+    this.roamAnchorX = new Float32Array(count);
+    this.roamAnchorZ = new Float32Array(count);
+    this.roamRandomState = new Uint32Array(count);
     this.visualChangeFlags = new Uint8Array(count);
     this.nextInCell = new Int32Array(count);
+    this.dormantNext = new Int32Array(count);
+    this.dormantPrevious = new Int32Array(count);
+    this.activeIndexByAgent = new Int32Array(count);
     this.gridWidth = Math.ceil(world.size / cellSize);
     this.gridOrigin = -world.size / 2;
     this.cellHeads = new Int32Array(this.gridWidth * this.gridWidth);
-    this.reset(seed, pattern);
+    this.dormantCellHeads = new Int32Array(this.gridWidth * this.gridWidth);
+    this.reset(seed, pattern, initialCount);
   }
 
   get livingCount(): number {
     let living = 0;
-    for (let index = 0; index < this.count; index += 1) living += this.alive[index]!;
+    for (let index = 0; index < this.activeCount; index += 1) living += this.alive[index]!;
     return living;
+  }
+
+  get dormantCount(): number {
+    return this.dormantCountValue;
+  }
+
+  get activeSimulationCount(): number {
+    return this.activeIndices.length;
+  }
+
+  get noiseLevel(): number {
+    return this.noiseLevelValue;
+  }
+
+  get awarenessRadius(): number {
+    return this.noiseLevelValue * maximumAwarenessRadius;
   }
 
   get tiers(): HordeTierCounts {
     return { ...this.tierCounts };
   }
 
-  reset(seed: string, pattern: HordeSpawnPattern): void {
+  emitNoise(x: number, z: number, intensity: number): void {
+    if (!Number.isFinite(x) || !Number.isFinite(z) || !Number.isFinite(intensity) || intensity <= 0)
+      return;
+    this.noiseLevelValue = Math.max(this.noiseLevelValue, Math.min(1, intensity));
+    this.noiseX = x;
+    this.noiseZ = z;
+  }
+
+  reset(seed: string, pattern: HordeSpawnPattern, initialCount = this.count): void {
+    if (!Number.isInteger(initialCount) || initialCount < 0 || initialCount > this.count)
+      throw new RangeError(`Initial horde count must be an integer from 0 to ${this.count}.`);
     this.pendingVisualChanges.length = 0;
     this.visualChangeFlags.fill(0);
-    const random = createRandom(seed.trim() || 'HORDE-01');
+    this.seed = seed.trim() || 'HORDE-01';
+    this.random = createRandom(this.seed);
+    this.activeCount = initialCount;
+    this.activeIndices.length = 0;
+    this.activeIndexByAgent.fill(-1);
+    this.nextInCell.fill(-1);
+    this.dormantNext.fill(-1);
+    this.dormantPrevious.fill(-1);
+    this.cellHeads.fill(-1);
+    this.dormantCellHeads.fill(-1);
+    this.dormantCountValue = 0;
+    this.noiseLevelValue = 0;
+    this.noiseX = this.world.spawn.x;
+    this.noiseZ = this.world.spawn.z;
     const columns = Math.ceil(Math.sqrt(this.count));
     for (let index = 0; index < this.count; index += 1) {
-      const point = this.spawnPoint(index, random, pattern, columns);
+      const wasAlive = this.alive[index] === 1;
+      this.alive[index] = 0;
+      this.health[index] = 0;
+      this.behavior[index] = defeatedState;
+      if (index >= initialCount) {
+        if (wasAlive) this.markVisualChanged(index, transformChanged | colorChanged);
+        continue;
+      }
+      const point = this.spawnPoint(index, this.random, pattern, columns);
       const walkable = this.nearestWalkable(point.x, point.z);
-      this.ids[index] = index + 1;
-      this.x[index] = walkable.x;
-      this.y[index] = terrainHeightAt(this.world.seed, walkable.x, walkable.z);
-      this.z[index] = walkable.z;
-      this.facing[index] = 0;
-      this.health[index] = 100;
-      this.alive[index] = 1;
-      this.tier[index] = 2;
-      this.attacks[index] = 0;
-      this.cooldown[index] = 0.25 + (index % 11) * 0.07;
-      this.tierAccumulator[index] = 0;
-      this.markVisualChanged(index, transformChanged | colorChanged);
+      this.initializeAgent(index, walkable.x, walkable.z);
+      if (this.dormantActivationEnabled) this.addDormantAgent(index);
+      else this.addActiveAgent(index);
     }
     this.playerHealth = 100;
     this.totalPlayerHits = 0;
     this.tierRefreshRemaining = 0;
-    this.tierCounts = { near: 0, mid: 0, far: this.count };
+    this.tierCounts = { near: 0, mid: 0, far: initialCount };
     this.rebuildSpatialGrid();
+  }
+
+  spawnOne(centerX = this.world.spawn.x, centerZ = this.world.spawn.z): number | undefined {
+    if (this.activeCount >= this.count) return undefined;
+    const index = this.activeCount;
+    let point: { x: number; z: number } | undefined;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      const angle = this.random() * Math.PI * 2;
+      const radius = 82 + Math.sqrt(this.random()) * 46;
+      const candidate = this.nearestWalkable(
+        centerX + Math.cos(angle) * radius,
+        centerZ + Math.sin(angle) * radius,
+      );
+      if (Math.hypot(candidate.x - centerX, candidate.z - centerZ) >= 64) {
+        point = candidate;
+        break;
+      }
+    }
+    if (!point) {
+      const fallback = this.spawnPoint(index, this.random, 'ring', Math.ceil(Math.sqrt(this.count)));
+      point = this.nearestWalkable(fallback.x, fallback.z);
+    }
+    this.initializeAgent(index, point.x, point.z);
+    this.activeCount += 1;
+    if (this.dormantActivationEnabled) this.addDormantAgent(index);
+    else this.addActiveAgent(index);
+    this.rebuildSpatialGrid();
+    return index;
   }
 
   snapshot(index: number): HordeAgentSnapshot {
@@ -141,6 +257,7 @@ export class HordeSimulation {
       health: this.health[index]!,
       alive: this.alive[index] === 1,
       tier: this.tier[index]! as HordeTier,
+      behavior: this.behaviorName(index),
     };
   }
 
@@ -148,15 +265,35 @@ export class HordeSimulation {
     if (
       !Number.isInteger(index) ||
       index < 0 ||
-      index >= this.count ||
+      index >= this.activeCount ||
       this.alive[index] === 0 ||
       damage <= 0
     )
       return false;
     this.health[index] = Math.max(0, this.health[index]! - damage);
-    if (this.health[index] === 0) this.alive[index] = 0;
+    if (this.health[index] === 0) {
+      this.alive[index] = 0;
+      if (this.behavior[index] === dormantState) this.removeDormantAgent(index);
+      else this.removeActiveAgent(index);
+      this.behavior[index] = defeatedState;
+    }
     this.markVisualChanged(index, transformChanged);
     return true;
+  }
+
+  damageAgentsInRadius(x: number, z: number, radius: number, damage: number): number {
+    if (radius < 0 || damage <= 0) return 0;
+    let affected = 0;
+    const radiusSquared = radius * radius;
+    for (let index = 0; index < this.activeCount; index += 1) {
+      if (this.alive[index] === 0) continue;
+      const dx = this.x[index]! - x;
+      const dz = this.z[index]! - z;
+      if (dx * dx + dz * dz > radiusSquared) continue;
+      this.damageAgent(index, damage);
+      affected += 1;
+    }
+    return affected;
   }
 
   consumeVisualChanges(visit: (index: number, transform: boolean, color: boolean) => void): void {
@@ -174,27 +311,31 @@ export class HordeSimulation {
     const cellRange = Math.ceil(radius / cellSize);
     let nearest: number | undefined;
     let nearestDistanceSquared = radius * radius;
-    for (let offsetZ = -cellRange; offsetZ <= cellRange; offsetZ += 1) {
-      const row = cellZ + offsetZ;
-      if (row < 0 || row >= this.gridWidth) continue;
-      for (let offsetX = -cellRange; offsetX <= cellRange; offsetX += 1) {
-        const column = cellX + offsetX;
-        if (column < 0 || column >= this.gridWidth) continue;
-        let index = this.cellHeads[row * this.gridWidth + column]!;
-        while (index >= 0) {
-          if (this.alive[index] === 1) {
-            const dx = x - this.x[index]!;
-            const dz = z - this.z[index]!;
-            const distanceSquared = dx * dx + dz * dz;
-            if (distanceSquared <= nearestDistanceSquared) {
-              nearestDistanceSquared = distanceSquared;
-              nearest = index;
+    const searchGrid = (heads: Int32Array, links: Int32Array): void => {
+      for (let offsetZ = -cellRange; offsetZ <= cellRange; offsetZ += 1) {
+        const row = cellZ + offsetZ;
+        if (row < 0 || row >= this.gridWidth) continue;
+        for (let offsetX = -cellRange; offsetX <= cellRange; offsetX += 1) {
+          const column = cellX + offsetX;
+          if (column < 0 || column >= this.gridWidth) continue;
+          let index = heads[row * this.gridWidth + column]!;
+          while (index >= 0) {
+            if (this.alive[index] === 1) {
+              const dx = x - this.x[index]!;
+              const dz = z - this.z[index]!;
+              const distanceSquared = dx * dx + dz * dz;
+              if (distanceSquared <= nearestDistanceSquared) {
+                nearestDistanceSquared = distanceSquared;
+                nearest = index;
+              }
             }
+            index = links[index]!;
           }
-          index = this.nextInCell[index]!;
         }
       }
-    }
+    };
+    searchGrid(this.cellHeads, this.nextInCell);
+    searchGrid(this.dormantCellHeads, this.dormantNext);
     return nearest;
   }
 
@@ -206,13 +347,20 @@ export class HordeSimulation {
       return;
     }
 
+    this.noiseLevelValue = Math.max(0, this.noiseLevelValue - noiseDecayPerSecond * delta);
+    if (this.dormantActivationEnabled) {
+      this.tickDormantSimulation(delta, playerX, playerZ);
+      this.lastStepMs = performance.now() - started;
+      return;
+    }
+
     this.rebuildSpatialGrid();
     this.tierRefreshRemaining -= delta;
     const refreshTiers = this.tierRefreshRemaining <= 0;
     if (refreshTiers) this.tierRefreshRemaining = 0.25;
     const counts: HordeTierCounts = { near: 0, mid: 0, far: 0 };
 
-    for (let index = 0; index < this.count; index += 1) {
+    for (const index of this.activeIndices) {
       if (this.alive[index] === 0) continue;
       const dx = playerX - this.x[index]!;
       const dz = playerZ - this.z[index]!;
@@ -238,6 +386,329 @@ export class HordeSimulation {
 
     this.tierCounts = counts;
     this.lastStepMs = performance.now() - started;
+  }
+
+  private behaviorName(index: number): HordeBehavior {
+    switch (this.behavior[index]) {
+      case dormantState:
+        return 'dormant';
+      case roamingState:
+        return 'roaming';
+      case investigatingState:
+        return 'investigating';
+      case focusedState:
+        return 'focused';
+      default:
+        return 'defeated';
+    }
+  }
+
+  private addActiveAgent(index: number): void {
+    if (this.activeIndexByAgent[index]! >= 0) return;
+    this.activeIndexByAgent[index] = this.activeIndices.length;
+    this.activeIndices.push(index);
+  }
+
+  private removeActiveAgent(index: number): void {
+    const activeIndex = this.activeIndexByAgent[index]!;
+    if (activeIndex < 0) return;
+    const lastIndex = this.activeIndices.length - 1;
+    const movedAgent = this.activeIndices[lastIndex]!;
+    this.activeIndices.pop();
+    this.activeIndexByAgent[index] = -1;
+    if (activeIndex < lastIndex) {
+      this.activeIndices[activeIndex] = movedAgent;
+      this.activeIndexByAgent[movedAgent] = activeIndex;
+    }
+    this.nextInCell[index] = -1;
+  }
+
+  private addDormantAgent(index: number): void {
+    const cellX = this.cellCoordinate(this.x[index]!);
+    const cellZ = this.cellCoordinate(this.z[index]!);
+    const cellIndex = cellZ * this.gridWidth + cellX;
+    const head = this.dormantCellHeads[cellIndex]!;
+    this.dormantPrevious[index] = -1;
+    this.dormantNext[index] = head;
+    if (head >= 0) this.dormantPrevious[head] = index;
+    this.dormantCellHeads[cellIndex] = index;
+    this.dormantCountValue += 1;
+  }
+
+  private removeDormantAgent(index: number): void {
+    const cellX = this.cellCoordinate(this.x[index]!);
+    const cellZ = this.cellCoordinate(this.z[index]!);
+    const cellIndex = cellZ * this.gridWidth + cellX;
+    const previous = this.dormantPrevious[index]!;
+    const next = this.dormantNext[index]!;
+    if (previous >= 0) this.dormantNext[previous] = next;
+    else if (this.dormantCellHeads[cellIndex] === index) this.dormantCellHeads[cellIndex] = next;
+    if (next >= 0) this.dormantPrevious[next] = previous;
+    this.dormantPrevious[index] = -1;
+    this.dormantNext[index] = -1;
+    this.dormantCountValue = Math.max(0, this.dormantCountValue - 1);
+  }
+
+  private sleepDistantAgents(playerX: number, playerZ: number): void {
+    const radiusSquared = activationRadius * activationRadius;
+    let cursor = 0;
+    while (cursor < this.activeIndices.length) {
+      const index = this.activeIndices[cursor]!;
+      const dx = playerX - this.x[index]!;
+      const dz = playerZ - this.z[index]!;
+      if (dx * dx + dz * dz <= radiusSquared) {
+        cursor += 1;
+        continue;
+      }
+      this.removeActiveAgent(index);
+      this.behavior[index] = dormantState;
+      this.behaviorTimer[index] = 0;
+      this.focusRemaining[index] = 0;
+      this.setTier(index, 2);
+      this.addDormantAgent(index);
+    }
+  }
+
+  private wakeNearbyAgents(playerX: number, playerZ: number): void {
+    const cellX = this.cellCoordinate(playerX);
+    const cellZ = this.cellCoordinate(playerZ);
+    const cellRange = Math.ceil(activationRadius / cellSize);
+    const radiusSquared = activationRadius * activationRadius;
+    const awareness = this.awarenessRadius;
+    const awarenessSquared = awareness * awareness;
+    for (let offsetZ = -cellRange; offsetZ <= cellRange; offsetZ += 1) {
+      const row = cellZ + offsetZ;
+      if (row < 0 || row >= this.gridWidth) continue;
+      for (let offsetX = -cellRange; offsetX <= cellRange; offsetX += 1) {
+        const column = cellX + offsetX;
+        if (column < 0 || column >= this.gridWidth) continue;
+        let index = this.dormantCellHeads[row * this.gridWidth + column]!;
+        while (index >= 0) {
+          const next = this.dormantNext[index]!;
+          const dx = playerX - this.x[index]!;
+          const dz = playerZ - this.z[index]!;
+          const distanceSquared = dx * dx + dz * dz;
+          if (this.alive[index] === 1 && distanceSquared <= radiusSquared) {
+            this.removeDormantAgent(index);
+            this.addActiveAgent(index);
+            this.setTier(index, this.classifyTier(distanceSquared));
+            this.roamAnchorX[index] = this.x[index]!;
+            this.roamAnchorZ[index] = this.z[index]!;
+            this.chooseRoamTarget(index);
+            if (awareness > 0 && distanceSquared <= awarenessSquared)
+              this.beginInvestigation(index);
+            else this.behavior[index] = roamingState;
+          }
+          index = next;
+        }
+      }
+    }
+  }
+
+  private tickDormantSimulation(delta: number, playerX: number, playerZ: number): void {
+    this.sleepDistantAgents(playerX, playerZ);
+    this.wakeNearbyAgents(playerX, playerZ);
+    this.rebuildSpatialGrid();
+    this.tierRefreshRemaining -= delta;
+    const refreshTiers = this.tierRefreshRemaining <= 0;
+    if (refreshTiers) this.tierRefreshRemaining = 0.25;
+    const counts: HordeTierCounts = { near: 0, mid: 0, far: this.dormantCountValue };
+
+    for (const index of this.activeIndices) {
+      if (this.alive[index] === 0) continue;
+      const dx = playerX - this.x[index]!;
+      const dz = playerZ - this.z[index]!;
+      const distanceSquared = dx * dx + dz * dz;
+      if (refreshTiers) this.setTier(index, this.classifyTier(distanceSquared));
+      const tier = this.tier[index]! as HordeTier;
+      if (tier === 0) counts.near += 1;
+      else if (tier === 1) counts.mid += 1;
+      else counts.far += 1;
+
+      this.tierAccumulator[index] += delta;
+      if (this.tierAccumulator[index]! < tierIntervals[tier]) continue;
+      const elapsed = this.tierAccumulator[index]!;
+      this.tierAccumulator[index] = 0;
+      this.advanceLifecycleAgent(index, elapsed, distanceSquared, playerX, playerZ);
+    }
+
+    this.tierCounts = counts;
+  }
+
+  private beginInvestigation(index: number): void {
+    this.behavior[index] = investigatingState;
+    this.behaviorTimer[index] = investigationDuration;
+    this.focusRemaining[index] = focusDecayDuration;
+  }
+
+  private beginRoaming(index: number): void {
+    this.behavior[index] = roamingState;
+    this.behaviorTimer[index] = 0;
+    this.focusRemaining[index] = 0;
+    this.roamAnchorX[index] = this.x[index]!;
+    this.roamAnchorZ[index] = this.z[index]!;
+    this.chooseRoamTarget(index);
+  }
+
+  private advanceLifecycleAgent(
+    index: number,
+    delta: number,
+    distanceSquared: number,
+    playerX: number,
+    playerZ: number,
+  ): void {
+    const awareness = this.awarenessRadius;
+    const aware = awareness > 0 && distanceSquared <= awareness * awareness;
+    let state = this.behavior[index]!;
+    if (aware) {
+      this.focusRemaining[index] = focusDecayDuration;
+      if (state === roamingState) this.beginInvestigation(index);
+      state = this.behavior[index]!;
+    } else {
+      this.focusRemaining[index] = Math.max(0, this.focusRemaining[index]! - delta);
+      if (
+        (state === investigatingState || state === focusedState) &&
+        this.focusRemaining[index] === 0
+      ) {
+        this.beginRoaming(index);
+        state = roamingState;
+      }
+    }
+
+    let targetX = this.roamTargetX[index]!;
+    let targetZ = this.roamTargetZ[index]!;
+    let speed = 0.52;
+    if (state === investigatingState) {
+      this.behaviorTimer[index] = Math.max(0, this.behaviorTimer[index]! - delta);
+      targetX = this.noiseX;
+      targetZ = this.noiseZ;
+      speed = 1.35;
+      const noiseDistance = Math.hypot(targetX - this.x[index]!, targetZ - this.z[index]!);
+      if (noiseDistance <= 1.8 || this.behaviorTimer[index] === 0) {
+        this.behavior[index] = focusedState;
+        state = focusedState;
+      }
+    }
+    if (state === focusedState) {
+      targetX = playerX;
+      targetZ = playerZ;
+      speed = this.tier[index] === 0 ? 1.85 : 1.6;
+    } else if (state === roamingState) {
+      const roamDistance = Math.hypot(targetX - this.x[index]!, targetZ - this.z[index]!);
+      if (roamDistance <= 1.2) {
+        this.chooseRoamTarget(index);
+        targetX = this.roamTargetX[index]!;
+        targetZ = this.roamTargetZ[index]!;
+      }
+    }
+
+    this.cooldown[index] = Math.max(0, this.cooldown[index]! - delta);
+    if (state === focusedState && distanceSquared <= attackRange * attackRange) {
+      if (this.cooldown[index] === 0) {
+        this.cooldown[index] = attackInterval;
+        this.attacks[index] = Math.min(65_535, this.attacks[index]! + 1);
+        this.totalPlayerHits += 1;
+        this.playerHealth = Math.max(0, this.playerHealth - attackDamage);
+      }
+      return;
+    }
+    this.moveAgentToward(index, targetX, targetZ, playerX, playerZ, delta, speed);
+  }
+
+  private moveAgentToward(
+    index: number,
+    targetX: number,
+    targetZ: number,
+    playerX: number,
+    playerZ: number,
+    delta: number,
+    speed: number,
+  ): void {
+    const dx = targetX - this.x[index]!;
+    const dz = targetZ - this.z[index]!;
+    const distance = Math.hypot(dx, dz);
+    if (distance < 0.001) return;
+    let directionX = dx / distance;
+    let directionZ = dz / distance;
+    const separation = this.separationVector(index);
+    directionX += separation.x * 0.8;
+    directionZ += separation.z * 0.8;
+    const magnitude = Math.hypot(directionX, directionZ);
+    if (magnitude < 0.0001) return;
+    directionX /= magnitude;
+    directionZ /= magnitude;
+    const travel = Math.min(speed * delta, distance);
+    let nextX = this.x[index]! + directionX * travel;
+    let nextZ = this.z[index]! + directionZ * travel;
+    if (!this.navigator.isWalkable(nextX, nextZ)) {
+      const leftX = -directionZ;
+      const leftZ = directionX;
+      const rightX = directionZ;
+      const rightZ = -directionX;
+      const canMoveLeft = this.navigator.isWalkable(
+        this.x[index]! + leftX * travel,
+        this.z[index]! + leftZ * travel,
+      );
+      const canMoveRight = this.navigator.isWalkable(
+        this.x[index]! + rightX * travel,
+        this.z[index]! + rightZ * travel,
+      );
+      if (canMoveLeft && canMoveRight) {
+        const leftDistance = Math.hypot(
+          playerX - (this.x[index]! + leftX * travel),
+          playerZ - (this.z[index]! + leftZ * travel),
+        );
+        const rightDistance = Math.hypot(
+          playerX - (this.x[index]! + rightX * travel),
+          playerZ - (this.z[index]! + rightZ * travel),
+        );
+        const useLeft = leftDistance <= rightDistance;
+        nextX = this.x[index]! + (useLeft ? leftX : rightX) * travel;
+        nextZ = this.z[index]! + (useLeft ? leftZ : rightZ) * travel;
+      } else if (canMoveLeft) {
+        nextX = this.x[index]! + leftX * travel;
+        nextZ = this.z[index]! + leftZ * travel;
+      } else if (canMoveRight) {
+        nextX = this.x[index]! + rightX * travel;
+        nextZ = this.z[index]! + rightZ * travel;
+      } else {
+        return;
+      }
+    }
+    this.x[index] = nextX;
+    this.y[index] = terrainHeightAt(this.world.seed, nextX, nextZ);
+    this.z[index] = nextZ;
+    this.facing[index] = Math.atan2(-directionX, -directionZ);
+    this.markVisualChanged(index, transformChanged);
+  }
+
+  private chooseRoamTarget(index: number): void {
+    const angle = this.nextRoamRandom(index) * Math.PI * 2;
+    const distance = 4 + Math.sqrt(this.nextRoamRandom(index)) * 12;
+    const anchorX = this.roamAnchorX[index]!;
+    const anchorZ = this.roamAnchorZ[index]!;
+    let point = this.nearestWalkable(
+      anchorX + Math.cos(angle) * distance,
+      anchorZ + Math.sin(angle) * distance,
+    );
+    if (Math.hypot(point.x - anchorX, point.z - anchorZ) > 16) point = { x: anchorX, z: anchorZ };
+    this.roamTargetX[index] = point.x;
+    this.roamTargetZ[index] = point.z;
+  }
+
+  private nextRoamRandom(index: number): number {
+    let value = this.roamRandomState[index]!;
+    value ^= value << 13;
+    value ^= value >>> 17;
+    value ^= value << 5;
+    this.roamRandomState[index] = value >>> 0;
+    return (value >>> 0) / 4_294_967_296;
+  }
+
+  private setTier(index: number, nextTier: HordeTier): void {
+    if (this.tier[index] === nextTier) return;
+    this.tier[index] = nextTier;
+    this.markVisualChanged(index, colorChanged);
   }
 
   private spawnPoint(
@@ -307,9 +778,36 @@ export class HordeSimulation {
     return 2;
   }
 
+  private initializeAgent(index: number, x: number, z: number): void {
+    this.ids[index] = index + 1;
+    this.x[index] = x;
+    this.y[index] = terrainHeightAt(this.world.seed, x, z);
+    this.z[index] = z;
+    this.facing[index] = 0;
+    this.health[index] = 100;
+    this.alive[index] = 1;
+    this.tier[index] = 2;
+    this.behavior[index] = this.dormantActivationEnabled ? dormantState : focusedState;
+    this.attacks[index] = 0;
+    this.cooldown[index] = 0.25 + (index % 11) * 0.07;
+    this.tierAccumulator[index] = 0;
+    this.nextInCell[index] = -1;
+    this.dormantNext[index] = -1;
+    this.dormantPrevious[index] = -1;
+    this.activeIndexByAgent[index] = -1;
+    this.behaviorTimer[index] = 0;
+    this.focusRemaining[index] = 0;
+    this.roamAnchorX[index] = x;
+    this.roamAnchorZ[index] = z;
+    this.roamTargetX[index] = x;
+    this.roamTargetZ[index] = z;
+    this.roamRandomState[index] = hashSeed(`${this.seed}:agent-${index + 1}:roam`) || 0x6d2b79f5;
+    this.markVisualChanged(index, transformChanged | colorChanged);
+  }
+
   private rebuildSpatialGrid(): void {
     this.cellHeads.fill(-1);
-    for (let index = 0; index < this.count; index += 1) {
+    for (const index of this.activeIndices) {
       if (this.alive[index] === 0) {
         this.nextInCell[index] = -1;
         continue;

@@ -57,7 +57,7 @@ export class CombatSimulation {
     this.zombies.splice(0, this.zombies.length, ...hostiles);
   }
 
-  reset(): void {
+  reset(initialHostiles = 3): void {
     this.health = maxPlayerHealth;
     this.alive = true;
     this.fireCooldownRemaining = 0;
@@ -72,7 +72,7 @@ export class CombatSimulation {
       { x: 7, z: -13 },
       { x: 1, z: -21 },
     ];
-    offsets.forEach((offset, index) => {
+    offsets.slice(0, Math.max(0, initialHostiles)).forEach((offset, index) => {
       const point = this.findSpawn(offset.x, offset.z);
       this.zombies.push({
         id: `hostile-${index + 1}`,
@@ -87,7 +87,8 @@ export class CombatSimulation {
         facing: 0,
       });
     });
-    this.lastMessage = 'Three hostiles detected. Stay mobile.';
+    this.lastMessage =
+      initialHostiles > 0 ? 'Three hostiles detected. Stay mobile.' : 'Stay alert. The horde is out there.';
   }
 
   get livingZombieCount(): number {

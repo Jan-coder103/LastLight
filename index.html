@@ -83,6 +83,19 @@
           <span>CAMP STATUS</span><strong id="run-clock">CAMP</strong>
         </div>
         <div class="field-line"><span>THREAT</span><strong id="hostile-count">SAFE</strong></div>
+        <div class="noise-status" id="noise-status" hidden>
+          <div class="field-line"><span>NOISE / AWARENESS</span><strong id="noise-value">QUIET · 0 M</strong></div>
+          <div
+            class="noise-meter"
+            id="noise-meter"
+            role="meter"
+            aria-label="Current sound level and infected awareness radius"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            aria-valuetext="Quiet; no awareness radius"
+          ><span id="noise-fill"></span></div>
+        </div>
         <div class="field-line">
           <span>SKY</span><strong id="atmosphere-status">CAMP · CLEAR</strong>
         </div>

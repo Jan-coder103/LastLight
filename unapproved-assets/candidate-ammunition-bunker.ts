@@ -15,6 +15,9 @@ import type { AuthoredAsset } from './assetTypes';
 // covers the roof, so the face reads as a portal cut into a hillside rather than a wall with a
 // mound behind it. The door is CLOSED, which is correct for the object and means this candidate
 // has no collider-versus-opening problem.
+// Revision: the berm wedges and roof ridge no longer share a face plane with the concrete
+// chamber, which is what shimmered as a glitched left flank when the face was viewed from the
+// front. Every earth/concrete interface is now either embedded or proud by a visible margin.
 const concreteMaterials = [
   new MeshStandardMaterial({ color: '#8b887d', roughness: 1 }),
   new MeshStandardMaterial({ color: '#797762', roughness: 1 }),
@@ -108,16 +111,19 @@ export const candidateAmmunitionBunker: AuthoredAsset = {
 
     // Earth berms: two side wedges rising against the chamber walls, and a rear wedge across the
     // back. Toes at 3.9 m from the centre give the mound its footprint; the tops stop exactly at
-    // the chamber top so they tuck under the roof ridge's base edge.
+    // the chamber top so they tuck under the roof ridge's base edge. The inner edges sit 4 cm
+    // INSIDE the chamber and the front edges stand 6 cm PROUD of its face: an earlier draft ran
+    // the wedge faces flush with the chamber faces, and the two exactly coplanar wall-sized
+    // quads z-fought — the shimmer read as a glitched flank when viewed from the front.
     for (const side of [-1, 1]) {
       const wedge = prism(
         [
-          [side * 2.2, 0],
+          [side * 2.16, 0],
           [side * 3.9, 0],
-          [side * 2.2, 2.6],
+          [side * 2.16, 2.6],
         ],
         BACK_Z,
-        FACE_Z,
+        FACE_Z + 0.06,
         earthMaterial,
       );
       wedge.castShadow = true;
@@ -126,9 +132,9 @@ export const candidateAmmunitionBunker: AuthoredAsset = {
     }
     const rear = prism(
       [
-        [3.5, 0],
+        [3.44, 0],
         [5.2, 0],
-        [3.5, 2.6],
+        [3.44, 2.6],
       ],
       -2.2,
       2.2,
@@ -142,14 +148,14 @@ export const candidateAmmunitionBunker: AuthoredAsset = {
     rear.receiveShadow = true;
     bunker.add(rear);
 
-    // Roof mound: an earth ridge sitting exactly ON the chamber top with a steeper turf cap
-    // above it, inset from the ridge's front and back edges and lifted 2 cm so the two prisms'
-    // hidden bottom faces cannot share a plane. The earlier base of 2.55 cut 5 cm into the
-    // chamber, which put coplanar earth/concrete bands across the top of both end faces.
+    // Roof mound: an earth ridge sitting over the chamber top with a steeper turf cap above it,
+    // inset from the ridge's front and back edges and lifted 2 cm so no prism's hidden bottom
+    // face can share a plane with the concrete (or with the turf cap below it). Coplanar faces
+    // here were the source of the same shimmer as the berms.
     const roofEarth = prism(
       [
-        [-2.2, 2.6],
-        [2.2, 2.6],
+        [-2.2, 2.62],
+        [2.2, 2.62],
         [0, 3.05],
       ],
       BACK_Z,
@@ -199,7 +205,7 @@ export const candidateAmmunitionBunker: AuthoredAsset = {
     // The first draft placed every one of these parts in front of z = 2.5 minus an offset, which
     // buried the whole assembly inside the solid chamber where it could not be seen.
     const door = new Mesh(new BoxGeometry(DOOR_W - 0.1, DOOR_H - 0.08, 0.16), doorMaterial);
-    door.position.set(0, DOOR_H / 2, FACE_Z + 0.08);
+    door.position.set(0, DOOR_H / 2, FACE_Z + 0.09);
     door.castShadow = true;
     bunker.add(door);
     const wheel = new Mesh(new CylinderGeometry(0.28, 0.28, 0.08, 10), doorMaterial);
@@ -225,7 +231,7 @@ export const candidateAmmunitionBunker: AuthoredAsset = {
       [DOOR_W + 0.36, 0.18, 0, DOOR_H + 0.15],
     ] as const) {
       const frame = new Mesh(new BoxGeometry(w, h, 0.26), concreteMaterial);
-      frame.position.set(x, y, FACE_Z + 0.13);
+      frame.position.set(x, y, FACE_Z + 0.14);
       frame.castShadow = true;
       bunker.add(frame);
     }

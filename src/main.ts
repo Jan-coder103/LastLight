@@ -10,12 +10,11 @@ import {
   CylinderGeometry,
   DepthTexture,
   DirectionalLight,
-  DynamicDrawUsage,
   Fog,
   Group,
-  InstancedMesh,
   Line,
   LineBasicMaterial,
+  LineLoop,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -81,7 +80,11 @@ import {
   type ResourceKind,
   type SaveData,
 } from './game/saveData';
-import { createZombieVisual, syncZombieVisual } from './game/zombieVisual';
+import {
+  createZombieVisual,
+  syncZombieVisual,
+  ZombieCrowdVisual,
+} from './game/zombieVisual';
 import { GridNavigator, type NavPoint } from './navigation/GridNavigator';
 import { buildInterior } from './interiors/buildInterior';
 import { generateInterior, interiorWorld, type InteriorLayout } from './interiors/interiorLayout';
@@ -224,6 +227,10 @@ const elements = {
   diagSeed: document.querySelector<HTMLElement>('#diag-seed'),
   controlsContent: document.querySelector<HTMLElement>('#controls-content'),
   hostileCount: document.querySelector<HTMLElement>('#hostile-count'),
+  noiseStatus: document.querySelector<HTMLElement>('#noise-status'),
+  noiseValue: document.querySelector<HTMLElement>('#noise-value'),
+  noiseMeter: document.querySelector<HTMLElement>('#noise-meter'),
+  noiseFill: document.querySelector<HTMLElement>('#noise-fill'),
   atmosphereStatus: document.querySelector<HTMLElement>('#atmosphere-status'),
   healthPercent: document.querySelector<HTMLElement>('#health-percent'),
   healthRing: document.querySelector<SVGCircleElement>('#health-ring'),
@@ -375,14 +382,33 @@ interface CampInteriorSession {
 let gamePhase: GamePhase = 'base';
 let stressActive = false;
 let hordeSimulation: HordeSimulation | undefined;
-let hordeVisual: InstancedMesh | undefined;
-let hordeInstance = new Object3D();
+let hordeVisual: ZombieCrowdVisual | undefined;
+let fieldHorde: HordeSimulation | undefined;
+let fieldHordeVisual: ZombieCrowdVisual | undefined;
+let noiseRadiusVisual: LineLoop | undefined;
+let noiseRadiusRefreshRemaining = 0;
+let fieldHordeSpawnRemaining = 2;
 let hordeRenderTier = new Uint8Array();
-const changedMatrixIndices: number[] = [];
-const changedColorIndices: number[] = [];
-const hordeTierColors = [0xb98155, 0x9b9a65, 0x71806a];
+let fieldHordeRenderTier = new Uint8Array();
+const fieldHordeCapacity = 10_000;
+const fieldHordeInitialCount = 20;
 let hordeSyncMs = 0;
 let hordeSyncCount = 0;
+
+function isFieldHordeGameplay(): boolean {
+  return Boolean(
+    fieldHorde &&
+      !stressActive &&
+      !interiorSession &&
+      gamePhase !== 'base' &&
+      gamePhase !== 'result',
+  );
+}
+
+function emitFieldNoise(intensity: number, x = player.position.x, z = player.position.z): void {
+  if (isFieldHordeGameplay()) fieldHorde?.emitNoise(x, z, intensity);
+}
+
 let saveData: SaveData = loadSave();
 let cargo = emptyInventory();
 let runItems: ItemGrid = saveData.storedItems;
@@ -405,8 +431,6 @@ const rappelDuration = 0.9;
 const extractionApproachDuration = 0.55;
 const extractionHoistDuration = 0.95;
 const extractionDepartureDuration = 1.1;
-let reinforcementIndex = 0;
-let waveWarningShown = false;
 let runLootCollected = 0;
 let nearbyRefresh = 0;
 let lootGroup = new Group();
@@ -747,8 +771,33 @@ function updateActionHud(healthPercent: number): void {
     .join('');
 }
 
+function updateNoiseUi(): void {
+  const horde = isFieldHordeGameplay() ? fieldHorde : undefined;
+  if (!elements.noiseStatus || !elements.noiseValue || !elements.noiseMeter || !elements.noiseFill)
+    return;
+  elements.noiseStatus.hidden = !horde;
+  if (!horde) {
+    elements.noiseValue.textContent = 'QUIET · 0 M';
+    elements.noiseFill.style.width = '0%';
+    elements.noiseMeter.setAttribute('aria-valuenow', '0');
+    elements.noiseMeter.setAttribute('aria-valuetext', 'Quiet; no awareness radius');
+    return;
+  }
+  const level = Math.round(horde.noiseLevel * 100);
+  const radius = Math.ceil(horde.awarenessRadius);
+  const label = level >= 65 ? 'LOUD' : level >= 30 ? 'ELEVATED' : level > 0 ? 'LOW' : 'QUIET';
+  elements.noiseValue.textContent = `${label} · ${radius} M`;
+  elements.noiseFill.style.width = `${level}%`;
+  elements.noiseMeter.setAttribute('aria-valuenow', String(level));
+  elements.noiseMeter.setAttribute(
+    'aria-valuetext',
+    `${label.toLowerCase()}, ${radius} meter infected awareness radius`,
+  );
+}
+
 function updateCombatUi(): void {
   updateAtmosphereStatus();
+  updateNoiseUi();
   if (stressActive && hordeSimulation) {
     const health = Math.ceil(hordeSimulation.playerHealth);
     elements.hostileCount!.textContent = `${hordeSimulation.livingCount} / ${hordeSimulation.count}`;
@@ -785,14 +834,13 @@ function updateCombatUi(): void {
   if (threatLabel) threatLabel.textContent = 'HOSTILES';
   if (stockLabel) stockLabel.textContent = 'CARRIED / CAPACITY';
   if (controlsHeading) controlsHeading.textContent = 'FIELD CONTROLS';
-  elements.hostileCount!.textContent = String(combat.livingZombieCount);
+  elements.hostileCount!.textContent = isFieldHordeGameplay()
+    ? `${fieldHorde!.livingCount} / ${fieldHorde!.activeCount}`
+    : String(combat.livingZombieCount);
   updateActionHud(healthPercent);
   elements.combatMessage!.textContent = combat.lastMessage;
   elements.runClock!.textContent = `${String(Math.floor(runElapsed / 60)).padStart(2, '0')}:${String(Math.floor(runElapsed % 60)).padStart(2, '0')}`;
-  elements.runClock!.classList.toggle(
-    'pressure-warning',
-    gamePhase === 'active' && reinforcementIndex < 2 && runElapsed >= [50, 110][reinforcementIndex],
-  );
+  elements.runClock!.classList.toggle('pressure-warning', gamePhase === 'active' && runElapsed >= 50);
   const capacity = cargoCapacity(saveData);
   elements.cargoValue!.textContent = `${cargoWeight(cargo)} / ${capacity}`;
   elements.cargoBreakdown!.textContent = `GEAR ${cargo.gear} · SUP ${cargo.supplies} · GRENADES ${grenadeCount} · CR ${cargo.money} · FUEL ${cargo.fuel}`;
@@ -937,7 +985,11 @@ function setSeed(seed: string): void {
   elements.seedHint!.textContent =
     'Field map regenerated. Camp storage and upgrades are unchanged.';
   elements.diagSeed!.textContent = world.seed;
-  elements.entityValue!.textContent = String(world.objectCount + combat.livingZombieCount + 1);
+  elements.entityValue!.textContent = String(
+    world.objectCount +
+      (fieldHorde?.livingCount ?? combat.livingZombieCount) +
+      1,
+  );
   updateModeUi();
   updateBaseUi();
   releaseLookDrag();
@@ -974,15 +1026,25 @@ function disposeTree(root: Object3D): void {
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   root.traverse((object) => {
-    if ('geometry' in object && object.geometry) geometries.add(object.geometry as BufferGeometry);
+    if (
+      'geometry' in object &&
+      object.geometry &&
+      !(object.geometry as BufferGeometry).userData.sharedZombieGeometry
+    )
+      geometries.add(object.geometry as BufferGeometry);
     if ('material' in object && object.material) {
       const assigned = object.material as Material | Material[];
-      for (const material of Array.isArray(assigned) ? assigned : [assigned])
-        materials.add(material);
+      for (const material of Array.isArray(assigned) ? assigned : [assigned]) {
+        if (!material.userData.sharedZombieMaterial) materials.add(material);
+      }
     }
   });
   geometries.forEach((geometry) => geometry.dispose());
   materials.forEach((material) => material.dispose());
+}
+
+function disposeCrowdVisual(visual: ZombieCrowdVisual): void {
+  for (const mesh of visual.parts) mesh.dispose();
 }
 
 function createZombieViews(): void {
@@ -992,11 +1054,23 @@ function createZombieViews(): void {
   zombieGroup = new Group();
   zombieGroup.name = 'Hostiles';
   for (const zombie of combat.zombies) {
+    if (!zombie.alive) continue;
     const visual = createZombieVisual(zombie);
     zombieViews.set(zombie.id, visual);
     zombieGroup.add(visual);
   }
   scene.add(zombieGroup);
+}
+
+function syncCombatZombieView(zombie: ZombieState): void {
+  const visual = zombieViews.get(zombie.id);
+  if (!visual) return;
+  if (!zombie.alive) {
+    visual.removeFromParent();
+    zombieViews.delete(zombie.id);
+    return;
+  }
+  syncZombieVisual(visual, zombie);
 }
 
 function beginGpuFrameQuery(): WebGLQuery | undefined {
@@ -1076,49 +1150,99 @@ function updateHordeUi(): void {
   elements.hordeStatus!.textContent = `${elements.hordePattern!.selectedOptions[0]?.textContent ?? 'Horde'} · seed ${elements.hordeSeed!.value.trim() || 'HORDE-01'} · WASD move, LMB shoot visible agents, RMB routes in top-down. No per-agent route search.`;
 }
 
-function updateHordeVisual(): void {
-  const horde = hordeSimulation;
-  const mesh = hordeVisual;
-  if (!horde || !mesh || !stressActive) return;
+function syncCrowdVisual(
+  horde: HordeSimulation | undefined,
+  visual: ZombieCrowdVisual | undefined,
+  renderTier: Uint8Array,
+): void {
+  if (!horde || !visual) return;
   const started = performance.now();
-  let transformChanged = false;
-  let colorChanged = false;
-  hordeSyncCount = 0;
-  changedMatrixIndices.length = 0;
-  changedColorIndices.length = 0;
   horde.consumeVisualChanges((index, transform, color) => {
+    if (!transform && !color) return;
     const tier = horde.tier[index]!;
-    if (color || hordeRenderTier[index] !== tier) {
-      hordeRenderTier[index] = tier;
-      mesh.setColorAt(index, hordeInstance.userData.color.setHex(hordeTierColors[tier]!));
-      changedColorIndices.push(index);
-      colorChanged = true;
-    }
-    if (!transform) return;
+    if (color || renderTier[index] !== tier) renderTier[index] = tier;
     if (horde.alive[index] === 0) {
-      hordeInstance.position.set(0, -10_000, 0);
-      hordeInstance.scale.setScalar(0);
+      visual.hideAgent(index);
     } else {
-      hordeInstance.position.set(horde.x[index]!, horde.y[index]! + 0.84, horde.z[index]!);
-      hordeInstance.rotation.set(0, horde.facing[index]!, 0);
       const healthScale = 0.86 + (horde.health[index]! / 100) * 0.14;
-      hordeInstance.scale.set(healthScale, healthScale, healthScale);
+      visual.setAgent(
+        index,
+        horde.x[index]!,
+        horde.y[index]!,
+        horde.z[index]!,
+        horde.facing[index]!,
+        healthScale,
+        tier,
+      );
     }
-    hordeInstance.updateMatrix();
-    mesh.setMatrixAt(index, hordeInstance.matrix);
-    changedMatrixIndices.push(index);
-    transformChanged = true;
-    hordeSyncCount += 1;
+    hordeSyncCount += Number(transform);
   });
-  if (transformChanged) {
-    setInstanceUpdateRanges(mesh.instanceMatrix, changedMatrixIndices, 16, horde.count);
-    mesh.instanceMatrix.needsUpdate = true;
-  }
-  if (colorChanged && mesh.instanceColor) {
-    setInstanceUpdateRanges(mesh.instanceColor, changedColorIndices, 3, horde.count);
-    mesh.instanceColor.needsUpdate = true;
-  }
+  visual.consumeDirtyUpdates(({ mesh, matrixIndices, colorIndices }) => {
+    if (matrixIndices.length > 0) {
+      setInstanceUpdateRanges(mesh.instanceMatrix, matrixIndices, 16, mesh.count);
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+    if (colorIndices.length > 0 && mesh.instanceColor) {
+      setInstanceUpdateRanges(mesh.instanceColor, colorIndices, 3, mesh.count);
+      mesh.instanceColor.needsUpdate = true;
+    }
+  });
   hordeSyncMs = performance.now() - started;
+}
+
+function updateHordeVisual(): void {
+  hordeSyncCount = 0;
+  if (stressActive) {
+    syncCrowdVisual(hordeSimulation, hordeVisual, hordeRenderTier);
+  } else if (fieldHorde) {
+    syncCrowdVisual(fieldHorde, fieldHordeVisual, fieldHordeRenderTier);
+  }
+}
+
+function createNoiseRadiusVisual(): void {
+  const segments = 96;
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new BufferAttribute(new Float32Array(segments * 3), 3));
+  const material = new LineBasicMaterial({
+    color: '#d8c27b',
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  noiseRadiusVisual = new LineLoop(geometry, material);
+  noiseRadiusVisual.name = 'Player noise awareness radius';
+  noiseRadiusVisual.frustumCulled = false;
+  noiseRadiusVisual.renderOrder = 3;
+  noiseRadiusVisual.visible = false;
+  noiseRadiusRefreshRemaining = 0;
+  scene.add(noiseRadiusVisual);
+}
+
+function updateNoiseRadiusVisual(delta: number): void {
+  const visual = noiseRadiusVisual;
+  const horde = isFieldHordeGameplay() ? fieldHorde : undefined;
+  if (!visual) return;
+  const radius = horde?.awarenessRadius ?? 0;
+  visual.visible = Boolean(horde && radius >= 1);
+  if (!horde || radius < 1) return;
+
+  noiseRadiusRefreshRemaining -= delta;
+  if (noiseRadiusRefreshRemaining > 0) return;
+  noiseRadiusRefreshRemaining = 0.08;
+  const position = visual.geometry.getAttribute('position') as BufferAttribute;
+  const segments = position.count;
+  const centerX = player.position.x;
+  const centerZ = player.position.z;
+  for (let index = 0; index < segments; index += 1) {
+    const angle = (index / segments) * Math.PI * 2;
+    const x = centerX + Math.cos(angle) * radius;
+    const z = centerZ + Math.sin(angle) * radius;
+    position.setXYZ(index, x, terrainHeightAt(world.seed, x, z) + 0.075, z);
+  }
+  position.needsUpdate = true;
+  visual.geometry.computeBoundingSphere();
+  (visual.material as LineBasicMaterial).opacity = 0.1 + horde.noiseLevel * 0.1;
 }
 
 function setInstanceUpdateRanges(
@@ -1178,17 +1302,8 @@ function startHordeTest(): void {
   hordeRenderTier.fill(255);
   hordeSyncMs = 0;
   hordeSyncCount = 0;
-  const body = new CylinderGeometry(0.34, 0.48, 1.65, 6, 1);
-  const material = new MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true });
-  hordeVisual = new InstancedMesh(body, material, count);
-  hordeVisual.name = 'Instanced horde stress visuals';
-  hordeVisual.instanceMatrix.setUsage(DynamicDrawUsage);
-  hordeVisual.frustumCulled = false;
-  hordeVisual.castShadow = false;
-  hordeVisual.receiveShadow = false;
-  hordeInstance = new Object3D();
-  hordeInstance.userData.color = new Color();
-  scene.add(hordeVisual);
+  hordeVisual = new ZombieCrowdVisual(count, 'Instanced horde stress visuals');
+  scene.add(hordeVisual.group);
 
   if (campInteriorSession) leaveCampBuilding();
   campGroup.visible = false;
@@ -1228,12 +1343,8 @@ function stopHordeTest(): void {
   if (!stressActive) return;
   stressActive = false;
   if (hordeVisual) {
-    scene.remove(hordeVisual);
-    hordeVisual.geometry.dispose();
-    const materials = Array.isArray(hordeVisual.material)
-      ? hordeVisual.material
-      : [hordeVisual.material];
-    materials.forEach((material) => material.dispose());
+    scene.remove(hordeVisual.group);
+    disposeCrowdVisual(hordeVisual);
   }
   hordeVisual = undefined;
   hordeSimulation = undefined;
@@ -1650,11 +1761,13 @@ function enterBuilding(entrance: BuildingEntrance): void {
   zombieGroup.name = `Interior hostiles ${entrance.id}`;
   zombieViews.clear();
   for (const hostile of savedRoomHostiles) {
+    if (!hostile.alive) continue;
     const visual = createZombieVisual(hostile);
     zombieViews.set(hostile.id, visual);
     zombieGroup.add(visual);
   }
   scene.add(roomGroup, roomLootGroup, zombieGroup);
+  if (fieldHordeVisual) fieldHordeVisual.group.visible = false;
   worldGroup.visible = false;
   lootGroup.visible = false;
   if (chopper) chopper.visible = false;
@@ -1710,6 +1823,7 @@ function leaveBuilding(resumePlayer = true): void {
   zombieViews.clear();
   for (const [id, view] of session.outdoorZombieViews) zombieViews.set(id, view);
   scene.add(zombieGroup);
+  if (fieldHordeVisual) fieldHordeVisual.group.visible = true;
   worldGroup.visible = true;
   lootGroup.visible = true;
   if (chopper) chopper.visible = true;
@@ -2230,9 +2344,7 @@ function beginExtraction(): void {
     updateCombatUi();
     return;
   }
-  const danger = combat.zombies.some(
-    (zombie) => zombie.alive && zombie.position.distanceTo(player.position) < 3.5,
-  );
+  const danger = hasHostileWithin(player.position.x, player.position.z, 3.5);
   if (danger) {
     combat.lastMessage = 'Hostiles are too close. Clear space before boarding.';
     updateCombatUi();
@@ -2423,9 +2535,31 @@ function replanNavigationTask(): void {
 }
 
 function updateDynamicNavigation(): void {
-  const obstacles = combat.zombies
-    .filter((zombie) => zombie.alive && zombie.position.distanceTo(player.position) > 3.2)
-    .map((zombie) => ({ x: zombie.position.x, z: zombie.position.z, radius: 0.8 }));
+  let obstacles: Array<{ x: number; z: number; radius: number }>;
+  if (isFieldHordeGameplay() && fieldHorde) {
+    const candidates: Array<{ x: number; z: number; radius: number; distanceSquared: number }> = [];
+    for (let index = 0; index < fieldHorde.activeCount; index += 1) {
+      if (fieldHorde.alive[index] !== 1) continue;
+      const dx = fieldHorde.x[index]! - player.position.x;
+      const dz = fieldHorde.z[index]! - player.position.z;
+      const distanceSquared = dx * dx + dz * dz;
+      if (distanceSquared <= 3.2 * 3.2 || distanceSquared > 34 * 34) continue;
+      candidates.push({
+        x: fieldHorde.x[index]!,
+        z: fieldHorde.z[index]!,
+        radius: 0.8,
+        distanceSquared,
+      });
+    }
+    obstacles = candidates
+      .sort((a, b) => a.distanceSquared - b.distanceSquared)
+      .slice(0, 96)
+      .map(({ x, z, radius }) => ({ x, z, radius }));
+  } else {
+    obstacles = combat.zombies
+      .filter((zombie) => zombie.alive && zombie.position.distanceTo(player.position) > 3.2)
+      .map((zombie) => ({ x: zombie.position.x, z: zombie.position.z, radius: 0.8 }));
+  }
   navigator.setDynamicObstacles(obstacles);
   if (
     navigationTask &&
@@ -2472,6 +2606,20 @@ function clearRunScene(): void {
   }
   timedEffects.length = 0;
   if (interiorSession) leaveBuilding(false);
+  if (fieldHordeVisual) {
+    scene.remove(fieldHordeVisual.group);
+    disposeCrowdVisual(fieldHordeVisual);
+  }
+  fieldHordeVisual = undefined;
+  if (noiseRadiusVisual) {
+    scene.remove(noiseRadiusVisual);
+    noiseRadiusVisual.geometry.dispose();
+    (noiseRadiusVisual.material as LineBasicMaterial).dispose();
+  }
+  noiseRadiusVisual = undefined;
+  fieldHorde = undefined;
+  fieldHordeRenderTier = new Uint8Array();
+  fieldHordeSpawnRemaining = 2;
   removeRappelRope();
   if (chopper) {
     scene.remove(chopper);
@@ -2532,12 +2680,26 @@ function startRun(): void {
   disembarkElapsed = 0;
   extractingRemaining = 0;
   takeoffElapsed = 0;
-  reinforcementIndex = 0;
-  waveWarningShown = false;
   runLootCollected = 0;
-  combat.reset();
+  combat.reset(0);
   createZombieViews();
   zombieGroup.visible = false;
+  fieldHorde = new HordeSimulation(
+    fieldHordeCapacity,
+    `${world.seed}:field-horde`,
+    'ring',
+    world,
+    new GridNavigator(world),
+    fieldHordeInitialCount,
+    { dormantActivation: true },
+  );
+  fieldHordeVisual = new ZombieCrowdVisual(fieldHordeCapacity, 'Field horde');
+  fieldHordeVisual.group.visible = false;
+  fieldHordeRenderTier = new Uint8Array(fieldHordeCapacity);
+  fieldHordeRenderTier.fill(255);
+  scene.add(fieldHordeVisual.group);
+  createNoiseRadiusVisual();
+  fieldHordeSpawnRemaining = 2;
   player.setWorld(world, (x, z) => terrainHeightAt(world.seed, x, z));
   player.setPosition(world.spawn.x, world.spawn.z);
   player.setEnabled(false);
@@ -3059,6 +3221,7 @@ function fireArtilleryAtPointer(): void {
     updateCombatUi();
     return;
   }
+  emitFieldNoise(0.5);
   const mark = new Group();
   mark.name = 'Artillery impact marker';
   mark.position.copy(target).add(new Vector3(0, 0.1, 0));
@@ -3090,7 +3253,8 @@ function fireArtilleryAtPointer(): void {
     object: mark,
     remaining: 1.2,
     onExpire: () => {
-      const affected = combat.damageHostilesInRadius(target, artilleryRadius, 100);
+      emitFieldNoise(1, target.x, target.z);
+      const affected = damageHostilesInRadius(target, artilleryRadius, 100);
       combat.lastMessage = `Artillery impact · ${affected} hostile(s) caught in the blast.`;
       addBlastVisual(target, artilleryRadius, 10);
       audioFeedback.play('explosion');
@@ -3140,6 +3304,7 @@ function throwGrenadeAtPointer(): void {
   scene.add(projectile);
   const duration = Math.max(0.35, Math.min(1.1, offset.length() / 25));
   grenadeProjectiles.push({ object: projectile, start, target: aim.clone(), elapsed: 0, duration });
+  emitFieldNoise(0.28);
   const grenade = runItems.items.find((item) => item.id === 'grenade');
   if (grenade) removeItem(runItems, grenade.uid);
   syncGrenades();
@@ -3150,7 +3315,8 @@ function throwGrenadeAtPointer(): void {
 }
 
 function impactGrenade(point: Vector3): void {
-  const affected = combat.damageHostilesInRadius(point, grenadeBlastRadius, 100);
+  emitFieldNoise(0.96, point.x, point.z);
+  const affected = damageHostilesInRadius(point, grenadeBlastRadius, 100);
   combat.lastMessage = `Grenade blast · ${affected} hostile(s) caught in the explosion.`;
   addBlastVisual(point, grenadeBlastRadius, 5);
   audioFeedback.play('explosion');
@@ -3185,18 +3351,7 @@ function animateFieldAbilities(delta: number): void {
       (gamePhase === 'active' || gamePhase === 'extracting')
     ) {
       turret.fireRemaining -= delta;
-      const target = combat.zombies
-        .filter(
-          (zombie) =>
-            zombie.alive &&
-            Math.hypot(zombie.position.x - turret.x, zombie.position.z - turret.z) <=
-              turretAttackRadius,
-        )
-        .sort(
-          (a, b) =>
-            Math.hypot(a.position.x - turret.x, a.position.z - turret.z) -
-            Math.hypot(b.position.x - turret.x, b.position.z - turret.z),
-        )[0];
+      const target = nearestHostile(turret.x, turret.z, turretAttackRadius);
       if (target) {
         const dx = target.position.x - turret.x;
         const dz = target.position.z - turret.z;
@@ -3206,7 +3361,8 @@ function animateFieldAbilities(delta: number): void {
           turret.object.updateMatrixWorld(true);
           const muzzle = turret.object.localToWorld(new Vector3(0.17, 1.48, -1.03));
           const hitPoint = target.position.clone().add(new Vector3(0, 1.05, 0));
-          combat.damageHostile(target.id, 22);
+          damageHostile(target.id, 22);
+          emitFieldNoise(0.52, turret.x, turret.z);
           combat.lastMessage = `Auto turret hit ${target.id}.`;
           addShotEffect(muzzle, hitPoint);
           if (!atmosphereSettings.reduceMotion)
@@ -3295,6 +3451,7 @@ player = new PlayerController(
     if (cameraRig.mode === 'top-down') updateTopDownDashAim(pointerX, pointerY);
     const started = combat.tryDash();
     if (started) {
+      emitFieldNoise(0.18);
       audioFeedback.play('dash');
       if (!atmosphereSettings.reduceMotion)
         cameraRig.kickShake(0.025 * atmosphereSettings.shakeIntensity, 0.17);
@@ -3591,10 +3748,25 @@ function updateTopDownDashAim(clientX: number, clientY: number): void {
   if (point) player.setCursorWorldPoint(point.x, point.z);
 }
 
-function findZombieId(object: Object3D | undefined): string | undefined {
+function findZombieId(object: Object3D | undefined, instanceId?: number): string | undefined {
   let current = object;
   while (current) {
     if (typeof current.userData.zombieId === 'string') return current.userData.zombieId;
+    if (
+      current.userData.hordePart === true &&
+      fieldHordeVisual &&
+      fieldHorde &&
+      instanceId !== undefined
+    ) {
+      const agentIndex = fieldHordeVisual.agentIndexForInstance(current, instanceId);
+      if (
+        agentIndex !== undefined &&
+        agentIndex < fieldHorde.activeCount &&
+        fieldHorde.alive[agentIndex] === 1
+      )
+        return `field-horde-${fieldHorde.ids[agentIndex]}`;
+      return undefined;
+    }
     current = current.parent ?? undefined;
   }
   return undefined;
@@ -3610,37 +3782,174 @@ function findInteractiveId(object: Object3D | undefined): string | undefined {
   return undefined;
 }
 
-function firstWorldOrLivingHit(raycaster: Raycaster) {
-  return raycaster
-    .intersectObjects([activeWorldVisual(), activeLootVisual(), zombieGroup], true)
-    .find((hit) => {
-      const zombieId = findZombieId(hit.object);
-      return !zombieId || combat.zombies.some((zombie) => zombie.id === zombieId && zombie.alive);
-    });
+interface HostileTarget {
+  id: string;
+  position: Vector3;
+  health: number;
+  maxHealth: number;
+  alive: boolean;
+  hordeIndex?: number;
 }
 
-function canSeeZombie(zombie: ZombieState): boolean {
+function fieldHordeIndex(id: string | undefined): number | undefined {
+  if (!id || !id.startsWith('field-horde-') || !fieldHorde) return undefined;
+  const numericId = Number(id.slice('field-horde-'.length));
+  const index = numericId - 1;
+  return Number.isInteger(index) && index >= 0 && index < fieldHorde.activeCount
+    ? index
+    : undefined;
+}
+
+function getHostileTarget(id: string | undefined): HostileTarget | undefined {
+  const index = fieldHordeIndex(id);
+  if (index !== undefined && fieldHorde && fieldHorde.alive[index] === 1) {
+    return {
+      id: id!,
+      position: new Vector3(fieldHorde.x[index]!, fieldHorde.y[index]!, fieldHorde.z[index]!),
+      health: fieldHorde.health[index]!,
+      maxHealth: 100,
+      alive: true,
+      hordeIndex: index,
+    };
+  }
+  return combat.zombies.find((zombie) => zombie.id === id && zombie.alive);
+}
+
+function damageHostile(id: string, amount: number): boolean {
+  const index = fieldHordeIndex(id);
+  if (index !== undefined && fieldHorde) {
+    return fieldHorde.damageAgent(index, amount);
+  }
+  return combat.damageHostile(id, amount);
+}
+
+function damageHostilesInRadius(center: Vector3, radius: number, amount: number): number {
+  if (isFieldHordeGameplay() && fieldHorde)
+    return fieldHorde.damageAgentsInRadius(center.x, center.z, radius, amount);
+  return combat.damageHostilesInRadius(center, radius, amount);
+}
+
+function nearestHostile(x: number, z: number, radius: number): HostileTarget | undefined {
+  if (isFieldHordeGameplay() && fieldHorde) {
+    const index = fieldHorde.findNearestAgent(x, z, radius);
+    if (index === undefined) return undefined;
+    return getHostileTarget(`field-horde-${fieldHorde.ids[index]}`);
+  }
+  let nearest: ZombieState | undefined;
+  let nearestDistance = radius * radius;
+  for (const zombie of combat.zombies) {
+    if (!zombie.alive) continue;
+    const dx = zombie.position.x - x;
+    const dz = zombie.position.z - z;
+    const distance = dx * dx + dz * dz;
+    if (distance > nearestDistance) continue;
+    nearestDistance = distance;
+    nearest = zombie;
+  }
+  return nearest;
+}
+
+function hasHostileWithin(x: number, z: number, radius: number): boolean {
+  return nearestHostile(x, z, radius) !== undefined;
+}
+
+function findFieldHordeAgentAlongRay(
+  raycaster: Raycaster,
+  obstructionDistance: number,
+): number | undefined {
+  if (!isFieldHordeGameplay() || !fieldHorde) return undefined;
+  const { origin, direction } = raycaster.ray;
+  const maxDistance = Math.min(90, obstructionDistance + 0.55);
+  const hitRadiusSquared = 0.72 * 0.72;
+  let nearest: number | undefined;
+  let nearestAlongRay = maxDistance;
+  for (let index = 0; index < fieldHorde.activeCount; index += 1) {
+    if (fieldHorde.alive[index] !== 1) continue;
+    const centerX = fieldHorde.x[index]!;
+    const centerY = fieldHorde.y[index]! + 1;
+    const centerZ = fieldHorde.z[index]!;
+    const offsetX = centerX - origin.x;
+    const offsetY = centerY - origin.y;
+    const offsetZ = centerZ - origin.z;
+    const alongRay = offsetX * direction.x + offsetY * direction.y + offsetZ * direction.z;
+    if (alongRay < 0 || alongRay > nearestAlongRay) continue;
+    const closestX = origin.x + direction.x * alongRay;
+    const closestY = origin.y + direction.y * alongRay;
+    const closestZ = origin.z + direction.z * alongRay;
+    const dx = closestX - centerX;
+    const dz = closestZ - centerZ;
+    if (
+      dx * dx + dz * dz > hitRadiusSquared ||
+      closestY < fieldHorde.y[index]! + 0.05 ||
+      closestY > fieldHorde.y[index]! + 2.05
+    )
+      continue;
+    nearest = index;
+    nearestAlongRay = alongRay;
+  }
+  return nearest;
+}
+
+function firstWorldOrLivingHit(raycaster: Raycaster) {
+  const objects = [activeWorldVisual(), activeLootVisual(), zombieGroup];
+  if (
+    isFieldHordeGameplay() &&
+    fieldHordeVisual?.group.visible
+  )
+    objects.push(fieldHordeVisual.group);
+  return raycaster.intersectObjects(objects, true).find((hit) => {
+    const zombieId = findZombieId(hit.object, hit.instanceId);
+    if (!zombieId) return true;
+    return getHostileTarget(zombieId) !== undefined;
+  });
+}
+
+function canSeeZombie(zombie: HostileTarget): boolean {
   const origin = camera.getWorldPosition(new Vector3());
   const aimPoint = zombie.position.clone().add(new Vector3(0, 1.05, 0));
   const direction = aimPoint.sub(origin);
   const distance = direction.length();
   direction.normalize();
   const raycaster = new Raycaster(origin, direction, 0, distance + 0.05);
-  return findZombieId(firstWorldOrLivingHit(raycaster)?.object) === zombie.id;
+  const hit = firstWorldOrLivingHit(raycaster);
+  return findZombieId(hit?.object, hit?.instanceId) === zombie.id;
 }
 
 function findAssistedZombie(
   clientX: number,
   clientY: number,
   directHit: Object3D | undefined,
-): ZombieState | undefined {
-  const directId = findZombieId(directHit);
-  const directTarget = combat.zombies.find((zombie) => zombie.id === directId && zombie.alive);
+  instanceId?: number,
+): HostileTarget | undefined {
+  const directId = findZombieId(directHit, instanceId);
+  const directTarget = getHostileTarget(directId);
   if (directTarget) return directTarget;
 
   camera.updateMatrixWorld(true);
-  let nearest: ZombieState | undefined;
+  let nearest: HostileTarget | undefined;
   let nearestDistanceSquared = enemyAimAssistRadius * enemyAimAssistRadius;
+  if (isFieldHordeGameplay() && fieldHorde) {
+    const candidates: Array<{ target: HostileTarget; distanceSquared: number }> = [];
+    for (let index = 0; index < fieldHorde.activeCount; index += 1) {
+      if (fieldHorde.alive[index] !== 1) continue;
+      const zombie = getHostileTarget(`field-horde-${fieldHorde.ids[index]}`);
+      if (!zombie) continue;
+      const screen = zombie.position.clone().add(new Vector3(0, 1.05, 0)).project(camera);
+      if (screen.z < -1 || screen.z > 1) continue;
+      const screenX = ((screen.x + 1) * window.innerWidth) / 2;
+      const screenY = ((1 - screen.y) * window.innerHeight) / 2;
+      const dx = screenX - clientX;
+      const dy = screenY - clientY;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared >= enemyAimAssistRadius * enemyAimAssistRadius) continue;
+      candidates.push({ target: zombie, distanceSquared });
+    }
+    candidates.sort((a, b) => a.distanceSquared - b.distanceSquared);
+    for (const candidate of candidates) {
+      if (canSeeZombie(candidate.target)) return candidate.target;
+    }
+    return undefined;
+  }
   for (const zombie of combat.zombies) {
     if (!zombie.alive || !canSeeZombie(zombie)) continue;
     const screen = zombie.position
@@ -3671,12 +3980,12 @@ function updateEnemyHover(clientX: number, clientY: number, overScene: boolean):
   const raycaster = new Raycaster();
   raycaster.setFromCamera(ndc, camera);
   const hit = firstWorldOrLivingHit(raycaster);
-  const hoveringEnemy = Boolean(findZombieId(hit?.object));
+  const hoveringEnemy = Boolean(findZombieId(hit?.object, hit?.instanceId));
   canvas!.classList.toggle('is-enemy-hovering', hoveringEnemy);
   elements.reticle!.classList.toggle('enemy-hover', hoveringEnemy);
 }
 
-function fireAlongRay(aimPoint: Vector3): boolean {
+function fireAlongRay(aimPoint: Vector3, preferredHordeIndex?: number): boolean {
   if (!combat.alive) return false;
   if (
     gamePhase === 'active' &&
@@ -3701,17 +4010,46 @@ function fireAlongRay(aimPoint: Vector3): boolean {
   const weaponRay = new Raycaster(muzzle, shotDirection, 0, shotLength + 0.05);
   const weaponHit = firstWorldOrLivingHit(weaponRay);
   const hitPoint = weaponHit?.point ?? aimPoint;
-  const targetId = findZombieId(weaponHit?.object);
-  if (!combat.tryFire(targetId, damage, cooldown)) return false;
+  const hitHordeIndex =
+    weaponHit?.instanceId !== undefined && fieldHordeVisual
+      ? fieldHordeVisual.agentIndexForInstance(weaponHit.object, weaponHit.instanceId)
+      : undefined;
+  const maximumRange = weapon === 'shotgun' ? 16 : 90;
+  const preferredTargetInRange =
+    preferredHordeIndex !== undefined && fieldHorde
+      ? Math.hypot(
+          fieldHorde.x[preferredHordeIndex]! - muzzle.x,
+          fieldHorde.y[preferredHordeIndex]! + 1 - muzzle.y,
+          fieldHorde.z[preferredHordeIndex]! - muzzle.z,
+        ) <= maximumRange
+      : false;
+  const directHordeIndex =
+    preferredTargetInRange ? preferredHordeIndex : hitHordeIndex;
+  const targetId =
+    directHordeIndex !== undefined && fieldHorde
+      ? `field-horde-${fieldHorde.ids[directHordeIndex]}`
+      : findZombieId(weaponHit?.object, weaponHit?.instanceId);
+  const hordeIndex = isFieldHordeGameplay()
+    ? (directHordeIndex ?? fieldHordeIndex(targetId))
+    : undefined;
+  const targetBeforeHit = getHostileTarget(targetId);
+  if (!combat.tryFire(hordeIndex === undefined ? targetId : undefined, damage, cooldown))
+    return false;
+  emitFieldNoise(weapon === 'shotgun' ? 0.74 : weapon === 'handgun' ? 0.48 : 0.62);
+  if (hordeIndex !== undefined && targetId) {
+    fieldHorde?.damageAgent(hordeIndex, damage);
+    combat.lastMessage =
+      fieldHorde?.alive[hordeIndex] === 1 ? 'Hostile hit.' : 'Hostile eliminated.';
+  }
   audioFeedback.play('shot');
   if (targetId) {
-    const hostile = combat.zombies.find((zombie) => zombie.id === targetId);
+    const aliveAfterHit = getHostileTarget(targetId) !== undefined;
     audioFeedback.play('hit');
     if (!atmosphereSettings.reduceMotion)
       particleBursts.burst(
         hitPoint,
-        hostile?.alive ? '#e8d18f' : '#cf9870',
-        hostile?.alive ? 5 : 8,
+        targetBeforeHit?.alive && aliveAfterHit ? '#e8d18f' : '#cf9870',
+        targetBeforeHit?.alive && aliveAfterHit ? 5 : 8,
         1.9,
         0.24,
       );
@@ -3719,16 +4057,19 @@ function fireAlongRay(aimPoint: Vector3): boolean {
     window.setTimeout(() => elements.reticle!.classList.remove('hit'), 120);
   }
   addShotEffect(muzzle, hitPoint);
-  for (const zombie of combat.zombies) {
-    const visual = zombieViews.get(zombie.id);
-    if (visual) syncZombieVisual(visual, zombie);
+  if (hordeIndex !== undefined) updateHordeVisual();
+  else {
+    for (const zombie of combat.zombies) syncCombatZombieView(zombie);
   }
   updateCombatUi();
   return true;
 }
 
-function fireAtZombie(zombie: ZombieState): boolean {
-  return fireAlongRay(zombie.position.clone().add(new Vector3(0, 1.05, 0)));
+function fireAtZombie(zombie: HostileTarget): boolean {
+  return fireAlongRay(
+    zombie.position.clone().add(new Vector3(0, 1.05, 0)),
+    zombie.hordeIndex,
+  );
 }
 
 function fireAt(event: PointerEvent): void {
@@ -3737,15 +4078,19 @@ function fireAt(event: PointerEvent): void {
     const stressRay = new Raycaster();
     stressRay.setFromCamera(pointToNdc(event), camera);
     const stressHit = hordeVisual
-      ? stressRay.intersectObjects([worldGroup, hordeVisual], true)[0]
+      ? stressRay.intersectObjects([worldGroup, hordeVisual.group], true)[0]
       : undefined;
+    const stressIndex =
+      stressHit?.instanceId !== undefined && hordeVisual
+        ? hordeVisual.agentIndexForInstance(stressHit.object, stressHit.instanceId)
+        : undefined;
     if (
       stressHit &&
-      stressHit.object === hordeVisual &&
-      stressHit.instanceId !== undefined &&
-      hordeSimulation.damageAgent(stressHit.instanceId, 50)
+      stressHit.object.userData.hordePart === true &&
+      stressIndex !== undefined &&
+      hordeSimulation.damageAgent(stressIndex, 50)
     ) {
-      const index = stressHit.instanceId;
+      const index = stressIndex;
       const position = new Vector3(
         hordeSimulation.x[index]!,
         hordeSimulation.y[index]! + 0.9,
@@ -3781,7 +4126,12 @@ function fireAt(event: PointerEvent): void {
     return;
   }
   if (cameraRig.mode === 'top-down') {
-    const target = findAssistedZombie(event.clientX, event.clientY, aimHit?.object);
+    const target = findAssistedZombie(
+      event.clientX,
+      event.clientY,
+      aimHit?.object,
+      aimHit?.instanceId,
+    );
     if (target) {
       autoAttackTargetId = target.id;
       clearNavigation('CANCELLED');
@@ -3792,7 +4142,13 @@ function fireAt(event: PointerEvent): void {
   }
   autoAttackTargetId = undefined;
   const aimPoint = aimHit?.point ?? viewRay.ray.at(70, new Vector3());
-  fireAlongRay(aimPoint);
+  const mappedAimHordeIndex =
+    aimHit?.instanceId !== undefined && fieldHordeVisual
+      ? fieldHordeVisual.agentIndexForInstance(aimHit.object, aimHit.instanceId)
+      : undefined;
+  const aimHordeIndex =
+    findFieldHordeAgentAlongRay(viewRay, aimHit?.distance ?? 90) ?? mappedAimHordeIndex;
+  fireAlongRay(aimPoint, aimHordeIndex);
 }
 
 function updateAutoAttack(): void {
@@ -3801,7 +4157,7 @@ function updateAutoAttack(): void {
     autoAttackTargetId = undefined;
     return;
   }
-  const target = combat.zombies.find((zombie) => zombie.id === autoAttackTargetId && zombie.alive);
+  const target = getHostileTarget(autoAttackTargetId);
   if (!target) {
     autoAttackTargetId = undefined;
     return;
@@ -4028,6 +4384,7 @@ function animate(now: number): void {
       cameraRig.switchMode(player.position);
       removeRappelRope();
       zombieGroup.visible = true;
+      if (fieldHordeVisual) fieldHordeVisual.group.visible = true;
       if (extractionGuideArrow) extractionGuideArrow.visible = true;
       elements.extractionGuide!.removeAttribute('hidden');
       elements.zoneStatus!.textContent = 'ACTIVE';
@@ -4095,36 +4452,30 @@ function animate(now: number): void {
       combat.tickCooldowns(fixedStep);
       if (gamePhase === 'active') {
         if (!interiorSession) runElapsed += fixedStep;
-        const warningTimes = [50, 110];
-        const spawnTimes = [90, 150];
-        if (
-          !interiorSession &&
-          reinforcementIndex < 2 &&
-          runElapsed >= warningTimes[reinforcementIndex] &&
-          !waveWarningShown
-        ) {
-          waveWarningShown = true;
-          combat.lastMessage = `Horde movement detected. Reinforcements may reach this area in ${spawnTimes[reinforcementIndex] - warningTimes[reinforcementIndex]} seconds. Extract while the route is clear.`;
-        }
-        if (
-          !interiorSession &&
-          reinforcementIndex < 2 &&
-          runElapsed >= spawnTimes[reinforcementIndex]
-        ) {
-          const added = combat.addReinforcements(2, player.position);
-          for (const zombie of added) {
-            const visual = createZombieVisual(zombie);
-            zombieViews.set(zombie.id, visual);
-            zombieGroup.add(visual);
+      }
+      if (!interiorSession && fieldHorde) {
+        fieldHordeSpawnRemaining -= fixedStep;
+        if (fieldHordeSpawnRemaining <= 0) {
+          const spawned = fieldHorde.spawnOne(player.position.x, player.position.z);
+          fieldHordeSpawnRemaining += 2;
+          if (spawned !== undefined && spawned % 15 === 0) {
+            combat.lastMessage = 'Distant movement · more infected are closing in.';
           }
-          reinforcementIndex += 1;
-          waveWarningShown = false;
         }
       }
       if (player.isDashing && !observedDash && cameraRig.mode === 'top-down') addDashIndicator();
       const wasDashing = player.isDashing;
-      if (gamePhase === 'extracting' || interiorSession || runElapsed >= 12)
-        combat.tickHostiles(fixedStep, player.position);
+      if (gamePhase === 'extracting' || interiorSession || runElapsed >= 12) {
+        if (isFieldHordeGameplay() && fieldHorde) {
+          const previousHits = fieldHorde.totalPlayerHits;
+          fieldHorde.tick(fixedStep, player.position.x, player.position.z);
+          const hitsTaken = fieldHorde.totalPlayerHits - previousHits;
+          for (let hit = 0; hit < hitsTaken; hit += 1) combat.damagePlayer(8);
+          fieldHorde.playerHealth = combat.health;
+        } else {
+          combat.tickHostiles(fixedStep, player.position);
+        }
+      }
       if (!combat.alive) {
         simulationAccumulator = 0;
         break;
@@ -4149,9 +4500,7 @@ function animate(now: number): void {
         observedDash = player.isDashing;
       } else if (gamePhase === 'extracting') {
         extractingRemaining -= fixedStep;
-        const danger = combat.zombies.some(
-          (zombie) => zombie.alive && zombie.position.distanceTo(player.position) < 3.5,
-        );
+        const danger = hasHostileWithin(player.position.x, player.position.z, 3.5);
         if (danger) {
           gamePhase = 'active';
           player.setEnabled(true);
@@ -4169,10 +4518,7 @@ function animate(now: number): void {
     finishDeath();
   }
   wasAlive = combat.alive;
-  for (const zombie of combat.zombies) {
-    const visual = zombieViews.get(zombie.id);
-    if (visual) syncZombieVisual(visual, zombie);
-  }
+  for (const zombie of combat.zombies) syncCombatZombieView(zombie);
   updateHordeVisual();
   const visibleHealth =
     stressActive && hordeSimulation ? hordeSimulation.playerHealth : combat.health;
@@ -4201,6 +4547,7 @@ function animate(now: number): void {
     );
   }
   animateFieldAbilities(delta);
+  updateNoiseRadiusVisual(delta);
   animateEffects(delta);
   if (gamePhase === 'active' || gamePhase === 'extracting') {
     if (!interiorSession) updateExtractionGuide();
@@ -4265,7 +4612,9 @@ function animate(now: number): void {
     if (cameraRig.mode === 'third-person') renderControls();
     elements.entityValue!.textContent = String(
       (gamePhase === 'base' ? campGroup.children.length : world.objectCount) +
-        (stressActive ? (hordeSimulation?.count ?? 0) : combat.zombies.length) +
+        (stressActive
+          ? (hordeSimulation?.count ?? 0)
+          : (fieldHorde?.livingCount ?? combat.zombies.length)) +
         lootGroup.children.length +
         1,
     );

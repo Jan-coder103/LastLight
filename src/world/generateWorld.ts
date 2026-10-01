@@ -693,6 +693,18 @@ function footprintsOverlap(a: PlacementFootprint, b: PlacementFootprint): boolea
   return a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ;
 }
 
+function overlapsWater(placement: AssetPlacement, waterAreas: WorldWaterArea[]): boolean {
+  const collider = colliderFor(placement);
+  if (!collider) return false;
+  return waterAreas.some(
+    (area) =>
+      collider.minX < area.centerX + area.sizeX / 2 &&
+      collider.maxX > area.centerX - area.sizeX / 2 &&
+      collider.minZ < area.centerZ + area.sizeZ / 2 &&
+      collider.maxZ > area.centerZ - area.sizeZ / 2,
+  );
+}
+
 function waterCollider(area: WorldWaterArea): WorldCollider {
   return {
     id: area.id,
@@ -715,6 +727,63 @@ function worldInteractionPoint(
     x: placement.position.x + (point.x * cosine + point.z * sine) * placement.scale,
     z: placement.position.z + (-point.x * sine + point.z * cosine) * placement.scale,
   };
+}
+
+function isClearOfInteractionApproaches(
+  candidate: AssetPlacement,
+  placements: AssetPlacement[],
+  clearance = 6.2,
+): boolean {
+  const candidateFootprint = footprintFor(candidate);
+  const existingApproachesClear = placements.every((placement) =>
+    getAsset(placement.assetId).interactionPoints.every((point) => {
+      const target = worldInteractionPoint(placement, point.position);
+      const dx = Math.max(
+        candidateFootprint.minX - target.x,
+        0,
+        target.x - candidateFootprint.maxX,
+      );
+      const dz = Math.max(
+        candidateFootprint.minZ - target.z,
+        0,
+        target.z - candidateFootprint.maxZ,
+      );
+      return Math.hypot(dx, dz) > clearance;
+    }),
+  );
+  const candidateApproachesClear = getAsset(candidate.assetId).interactionPoints.every((point) => {
+    const target = worldInteractionPoint(candidate, point.position);
+    return placements.every((placement) => {
+      const existingFootprint = footprintFor(placement);
+      const dx = Math.max(existingFootprint.minX - target.x, 0, target.x - existingFootprint.maxX);
+      const dz = Math.max(existingFootprint.minZ - target.z, 0, target.z - existingFootprint.maxZ);
+      return Math.hypot(dx, dz) > clearance;
+    });
+  });
+  return existingApproachesClear && candidateApproachesClear;
+}
+
+function isClearOfWaterApproaches(
+  placement: AssetPlacement,
+  waterAreas: WorldWaterArea[],
+  clearance = 6.2,
+): boolean {
+  return getAsset(placement.assetId).interactionPoints.every((point) => {
+    const target = worldInteractionPoint(placement, point.position);
+    return waterAreas.every((area) => {
+      const dx = Math.max(
+        area.centerX - area.sizeX / 2 - target.x,
+        0,
+        target.x - area.centerX - area.sizeX / 2,
+      );
+      const dz = Math.max(
+        area.centerZ - area.sizeZ / 2 - target.z,
+        0,
+        target.z - area.centerZ - area.sizeZ / 2,
+      );
+      return Math.hypot(dx, dz) > clearance;
+    });
+  });
 }
 
 function findAccessPoint(
@@ -808,18 +877,19 @@ function addDistrictBuildings(
           Math.abs(placement.position.z - z) < 20,
       );
       if (overlapsBuilding || random() > district.density) continue;
-      addPlacement(
-        placements,
-        'building-shell',
-        seed,
-        x,
-        z,
-        district.kind,
-        district.id,
-        0.88 + random() * 0.2,
-        random() < 0.5 ? 0 : Math.PI,
-        selectThemeVariant(random, district.kind, 'building-shell'),
-      );
+      const candidate: AssetPlacement = {
+        assetId: 'building-shell',
+        theme: district.kind,
+        regionId: district.id,
+        position: { x, y: terrainHeightAt(seed, x, z), z },
+        scale: 0.88 + random() * 0.2,
+        rotationY: random() < 0.5 ? 0 : Math.PI,
+        variant: selectThemeVariant(random, district.kind, 'building-shell'),
+      };
+      const footprint = footprintFor(candidate);
+      if (placements.some((placement) => footprintsOverlap(footprint, footprintFor(placement))))
+        continue;
+      placements.push(candidate);
       placed += 1;
     }
   }
@@ -834,7 +904,6 @@ function addForestProps(
 ): void {
   const random = createRandom(`${seed}:forest-props`);
   const spawn = { x: 0, y: 0, z: -5 };
-  const forestProps: AssetPlacement[] = [];
   const targetByDistrict = new Map([
     ['north-pines', 43],
     ['south-pines', 38],
@@ -877,12 +946,11 @@ function addForestProps(
         variant: selectThemeVariant(random, district.kind, assetId),
       };
       if (
-        forestProps.some((prop) =>
-          footprintsOverlap(footprintFor(candidate, 0.9), footprintFor(prop)),
+        placements.some((placement) =>
+          footprintsOverlap(footprintFor(candidate, 0.9), footprintFor(placement)),
         )
       )
         continue;
-      forestProps.push(candidate);
       placements.push(candidate);
       placed += 1;
     }
@@ -962,17 +1030,25 @@ function placeAssetInTheme(
   random: () => number,
   roads: WorldRoad[],
   districts: WorldDistrict[],
+  waterAreas: WorldWaterArea[],
   spawn: Vec3Data,
   maxAttempts = 1200,
+  search: {
+    radius?: number;
+    minSpacing?: number;
+    protectInteractionApproaches?: boolean;
+  } = {},
 ): AssetPlacement | undefined {
   const definition = WORLD_THEME_DEFINITIONS[theme];
   const regions = districts.filter((district) => district.kind === theme);
   const asset = getAsset(assetId);
+  const searchRadius = search.radius ?? 0.78;
+  const minSpacing = search.minSpacing ?? definition.minSpacing;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const district = regions[Math.floor(random() * regions.length)];
     if (!district) continue;
     const angle = random() * Math.PI * 2;
-    const distance = Math.sqrt(random()) * 0.78;
+    const distance = Math.sqrt(random()) * searchRadius;
     const x = district.centerX + Math.cos(angle) * district.radiusX * distance;
     const z = district.centerZ + Math.sin(angle) * district.radiusZ * distance;
     const rotationY = random() * Math.PI * 2;
@@ -993,11 +1069,17 @@ function placeAssetInTheme(
       footprint.minZ < -HALF_WORLD + 2 ||
       footprint.maxZ > HALF_WORLD - 2 ||
       !isClearOfLanding(x, z, spawn) ||
-      overlapsRoad(footprint, roads)
+      overlapsRoad(footprint, roads) ||
+      overlapsWater(candidate, waterAreas) ||
+      !isClearOfWaterApproaches(candidate, waterAreas)
     )
       continue;
-
-    const paddedFootprint = footprintFor(candidate, definition.minSpacing);
+    if (
+      search.protectInteractionApproaches &&
+      !isClearOfInteractionApproaches(candidate, placements)
+    )
+      continue;
+    const paddedFootprint = footprintFor(candidate, minSpacing);
     if (placements.some((placement) => footprintsOverlap(paddedFootprint, footprintFor(placement))))
       continue;
     placements.push(candidate);
@@ -1011,42 +1093,77 @@ function addRequiredThemeAssets(
   seed: string,
   roads: WorldRoad[],
   districts: WorldDistrict[],
+  waterAreas: WorldWaterArea[],
   landmarks: WorldLandmark[],
   spawn: Vec3Data,
+  reserveEarlyAssets = false,
 ): void {
-  const random = createRandom(`${seed}:theme-placement`);
-  const themes: WorldTheme[] = ['urban', 'forest', 'farm', 'military', 'coastal', 'camp'];
+  const random = createRandom(`${seed}:theme-placement${reserveEarlyAssets ? ':reserve' : ''}`);
+  const themes: WorldTheme[] = reserveEarlyAssets
+    ? ['urban', 'forest']
+    : ['urban', 'forest', 'farm', 'military', 'coastal', 'camp'];
   for (const theme of themes) {
     const definition = WORLD_THEME_DEFINITIONS[theme];
     const fixedAssets = new Set(
       landmarks.filter((landmark) => landmark.theme === theme).map((landmark) => landmark.assetId),
     );
-    for (const assetId of definition.requiredAssetIds) {
+    const requiredAssetsByFootprint = [...definition.requiredAssetIds];
+    if (theme === 'urban')
+      requiredAssetsByFootprint.sort((first, second) => {
+        const firstDimensions = getAsset(first).dimensions;
+        const secondDimensions = getAsset(second).dimensions;
+        return secondDimensions.x * secondDimensions.z - firstDimensions.x * firstDimensions.z;
+      });
+    const assetIdsToPlace =
+      reserveEarlyAssets && theme === 'urban'
+        ? requiredAssetsByFootprint.slice(0, 2)
+        : requiredAssetsByFootprint;
+    for (const assetId of assetIdsToPlace) {
       if (
         fixedAssets.has(assetId) ||
         placements.some((placement) => placement.theme === theme && placement.assetId === assetId)
       )
         continue;
-      const placed = placeAssetInTheme(
+      const placeRequired = (search?: { radius?: number; minSpacing?: number }) =>
+        placeAssetInTheme(
+          placements,
+          assetId,
+          theme,
+          seed,
+          random,
+          roads,
+          districts,
+          waterAreas,
+          spawn,
+          2600,
+          search,
+        );
+      const placed =
+        placeRequired() ??
+        // Keep preferred spacing when possible, but search farther through a dense district and
+        // allow tighter gaps before failing the whole world over a mandatory set piece.
+        placeRequired({ radius: 0.96, minSpacing: 0 });
+      if (!placed)
+        throw new Error(`Could not place required ${theme} asset "${assetId}" for seed "${seed}"`);
+    }
+    if (reserveEarlyAssets) continue;
+
+    const dressingCount = Math.round(definition.density * 1.5);
+    for (let index = 0; index < dressingCount; index += 1) {
+      if (Object.keys(definition.propWeights).length === 0) break;
+      const dressingAssetId = chooseWeightedAsset(random, definition.propWeights);
+      placeAssetInTheme(
         placements,
-        assetId,
+        dressingAssetId,
         theme,
         seed,
         random,
         roads,
         districts,
+        waterAreas,
         spawn,
-        2600,
+        420,
       );
-      if (!placed)
-        throw new Error(`Could not place required ${theme} asset "${assetId}" for seed "${seed}"`);
-    }
-
-    const dressingCount = Math.round(definition.density * 1.5);
-    for (let index = 0; index < dressingCount; index += 1) {
-      if (Object.keys(definition.propWeights).length === 0) break;
-      const assetId = chooseWeightedAsset(random, definition.propWeights);
-      placeAssetInTheme(placements, assetId, theme, seed, random, roads, districts, spawn, 420);
     }
   }
 }
@@ -1120,6 +1237,16 @@ export function generateWorld(seed: string): WorldData {
       landmark.variant,
     );
   addUrbanSetPiece(placements, resolvedSeed, districts, roads, canonicalSpawnPoint);
+  addRequiredThemeAssets(
+    placements,
+    resolvedSeed,
+    roads,
+    districts,
+    waterAreas,
+    landmarks,
+    canonicalSpawnPoint,
+    true,
+  );
   addDistrictBuildings(placements, resolvedSeed, roads, districts, landmarks);
   addForestProps(placements, resolvedSeed, roads, districts, landmarks);
   addMilitarySiteDressing(placements, resolvedSeed, districts, roads);
@@ -1128,6 +1255,7 @@ export function generateWorld(seed: string): WorldData {
     resolvedSeed,
     roads,
     districts,
+    waterAreas,
     landmarks,
     canonicalSpawnPoint,
   );
@@ -1352,10 +1480,28 @@ export function validateWorld(world: WorldData): string[] {
     (count, placement) => count + getAsset(placement.assetId).interactionPoints.length,
     0,
   );
-  if (world.accessPoints.length !== expectedAccessPoints)
-    issues.push(
-      `only ${world.accessPoints.length} of ${expectedAccessPoints} authored interaction points have clear approaches`,
+  if (world.accessPoints.length !== expectedAccessPoints) {
+    const missingAccessPoints = world.placements.flatMap((placement) =>
+      getAsset(placement.assetId)
+        .interactionPoints.filter(
+          (point) =>
+            !world.accessPoints.some(
+              (accessPoint) =>
+                accessPoint.assetId === placement.assetId &&
+                Math.abs(accessPoint.placementX - placement.position.x) < 0.05 &&
+                Math.abs(accessPoint.placementZ - placement.position.z) < 0.05 &&
+                accessPoint.pointId === point.id,
+            ),
+        )
+        .map(
+          (point) =>
+            `${placement.assetId}:${point.id}@${placement.position.x.toFixed(1)},${placement.position.z.toFixed(1)}`,
+        ),
     );
+    issues.push(
+      `only ${world.accessPoints.length} of ${expectedAccessPoints} authored interaction points have clear approaches (missing: ${missingAccessPoints.join(', ')})`,
+    );
+  }
   for (const accessPoint of world.accessPoints) {
     const placement = world.placements.find(
       (entry) =>
