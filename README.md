@@ -40,11 +40,15 @@ The backpack has an 8×6 grid, with the scout shown on the left. Drag shaped ite
 
 The scrap hut and two large, overlapping scrap piles are along the east edge of camp, clear of the chopper pad. Speak with the worker there to break scrap items into weightless scrap currency, then exchange five scrap for ten credits. Scrap items cannot be sold. The food stand near the west path buys and sells all eight food items for credits; food has no consumption effect yet. Both vendors use the same backpack grid, so a purchase needs a fitting space. Simple glyphs and colored tiles stand in for later item sprites.
 
+## Current project status
+
+Phases 1–13 are accepted. Phase 14 is open for revisions after owner feedback about dead-zombie despawning and far-tier visuals; the current revision removes defeated agents from rendering and uses cylinder instances for the far horde tier. Phase 15, dormant horde and noise awareness, is planned after Phase 14 acceptance. Phase 16, combat feedback and field interaction polish, is planned after Phase 15; it covers hit effects, pickup UI, sprint/adrenaline, pointer lock, explosive barrels, blood trails, tests, and moving the lowest world-asset LOD transition to 120 m. Phase 7 closed on 2026-10-01 after the approved-catalog LOD rollout and desktop performance review; phone testing is deferred until later. Implementation details and acceptance history are in `tracker.md`.
+
 The compact HUD at the bottom center shows health as a red ring and Q/W/E/R/G abilities with cooldown timers. Third-person slot keys display as 1/2/3 to match the field controls. The current camera view is listed in the right-side dev telemetry panel; the left controls panel lists **Tab** for switching views.
 
 Depart from the operations board, camp terminal, or chopper. The camera follows the inbound chopper; after it hovers, the scout rappels down automatically and controls unlock on landing. The chopper lowers a rope again for extraction, lifts the scout aboard, and flies out. Search a cache with F when close or left-click its crate; collect the revealed pickups with F or by clicking them. Top-down clicks on distant loot set a route. Recover at least one cache item before the chopper clears extraction. Gear, supplies, and fuel use carrying capacity; credits do not. X consumes a carried medical supply to restore up to 35 health. F boards when you are in the landing ring and no hostile is close; hold position for four seconds while the chopper is vulnerable to interruption.
 
-The extraction arrow and distance remain on screen during the run. A radio warning arrives before each small reinforcement wave, leaving time to head back. You can extract at any time. The camp quartermaster sells gear and medical supplies, and can install a one-time cargo harness upgrade. One gear kit and one medical supply are taken from camp at deployment if available. Banked items and shop purchases are saved in browser storage; carried items are lost on death.
+The extraction arrow and distance remain on screen during the run. A run begins with 20 infected spread across the map; one more joins every two seconds while you remain outdoors. They begin closing in after the insertion grace period, and the outdoor horde and spawn clock pause while you scavenge inside a building. The field HUD shows living and spawned counts. Near and mid hostiles use the shared multipart model; far hostiles use a simple cylinder LOD. Defeated hostiles disappear from the rendered scene. You can extract at any time, but nearby hostiles interrupt boarding. The camp quartermaster sells gear and medical supplies, and can install a one-time cargo harness upgrade. One gear kit and one medical supply are taken from camp at deployment if available. Banked items and shop purchases are saved in browser storage; carried items are lost on death.
 
 Building doors become usable during an active run. Press **F** or click a door, then use **F** or the lit exit marker to return to the same outdoor position. The generated 2–4 room layout, loot, and infected encounter repeat for that building and world seed. Collected interior loot and defeated infected remain cleared for the rest of that run. The outdoor horde and run timer pause while inside; player health and ability cooldowns continue normally.
 
@@ -117,107 +121,14 @@ The game builds authored models from Three.js geometry and materials in TypeScri
 
 To preview the reference models and top-level `candidate-*.ts` drafts, start `npm run dev` and open `/unapproved-assets/viewer.html`. Drag to orbit, scroll to zoom, and use the X/Y/Z sliders to move the directional key light. The exact gameplay scout model is shown beside each asset by default; toggle it or adjust its safe distance from the asset center. The page uses the game's base camp renderer settings and daylight; it omits gameplay weather and effects. Refresh after adding a candidate module.
 
-## Phase 3 playtest checklist
+## Phase 7 performance result
 
-1. Run `npm run dev`; confirm the camp panel shows stored gear, supplies, credits, fuel, and the deployment button.
-2. Start a run. Confirm the camera follows the chopper in, it hovers, the rope drops, and the scout reaches the ground before controls unlock. The camera should transition smoothly to the on-foot view without a blocking arrival menu.
-3. Follow the extraction arrow, search a cache, collect pickups, and check that the cargo counter changes. Fill capacity and confirm further weighted pickups remain available; credits should not use capacity. Use X while injured and verify a carried supply is consumed.
-4. Return to the chopper and press F. Confirm boarding requires the landing ring and nearby hostiles interrupt it. Complete the four-second boarding and takeoff; check that cargo is banked at camp.
-5. Start another run and let a hostile kill the scout. Confirm carried loot is lost, prior camp resources remain, and returning to camp enables another deployment.
-6. Buy supplies and the harness; reload the page and confirm base inventory and upgrade persist. Verify a new seed changes cache layout reproducibly, then check resize, focus loss, and mouse capture/release.
+Phases 1–13 are accepted. The owner closed Phase 7 on 2026-10-01 after adding three distance-based LOD tiers to every approved world-catalog asset and reviewing performance in a 20-minute session.
 
-## Phase 4 playtest checklist
+On the reported desktop (Ubuntu Linux, Intel Core i5-3570K @ 3.40 GHz, Nvidia GTX 1650 4 GB, 16 GB RAM, Firefox latest), FPS was mostly above 50. In the heaviest combination—10,000-agent horde plus the busiest asset area—it was typically 40+ FPS, with two brief dips to 35. Before LOD, the owner's short-window estimates were third person ~40/~18/~18–35 and top-down ~38/~30/~24 FPS for empty/wide/10k views.
 
-1. Start the game with `PHASE4-00` through `PHASE4-03`; these four regression seeds cover every city/forest orientation. Reload each seed and confirm its layout repeats.
-2. Compare the map directions: city blocks and forest must both remain present, their sides should rotate by seed, and terrain color should follow the generated districts. Local streets, trails, tree cover, loot regions, and landmarks should remain readable.
-3. Confirm the chopper can land and disembark into a clear area. Visit the landmark approaches and at least one cache from each visible region; the extraction guide should remain usable from the longest route.
-4. Report any blocked cache, landmark, landing zone, visually crowded street, or seed that repeats another map's route shape.
+The LOD levels switch at 58 m and 200 m with 12% hysteresis. Pine trees and burned-tree clusters retain hand-authored low models; other approved assets generate low and very-low models from their detailed variants. Very-low models simplify round primitives, filter small details, merge compatible indexed geometry by material, and do not cast shadows. Fog and draw distance were unchanged.
 
-## Phase 5 playtest checklist
-
-1. Start a run, disembark, and switch to top-down view. Right-click open ground and confirm the route follows walkable ground; a new right-click should replace it.
-2. Press Escape during an active route and confirm the route clears. Switch to third person and back, then confirm an unfinished route resumes from the player's current position.
-3. Click a cache or pickup from beyond interaction range. The scout should approach a clear position and search or collect without requiring a second click. Use F nearby and confirm the same approach behavior.
-4. Try destinations in a dense city block and around narrow passages. The scout should not cut through buildings or repeatedly oscillate; an unreachable destination should report that clearly.
-5. Let hostiles begin moving while following a route. Check that distant moving hostiles cause a detour when needed, the route recovers after a dash, and combat pursuers keep moving normally.
-6. Read the path timing and route status in the development telemetry. Report any route that stalls, ends outside interaction range, or takes an unexpectedly long time to calculate.
-
-## Phase 6 playtest checklist
-
-1. From camp, open **Horde Simulation Lab**. Try 100 agents first, then start 10,000 with a memorable seed and each spawn pattern. Confirm the same seed and pattern restore the same initial layout.
-2. Try both camera modes. In third person, walk with WASD and look around; in top-down mode, right-click to route around buildings. Confirm the agents close in without passing through static obstacles.
-3. Watch the near/mid/far counts shift as agents approach. Check nearest-target distance, simulation step time, and player health/attack count; nearby agents should reach and attack the player. Click a visible agent to damage it and confirm its health/identity persists until defeated.
-4. End the scene and repeat the same seed and pattern. Run the 100/1,000/5,000/10,000 benchmark twice and note mean and p95 simulation-step cost for each count.
-5. Report whether the crowd reads as growing pressure, whether tier changes look continuous, and any visible bunching, blocked groups, or unexpected state changes.
-
-## Phase 8 playtest checklist
-
-1. Start a run and approach a city building. Confirm its front door shows the enter prompt; try both **F** and clicking the door from outside interaction range in top-down view.
-2. Enter and verify the interior has 2–4 rooms, clear door openings, visible furniture, loot, and an infected encounter. Move with WASD in third person and route with right-click in top-down view.
-3. Switch camera views indoors and confirm the selected view, player heading, collision, and controls remain predictable. Try a route through each room and around furniture.
-4. Collect an item and clear the infected, then exit. Confirm the scout returns to the same outdoor position and the horde/run clock resume. Re-enter the same building and check that collected loot and defeated infected stay cleared.
-5. Change the world seed from camp and revisit a building. Confirm its interior repeats from that seed and that the run remains playable after leaving it.
-
-## Phase 9 playtest checklist
-
-1. Open **Asset Bench** from camp. Select the building shell and a prop; orbit each preview, zoom with the wheel, and compare **Near** and **Far** camera views.
-2. Choose a new material color in the OS color picker and press **Select**. Confirm the color swatch and 3D preview update. Then edit collision size and a building interaction point.
-3. Set a dimension outside the allowed range and confirm the validation message appears and JSON save/game actions are disabled. Restore a valid value.
-4. Save the asset JSON, reopen that file, and confirm the edited values return. Use **Try in Game**, start a run, and check the selected asset in the generated field.
-5. Use **Restore Source**, reload the game, and confirm the test override is cleared.
-
-## Phase 10 playtest checklist
-
-1. Explore Wayfarer Camp in both camera views. Walk with WASD and use right-click routes in top-down view; check the gate, fence, guards, service markers, and that paths reach the quartermaster, storage, operations boards, and chopper. Confirm the paired map/notes boards face the approach at their northern interaction point, the tower guard stands clear of the roof, ladder rungs follow the tilted backplate, and some friendly NPCs wander around camp.
-2. Use **F** at the quartermaster, storage, and operations board. Confirm each opens its own trade, inventory, or destination menu. Open **M** and confirm the combined quick terminal remains available. Greywood should be selectable; Military Base and Large City should be visibly unavailable.
-3. Inspect the parked and deployed helicopter from both camera views; check its scale beside characters, confirm a character fits through either open troop door, and verify the transverse benches leave a clear jump-out path. Also check the flush cockpit glazing, side-facing animated tail rotor, skids, and moving main rotor at camp and field distances.
-4. Enter and leave the barracks and clinic. Check that the interior is navigable in both views and returning to camp preserves the view and position without starting or advancing a field run.
-5. Buy field gear and supplies, sell carried items, and install the cargo harness. Confirm prices and affordability messages, one-time upgrade behavior, stock display, and saved credits/stock after a reload.
-6. Deploy through the board or chopper. Confirm Greywood remains free, the starting kit follows saved camp stock, extraction banks returned cargo, and death loses carried cargo while stored camp resources remain safe.
-
-## Phase 11 playtest checklist
-
-1. At camp, press **O**. Check that seeded lighting and weather are selected by default, then choose **Low sun** and **Clear** and deploy. Note the scene's orientation/readability and confirm the displayed sky preset stays fixed during the run.
-2. Return to camp, choose **High moon** and **Mist**, deploy again, then repeat with **Rain & distant thunder**. Check the map remains readable, irregular world-space fog banks drift slowly across the map without visible sphere boundaries, distant haze softens the horizon, fog scatters light, varied rain puddles catch highlights, rain stays outdoors, and thunder is distant and restrained.
-3. In a regular encounter, fire the rifle and use Q dash, hold/release W or 1 to place a turret, cancel turret previews with either mouse button, and aim E or 2 artillery at the cursor. Check the warning circle, explosion, smoke, and 10-second scorch decal. Throw grenades with G until the carried count reaches zero, then check that an extra press cannot throw. Use R or 3 for adrenaline. Try the same actions after enabling reduced motion and reduced flashes.
-4. Toggle rain particles and audio cues separately during an active run. Confirm each option takes effect immediately. Set a new lighting/weather preset during that run; it should not change until the next deployment.
-5. Adjust impact shake from 0% to a comfortable value. Reload the page and confirm options persist; if the operating system requests reduced motion and no saved choice exists, confirm the reduced-motion default is respected.
-6. Open **Horde Simulation Lab**, start 10,000 agents, and inspect weather/effects with diagnostics visible. Record browser, viewport, camera, frame-time p95, JS/GPU timing, draw calls, triangles, heap, and active effects. Compare stress and normal scenes; report stutter, visual obstruction, discomfort, or audio issues.
-
-## Phase 13 playtest checklist
-
-1. Start Greywood with `PHASE13-00` through `PHASE13-03`. Confirm all six regions appear in each map and rotate through the four seed orientations. Reload each seed and compare the terrain, roads, water edge, landmarks, and prop positions.
-2. Visit the city wrecks/store plus the row house, substations, water plant, rooftop tank, scrap station, and street lights; the forest lookout, ranger cabin, rock, timber, platform, weather hut, and pylon; the farm tractor and pumpjack; the military radar, checkpoint, and barricade; the coastal crane and containers; and the camp generator and abandoned substation. Check both camera views and confirm each appears in its intended theme.
-3. Walk to each landmark approach and authored door or service point. Check the barn, silo, hangar, lighthouse, crane, water plant, lookout tower, cabin, tent, tractor, generator, checkpoint, and service props for blocked approaches or overlapping collision boxes.
-4. Follow caches across the themed areas and verify each route is reachable from the chopper. Report any set piece on a road, in the water, outside its district, or crowding an entrance or approach.
-
-## Combined Phase 10 + 11 owner playtest (in progress)
-
-The owner is playtesting Phase 10 and Phase 11 together. Both phases remain **Revisions needed**, not accepted. Complete the two checklists above in one review, then record one owner result for each phase in `tracker.md`.
-
-For the camp/economy portion, explore the hub in both camera views; visit each service and enter/exit both camp buildings; verify the quick terminal and locked destinations; buy and resell gear/supplies; and install the one-time cargo harness when funds allow. Reload and verify stock, credits, upgrade state, and atmosphere options. Then deploy to Greywood, play and extract once, and confirm banked cargo survives while a later death loses only carried cargo. Finish with the Phase 11 preset/accessibility/audio/effect checks above. Phase 7's reference hardware remains unspecified, so report the browser and machine with performance observations.
-
-The regular encounter is intentionally capped at seven hostiles. For Phase 6, open **Horde Simulation Lab** from camp or the dev telemetry button. Choose 100, 1,000, 5,000, or 10,000 agents; set a spawn seed, layout, and camera; then start the isolated stress scene. WASD movement and top-down click-to-move let the horde pursue the player. The lab shows near/mid/far tier counts, the nearest-agent query, player attacks received, and simulation time. End the scene to return to camp.
-
-The lab benchmark measures fixed 1/60-second simulation steps after eight warm-up steps, using 36 samples per count. Spawn creation, rendering, world construction, and UI are excluded. Two local runs in the Codex in-app browser at a 640×697 preview viewport, using seed `PHASE6-SMOKE` and the Eight clusters pattern, measured:
-
-| Agents | Run 1 mean / p95 (ms) | Run 2 mean / p95 (ms) |
-| -----: | --------------------: | --------------------: |
-|    100 |         0.011 / 0.100 |         0.008 / 0.100 |
-|  1,000 |         0.108 / 0.700 |         0.078 / 0.500 |
-|  5,000 |         0.792 / 4.800 |         0.586 / 4.300 |
-| 10,000 |        1.547 / 11.300 |        1.517 / 11.900 |
-
-These are simulation-only preview measurements; browser scheduling changes individual samples. The owner later reported a successful 10,000-enemy playtest at stable 60 FPS and 17 ms or less per frame. That owner-observed result is not a hardware profile; browser and hardware were unspecified.
-
-## Phase 7 performance profile
-
-The development telemetry reports the rolling FPS, p95 request-animation-frame interval, p95 JavaScript frame work, fixed simulation work per frame, current camera and canvas size, draw calls and triangles, active effects, navigation timing, and scene seed. GPU p95 uses `EXT_disjoint_timer_query_webgl2` when the browser exposes it; otherwise it reads `N/A`. Heap size uses Chromium's optional JavaScript heap API. Geometry and texture values are renderer object counts, not GPU memory in bytes. `INSTANCE SYNC` in the Horde Lab measures CPU time and changed-agent count for preparing the instanced transforms.
-
-For a profile, record the browser/OS and hardware, canvas dimensions and pixel ratio, seed/pattern, agent count, camera, and whether a regular run or the stress scene is active. Check a regular field run and the 10,000-agent scene in both camera modes, repeat each measurement, and end/restart the stress scene several times to check that heap and renderer object counts settle. The rendering counters are camera-specific, so read them after each view is selected. Compare the p95 interval with the frame-rate target; JavaScript and GPU timings describe work inside their respective clocks and do not include browser compositing.
-
-The first steady-state local preview baseline was recorded in the Codex in-app browser while at camp, third-person, with a 1280×720 canvas at 1.00× pixel ratio: 60 FPS, 16.7 ms p95 frame interval, 4.40 ms p95 JavaScript work, 0.00 ms mean fixed-update work per frame (rounded to two decimals), 4.66 ms p95 GPU time, 468 draw calls, 17,490 triangles, 23 MB JavaScript heap, 111 geometries, and 3 textures. This is an idle camp baseline, not a normal active run or stress-scene profile. The browser host and GPU are not exposed, so final targets remain open until measurements are repeated on the agreed reference machine.
-
-Phase 7 updates the horde instance buffers only when an agent's transform, health scale, life state, or tier color changes. Sparse changes use merged instance-buffer update ranges; dense changes fall back to a full buffer update. This avoids rebuilding and uploading all 10,000 transforms on every display frame. Use the live `INSTANCE SYNC` and frame/GPU telemetry to check the effect on the owner machine.
+Phone testing remains deferred. The owner has not reported a phone performance result.
 
 Save data uses schema version 1 under the `last-light-save` browser storage key; invalid or unreadable data loads safe default camp supplies.

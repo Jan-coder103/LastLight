@@ -22,7 +22,7 @@ The game should feel responsive before it becomes large. Each phase below ends i
 
 1. A new player can complete a run: arrive, move, loot, fight or evade, find the chopper, extract, and see recovered items at base.
 2. Switching cameras feels continuous and never changes the underlying simulation or control ownership unexpectedly.
-3. The horde benchmark can spawn and track 10,000 agents without a crash; the phase 7 performance gate records frame time, simulation time, draw calls, memory, and hardware/browser used. A provisional goal is 60 FPS in normal runs and at least 30 FPS in the stress scene on an agreed reference desktop. Set the actual reference machine and final limits after the first benchmarks.
+3. The horde benchmark can spawn and track 10,000 agents without a crash. Phase 7 recorded desktop performance and applied distance-based LOD; future profiling may add frame-time, simulation, draw-call, memory, and hardware/browser detail if needed.
 4. Generated runs are reproducible from a seed, including map layout and initial loot placement. Random events after start can use a separately recorded seed.
 5. Every phase can be launched, tested, and playtested independently. Broken acceptance criteria remain open in the tracker.
 
@@ -34,7 +34,7 @@ One city–forest map, one chopper, one player, a small set of loot and weapons,
 
 ### Later content, after the core loop and performance gates
 
-Military base and large city maps with fuel costs; mutated animals, giant spiders, janky robots, human survivors, and bandits; gates and fences; exploding barrels; blood trails; a companion bot; a noise/discovery meter; rain puddles and wet-ground reflections. These are candidate milestones in the backlog, not hidden requirements for earlier phase acceptance.
+Military base and large city maps with fuel costs; mutated animals, giant spiders, janky robots, human survivors, and bandits; gates and fences; a companion bot; rain puddles and wet-ground reflections. These are candidate milestones in the backlog, not hidden requirements for earlier phase acceptance. Noise awareness, exploding barrels, and combat/readability feedback are scoped in Phases 15 and 16.
 
 ## Proposed technical shape
 
@@ -130,37 +130,19 @@ Status vocabulary: **Not started**, **In progress**, **Awaiting owner playtest**
 1. Profile CPU, GPU, memory, draw calls, pathfinding, particles, and camera-specific visibility. Optimize the measured bottleneck first.
 2. Apply instancing/batching, simplified materials and animation, distance tiers, culling, reduced updates, and optional impostors/sprites where quality holds up.
 3. Set draw distance and fog based on visual and measured needs. Reuse assets with color/orientation variants only when it actually improves cost or visual variety.
-4. Measure normal runs and stress scene on the reference machine in both camera modes; log known tradeoffs.
+4. Review desktop performance and visual quality in representative gameplay; record any known tradeoffs.
 
-**Acceptance:** normal play meets the final agreed frame-time target, stress scene meets its separate target, memory stays stable during repeated runs, and both camera modes remain readable. If a numeric target is missed, keep the phase open with a measured revised plan. Owner playtests appearance and responsiveness.
+**Acceptance:** the owner confirms the desktop performance and visual quality are acceptable after the rendering changes. Additional per-case profiling or mobile validation can be scheduled later without holding this phase open.
 
-### Phase 7 follow-up — broad-view and mobile performance (reopened 2026-09-29)
+### Phase 7 performance review — accepted 2026-10-01
 
-On the reference desktop, the owner reports approximate few-second FPS-counter means for empty scene / corner-to-corner view / 10,000-agent horde: third person ~40 / ~18 / ~18–35 FPS (location dependent), and top-down ~38 / ~30 / ~24 FPS. These are the initial comparison baseline, not p95 measurements; do not ask the owner to rerun the unchanged build. The owner supplied Firefox (latest version; exact version unknown) and a 1920×1080 display resolution, but the game canvas/backing resolution, pixel ratio, seed, camera path, and comparable telemetry are not recorded. GPU time and heap showed N/A in the reported telemetry. The current dev panel labels its GPU metric P95, queries `EXT_disjoint_timer_query_webgl2`, and reads heap through optional `performance.memory`; establish whether either API is unsupported or simply has no available sample before interpreting N/A. The reference desktop is Ubuntu Linux with an Intel Core i5-3570K at 3.40 GHz, GeForce GTX 1650 4 GB, and 16 GB RAM; a second laptop has a newer CPU and reportedly similar performance, but its specifications are unknown. The product should also run in a recent mobile browser on a device in the Pixel 10a class, but phone testing is deferred until later.
+Reference desktop: Ubuntu Linux, Intel Core i5-3570K at 3.40 GHz, Nvidia GTX 1650 4 GB, 16 GB RAM, Firefox latest as reported, 1920×1080 display. After the three-tier approved-catalog LOD rollout, the owner reports FPS mostly above 50; the busiest map area with 10,000 agents is typically above 40 FPS, with two brief dips to 35 during a 20-minute session. The owner accepts Phase 7 as complete and closed on 2026-10-01. Earlier camera-specific means are retained in the tracker as historical pre-LOD context.
 
-**Provisional goals:** desktop normal play should sustain 60 FPS (16.7 ms frame interval p95), and the 10,000-agent stress scene should sustain at least 30 FPS (33.3 ms p95). For a Pixel 10a-class phone, the provisional normal-play goal is at least 30 FPS using adaptive quality; actual phone testing and a firm mobile gate are deferred until a device is available. The owner shared a CPU Monkey comparison that ranks Tensor G4 above the i5-3570K in its aggregate single/multi-core scores; that synthetic comparison does not predict this game's browser frame rate. The 10,000-agent benchmark on phones remains a separate decision.
+The LOD path has three levels at 0/58/200 m with 12% hysteresis. Pine trees and burned-tree clusters use hand-authored lower-detail models; other approved assets generate low and very-low visuals from the detailed selected variant. Very-low geometry uses at most three round-primitive segments, a 0.45 m default feature cutoff plus per-asset filters, material merging with indexed geometry, and no cast shadows. Fog and draw distance remain unchanged. No assets in `unapproved-assets/` are included.
 
-**Optimization sequence:**
+Phone testing remains deferred and is not part of the completed desktop phase. If future performance work is prioritized, collect more detailed profiling and a phone profile as useful diagnostics; these are follow-ups, not remaining Phase 7 acceptance requirements. Optional profiling notes are tracked separately in `tracker.md`.
 
-1. **Preserve the baseline and inspect diagnostics.** Use the supplied FPS readings as the before-state. In code, determine whether the GPU timer extension is present and whether queries are pending, disjoint, or producing samples; make the telemetry distinguish those states instead of a generic N/A where possible. Firefox may not expose the optional JavaScript heap API, so treat Three.js geometry/texture counts as the available object-count signal. The panel already reports the actual drawing-buffer resolution and pixel ratio, JS-frame p95, simulation time, draw calls, triangles, active effects, and horde instance-sync time.
-2. **Classify the broad-view loss before choosing an optimization.** The wide view is ~18 FPS in third person versus ~30 FPS top-down, while the empty-scene readings are similar (~40/~38). This points to camera-dependent scene/render work as a useful first lead, not a proven cause. Compare existing counters for the two views and inspect per-placement scene construction: `buildWorld.ts` deep-clones an authored object hierarchy for each placement. If draw-call/scene traversal cost is high, prototype batching repeated static geometry/material pairs or spatially grouped scenery; preserve unique doors, landmarks, colliders, shadows, and interaction identity. If pixel/render cost dominates, test render scale, shadow coverage, and effects instead.
-3. **Handle the 10,000-agent result as its own case.** The horde is already a single `InstancedMesh`, but `frustumCulled` is disabled. If its render or sync cost is significant, split the visual batch into spatially bounded chunks and verify that off-screen chunks are culled without changing simulation IDs, tier updates, visible-agent targeting, or results. Keep horde simulation cost separate from rendering cost.
-4. **Change one measured cost at a time.** Candidate follow-ups are static world instancing/batching, spatial visibility chunks, distance-based detail, smaller/tighter shadows, reduced fog/rain/post effects, and a capped/adaptive render scale. Current renderer settings include a 2048×2048 shadow map and a device pixel ratio cap of 2; only change these if the counters or an isolated A/B show a gain.
-5. **Compare only after a code change.** Then rerun the same empty scene, corner-to-corner view, normal run, and 10,000-agent horde in both camera modes with the same browser, resolution, pixel ratio, seed, weather, and camera path. Use longer captures than the initial few-second means and record FPS plus frame-interval p95, JS-frame p95, available GPU P95, simulation and instance-sync time, draw calls, triangles, and object counts. Keep or revert the change based on measured gain and visual/readability checks. Phone measurement is a later follow-up.
-
-Keep Phase 7 **Revisions needed** until the broad-view and 10,000-agent targets are met on the reference desktop and the owner accepts the retest. The current baseline is captured; no further owner run is needed until a code change is ready for comparison. Actual phone testing is deferred by the owner and does not block this desktop performance gate; keep the mobile target explicitly unverified and complete that separate follow-up before claiming mobile performance support. If the desktop goals prove impractical, agree revised limits from repeatable measurements and record the decision here before closing the phase.
-
-### Phase 7.1 — Approved catalog LOD rollout (in progress)
-
-**Goal:** reduce distant world-render work while keeping close asset quality, map readability, collision, and interactions intact.
-
-1. Provide far representations for every approved asset in `assetCatalog`, and do not add assets from `unapproved-assets/`. Pine trees and burned-tree clusters keep their hand-authored 58 m models; remaining assets use a fallback generated from the selected asset variant.
-2. Add an ultra-far representation starting at 200 m, generated from each selected detailed asset variant. Cap cylinder/cone/toroid roundness at three segments, spheres at 3×2 segments, omit parts under 0.25 m, merge compatible geometry by material, and disable its shadow casting. Keep the 58 m tier's 0.08 m cutoff and hand-authored models intact.
-3. Keep each placement's transform, identity, collision, interaction points, and close-range model. Building interaction IDs remain on the near model. LOD uses player-to-asset distance with 12% hysteresis at the 58 m and 200 m switches; tune these values only after checking both camera modes.
-4. Compare asset LOD separately from other changes such as spatial culling, shadow changes, fog, and render scale. Keep the current fog and draw distance unchanged unless an isolated measurement shows otherwise.
-5. Compare normal and broad views on the reference desktop and check transitions, landmarks, threats, and routes in both cameras before claiming a performance gain.
-
-**Acceptance:** measured broad-view draw-call and JavaScript-frame costs improve on the reference desktop; all three detail levels transition unobtrusively; both camera modes preserve landmark, threat, and route readability; and repeated world rebuilds release all LOD levels cleanly. The owner reviews the visual changes before marking this follow-up accepted.
+**Acceptance record:** owner accepted Phase 7 and closed its rendering/performance gate on 2026-10-01 after the reported 20-minute LOD session. Phone testing is explicitly deferred; more detailed profiling can be considered later if needed.
 
 ## Phase 8 — Enterable buildings
 
@@ -188,9 +170,11 @@ Keep Phase 7 **Revisions needed** until the broad-view and 10,000-agent targets 
 
 1. Build the gated camp, guards, towers, friendly NPCs, and a few enterable buildings.
 2. Place shops, inventory/storage, upgrades, mission/map selection, and chopper departure in the world. Preserve a quick path through these actions.
-3. Keep the city–forest run free. Show future destinations as unavailable until their maps exist; then add fuel-cost selection, starting with military base and then large city.
+3. Add a shaped backpack shared between camp and field, with drag placement, ground drop/pickup, equipment selection, and persistent extraction/death rules. Keep camp resources and safe-reserve items protected.
+4. Add the scrap yard exchange and food stand as reachable camp services; make vendor purchases respect backpack space and saved credits/scrap.
+5. Keep the city–forest run free. Show future destinations as unavailable until their maps exist; then add fuel-cost selection, starting with military base and then large city.
 
-**Acceptance:** a player can manage gear, buy/sell/upgrade, select an available run, and depart from the hub; persistence and death-loss rules remain correct. Owner playtests navigation and economy friction.
+**Acceptance:** a player can manage and arrange gear, buy/sell/upgrade, use the camp vendors, select an available run, and depart from the hub; the same backpack persists into and out of a run, extraction banks it, and death replaces it with the starter kit without touching banked storage. Owner playtests navigation, item interactions, and economy friction.
 
 ## Phase 11 — Atmosphere and effects
 
@@ -222,7 +206,7 @@ Keep Phase 7 **Revisions needed** until the broad-view and 10,000-agent targets 
 
 1. Define region themes and their eligible buildings, landmarks, and props in authored metadata or a centralized placement table. Keep asset geometry and procedural placement data separate; expose a clear place for per-theme weights, density, and variant selection.
 2. Generate and seed the region layout before placing assets. Give each region a contiguous footprint, meaningful transition edges, roads or trails suited to the theme, and enough room for its landmarks. Preserve seed reproducibility and map rotations.
-3. Populate each region only from its eligible theme pool: city shells, utility plant, street props, and wrecks in urban areas; burned trees, lookout structures, ranger cabin, pylon, timber, and rock in forest; barn, silo, tractor, pumpjack, and wind pump in farm; hangar, helipad, radar, checkpoint, barricades, communication truck, and floodlights in military; lighthouse, dock crane, and containers on the coast; and tent, fire bin, generator, and abandoned substation at survival camps. Use regional landmarks as anchors, then add weighted local dressing.
+3. Populate each region only from its eligible theme pool: city shells, utility plant, street props, and wrecks in urban areas; burned trees, lookout structures, ranger cabin, weather station, pylon, timber, and rock in forest; barn, silo, tractor, pumpjack, and wind pump in farm; hangar, helipad, radar, checkpoint, barricades, communication truck, and floodlights in military; lighthouse, dock crane, and containers on the coast; and tent, fire bin, generator, and abandoned substation at survival camps. Use regional landmarks as anchors, then add weighted local dressing.
 4. Adapt placement clearance and collision validation to asset size, open structures, interaction points, and existing single-box collider limits. Keep spawn, extraction, cache routes, building entrances, and landmark approaches reachable; reject or retry blocked seeds.
 5. Add deterministic tests for region coverage, theme-pool eligibility, same-seed layouts, rotated layouts, collision/overlap limits, and reachable objectives. Add a batch-of-seeds report and update the map preview/docs with each supported theme.
 
@@ -230,9 +214,52 @@ Keep Phase 7 **Revisions needed** until the broad-view and 10,000-agent targets 
 
 **Implementation decision (2026-09-29):** each seeded Greywood run now includes all six themes on the existing 280 m map. The original city–forest route remains central; farm, coastal, field-base, and survival-camp regions form outer routes. All map data rotates through the existing four quarter-turn orientations. The field-base theme does not unlock the separate Military Base destination.
 
-## Backlog after phase 13
+## Phase 14 — Extraction horde pressure
 
-Prioritize by playtest value and measured cost: military-base and large-city destination generation, props, loot, and fuel pricing; explosive barrels with fire/shake; noise meter and discovery radius; fences and interactive gates; blood decals/trails with pooling and limits; companion bot; additional enemy families and survivor/bandit behavior; optimized rain puddles/wet reflections; plane variant. Promote an item to a scoped phase or subphase before implementing it, with acceptance criteria and tests recorded in `tracker.md`.
+**Goal:** make the scalable horde part of a normal extraction run and create rising pressure the longer the scout stays outside.
+
+1. Start an outdoor run with 20 seeded, walkable hostiles distributed across the map; add one more every two seconds while the scout is outside, up to the existing 10,000-agent capacity.
+2. Use the scalable horde simulation for field movement and combat. Preserve the arrival grace period, pause outdoor horde movement and spawn time inside buildings, and resume from the same state on exit.
+3. Route rifle fire, top-down target assist, turret, artillery, grenades, player damage, and extraction interruption through the same hostile state.
+4. Share one zombie design between the Horde Lab, field horde, and building encounters. Keep the detailed model for near/mid agents and use compact cylinder instances for the far tier.
+5. Remove defeated hostiles from the rendered scene and instance pools; do not leave dead models standing on the map.
+6. Show the growing threat in the field HUD and record performance and known limits.
+
+**Acceptance:** an owner can deploy, confirm 20 dispersed hostiles, observe one new hostile every two seconds during outdoor play, and feel the rising pressure; field weapons and abilities can damage the horde; defeated hostiles disappear from play; far agents use the cylinder LOD; extraction remains interruptible by nearby enemies; building visits pause and resume outdoor activity; seeded runs reproduce initial and later spawn locations; and the horde remains readable and performant at the intended desktop target. Owner playtests the full extraction loop.
+
+## Phase 15 — Dormant horde and noise awareness
+
+**Goal:** make distant enemies add to the dread of the map without paying the cost of simulating every agent continuously, then let player noise determine when they focus on the scout.
+
+1. Keep far-away agents dormant at their saved seeded position, health, and identity. Dormant agents do not move or run behavior updates.
+2. Activate agents when the scout enters a defined proximity radius. Active but unaware agents roam locally using seeded random movement, then return to dormancy when the scout leaves the activation area.
+3. Add a player noise meter driven by loud actions. Its current level defines the radius where enemies can notice, investigate, and gain focus on the scout; separate that awareness radius from the proximity radius used to activate simulation.
+4. Preserve near/mid detailed rendering, the far cylinder LOD, stable targeting, and horde capacity while agents change between dormant, roaming, aware, and focused states.
+5. Tune the transition ranges, noise decay, and response timing in a playable extraction run so quiet travel feels tense and loud play pulls pressure toward the player.
+
+**Acceptance:** the same seeded run preserves distant agents while dormant; nearby agents wake and roam without immediately homing in; loud actions expand enemy awareness and pull focused enemies toward the scout; quieting down lets focus decay; building entry still pauses outdoor activity; and the owner playtests the stealth-to-horde pressure loop and its performance.
+
+## Phase 16 — Combat feedback and field interaction polish
+
+**Goal:** make hits, pickups, movement, and cursor behavior more readable and responsive while keeping effects lightweight at horde scale.
+
+1. Add pooled, low-cost blood particles when a shot hits an enemy, a subtle hit flash on the struck enemy, and a small directional knockback that does not launch enemies or break navigation. Audit artillery ground-impact feedback: retain the existing slight camera shake if confirmed; add it only if missing. Respect reduced-motion and shake-intensity settings.
+2. Add pooled and capped low-poly ground blood trails behind shot-wounded enemies as they move; each mark fades out after 10 seconds. Disable trail creation when more than 500 living enemies are present, and re-enable it only after the count drops below 100.
+3. Add a pickup prompt above an item only inside its pickup range. Style it as an **F** keycap and animate its press state when F is used to collect the item.
+4. Add hold-Shift sprinting. Increase adrenaline's current +50% movement-speed bonus by about three times, targeting a +150% bonus (2.5× base speed); tune duration and handling so it combines predictably with sprinting.
+5. Add a compact pickup feed beside the character HUD. Append pickups at the bottom; keep each entry visible for three seconds, then fade it out and remove it. When an older entry leaves, move newer entries up while preserving their FIFO order.
+6. In third-person, request pointer lock automatically when the browser permits it. Escape or one Ctrl press unlocks; clicking the game scene relocks, while clicks on HUD controls do not. Keep a clear fallback when browser policy denies pointer lock.
+7. Add an approved low-poly explosive-barrel asset with detailed, low, and very-low LODs. A shot starts two visible red blinks over a two-second fuse, then triggers the shared artillery explosion and damage effect.
+8. Move the lowest approved world-asset LOD transition from 200 m to 120 m; preserve the middle transition at 58 m and its existing hysteresis. Cover the new threshold in transition tests.
+9. Add automated regression tests for effect lifetimes/pooling, hit feedback and knockback, artillery impact shake and accessibility settings, pickup-prompt range/press animation, sprint/adrenaline speed combination, pickup-feed FIFO/fade timing, pointer-lock eligibility and HUD exclusions, barrel fuse/blinks/explosion/damage/LOD, blood-trail expiry and the 500/100 hysteresis, and the 120 m world LOD boundary. Run the tests and build, then smoke-test both camera modes and the full pickup/combat flow in a browser.
+
+**Acceptance:** all features above work in both camera modes; controls remain responsive through pointer-lock changes; effects stay within the particle/trail budgets and obey accessibility settings; barrel timing and blast behavior are deterministic; the world LOD switches at the approved distances; automated tests and build pass; and the owner playtests combat readability, pickups, sprint/adrenaline, barrels, and performance.
+
+**Tuning note:** “three times the current adrenaline boost” is interpreted as tripling the current +50% bonus to +150%, for 2.5× base movement speed. Confirm the feel during the owner playtest before acceptance.
+
+## Backlog after phase 16
+
+Prioritize by playtest value and measured cost: military-base and large-city destination generation, props, loot, and fuel pricing; fences and interactive gates; companion bot; additional enemy families and survivor/bandit behavior; optimized rain puddles/wet reflections; plane variant. Promote an item to a scoped phase or subphase before implementing it, with acceptance criteria and tests recorded in `tracker.md`.
 
 ## Open choices to settle during implementation
 
