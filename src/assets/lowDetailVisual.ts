@@ -1,4 +1,5 @@
 import {
+  Box3,
   BufferGeometry,
   ConeGeometry,
   CylinderGeometry,
@@ -11,7 +12,7 @@ import {
   Vector3,
   type Material,
 } from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 type GeometryParameters = Record<string, number | boolean | undefined>;
 
@@ -23,8 +24,12 @@ interface DetailProfile {
   torusRadialSegments: number;
   torusTubularSegments: number;
   minimumFeatureSize: number;
+  minimumThickness?: number;
+  preserveThinFeatureSpanRatio?: number;
   label: 'low' | 'very-low';
 }
+
+type VeryLowDetailTuning = Partial<Omit<DetailProfile, 'label'>>;
 
 const LOW_DETAIL_PROFILE: DetailProfile = {
   cylinderSegments: 5,
@@ -44,8 +49,54 @@ const VERY_LOW_DETAIL_PROFILE: DetailProfile = {
   sphereHeightSegments: 2,
   torusRadialSegments: 3,
   torusTubularSegments: 3,
-  minimumFeatureSize: 0.25,
+  minimumFeatureSize: 0.45,
   label: 'very-low',
+};
+
+const VERY_LOW_DETAIL_TUNING: Record<string, VeryLowDetailTuning> = {
+  'dry-dock-crane': {
+    minimumFeatureSize: 1.8,
+    minimumThickness: 0.14,
+    preserveThinFeatureSpanRatio: 0.4,
+  },
+  'electrical-substation': {
+    minimumFeatureSize: 1.2,
+    minimumThickness: 0.1,
+    preserveThinFeatureSpanRatio: 0.35,
+  },
+  'abandoned-substation': {
+    minimumFeatureSize: 1.2,
+    minimumThickness: 0.1,
+    preserveThinFeatureSpanRatio: 0.35,
+  },
+  'fire-lookout': {
+    minimumFeatureSize: 0.8,
+    minimumThickness: 0.11,
+    preserveThinFeatureSpanRatio: 0.4,
+  },
+  'radar-dish': {
+    minimumFeatureSize: 0.9,
+    minimumThickness: 0.12,
+    preserveThinFeatureSpanRatio: 0.35,
+  },
+  'water-treatment-tanks': {
+    minimumFeatureSize: 1.1,
+    minimumThickness: 0.13,
+    preserveThinFeatureSpanRatio: 0.35,
+  },
+  'cargo-containers': {
+    minimumFeatureSize: 1.25,
+    minimumThickness: 0.18,
+    preserveThinFeatureSpanRatio: 0.3,
+  },
+  'aircraft-hangar': {
+    minimumFeatureSize: 1.3,
+    minimumThickness: 0.2,
+    preserveThinFeatureSpanRatio: 0.3,
+  },
+  'wind-pump': {
+    minimumFeatureSize: 0.75,
+  },
 };
 
 function simplifyPrimitive(geometry: BufferGeometry, profile: DetailProfile): BufferGeometry {
@@ -108,10 +159,14 @@ function simplifyPrimitive(geometry: BufferGeometry, profile: DetailProfile): Bu
   return geometry.clone();
 }
 
-function flattenGeometry(geometry: BufferGeometry, transform: Matrix4): BufferGeometry {
+function flattenGeometry(
+  geometry: BufferGeometry,
+  transform: Matrix4,
+  preserveIndex = false,
+): BufferGeometry {
   const flattened = geometry.clone();
   flattened.applyMatrix4(transform);
-  if (flattened.index) {
+  if (flattened.index && !preserveIndex) {
     const nonIndexed = flattened.toNonIndexed();
     flattened.dispose();
     return nonIndexed;
@@ -125,6 +180,27 @@ function isBelowFeatureSize(geometry: BufferGeometry, minimumFeatureSize: number
   if (!bounds) return false;
   const size = bounds.getSize(new Vector3());
   return Math.max(size.x, size.y, size.z) < minimumFeatureSize;
+}
+
+function isBelowThinFeatureCutoff(
+  geometry: BufferGeometry,
+  transform: Matrix4,
+  profile: DetailProfile,
+  preserveSpan: number,
+): boolean {
+  if (profile.minimumThickness === undefined || preserveSpan <= 0) return false;
+  geometry.computeBoundingBox();
+  const bounds = geometry.boundingBox;
+  if (!bounds) return false;
+
+  const size = bounds.getSize(new Vector3());
+  const elements = transform.elements;
+  const dimensions = [
+    size.x * Math.hypot(elements[0]!, elements[1]!, elements[2]!),
+    size.y * Math.hypot(elements[4]!, elements[5]!, elements[6]!),
+    size.z * Math.hypot(elements[8]!, elements[9]!, elements[10]!),
+  ].sort((a, b) => a - b);
+  return dimensions[0]! < profile.minimumThickness && dimensions[2]! < preserveSpan;
 }
 
 function materialBatchKey(material: Material): string {
@@ -149,6 +225,11 @@ function materialBatchKey(material: Material): string {
 function createDetailVisual(source: Group, assetId: string, profile: DetailProfile): Group {
   source.updateMatrixWorld(true);
   const inverseRoot = new Matrix4().copy(source.matrixWorld).invert();
+  const sourceBounds = new Box3().setFromObject(source);
+  const sourceSize = sourceBounds.getSize(new Vector3());
+  const sourceSpan = Math.max(sourceSize.x, sourceSize.y, sourceSize.z);
+  const preserveThinFeatureSpan =
+    sourceSpan * (profile.preserveThinFeatureSpanRatio ?? 0);
   const buckets = new Map<string, { material: Material; geometries: BufferGeometry[] }>();
   const unmerged: Mesh[] = [];
 
@@ -161,6 +242,10 @@ function createDetailVisual(source: Group, assetId: string, profile: DetailProfi
     // groups intact, while still applying their complete source transform.
     if (Array.isArray(material)) {
       const geometry = object.geometry.clone();
+      if (isBelowThinFeatureCutoff(geometry, transform, profile, preserveThinFeatureSpan)) {
+        geometry.dispose();
+        return;
+      }
       geometry.applyMatrix4(transform);
       if (isBelowFeatureSize(geometry, profile.minimumFeatureSize)) {
         geometry.dispose();
@@ -174,21 +259,28 @@ function createDetailVisual(source: Group, assetId: string, profile: DetailProfi
     }
 
     const geometry = simplifyPrimitive(object.geometry, profile);
+    if (isBelowThinFeatureCutoff(geometry, transform, profile, preserveThinFeatureSpan)) {
+      geometry.dispose();
+      return;
+    }
     geometry.applyMatrix4(transform);
     if (isBelowFeatureSize(geometry, profile.minimumFeatureSize)) {
       geometry.dispose();
       return;
     }
-    const flattened = flattenGeometry(geometry, new Matrix4());
+    const indexedOutput = profile.label === 'very-low';
+    const flattened = flattenGeometry(geometry, new Matrix4(), indexedOutput);
     geometry.dispose();
     flattened.clearGroups();
     for (const attribute of Object.keys(flattened.attributes)) {
       if (attribute !== 'position' && attribute !== 'normal') flattened.deleteAttribute(attribute);
     }
     if (!flattened.getAttribute('normal')) flattened.computeVertexNormals();
+    const optimized = indexedOutput && !flattened.index ? mergeVertices(flattened) : flattened;
+    if (optimized !== flattened) flattened.dispose();
     const key = materialBatchKey(material);
     const bucket = buckets.get(key) ?? { material, geometries: [] as BufferGeometry[] };
-    bucket.geometries.push(flattened);
+    bucket.geometries.push(optimized);
     buckets.set(key, bucket);
   });
 
@@ -196,7 +288,7 @@ function createDetailVisual(source: Group, assetId: string, profile: DetailProfi
   detail.name = `${source.name || assetId} ${profile.label} detail`;
   detail.userData = { ...source.userData, assetId, lod: profile.label };
   for (const { material, geometries } of buckets.values()) {
-    const merged = mergeGeometries(geometries, false);
+    const merged = mergeGeometries(geometries, profile.label === 'very-low');
     for (const geometry of geometries) geometry.dispose();
     if (!merged) continue;
     const mesh = new Mesh(merged, material);
@@ -215,5 +307,10 @@ export function createLowDetailVisual(source: Group, assetId: string): Group {
 
 /** Builds an ultra-far version with triangular round primitives and only larger silhouette parts. */
 export function createVeryLowDetailVisual(source: Group, assetId: string): Group {
-  return createDetailVisual(source, assetId, VERY_LOW_DETAIL_PROFILE);
+  const tuning = VERY_LOW_DETAIL_TUNING[assetId];
+  return createDetailVisual(
+    source,
+    assetId,
+    tuning ? { ...VERY_LOW_DETAIL_PROFILE, ...tuning } : VERY_LOW_DETAIL_PROFILE,
+  );
 }
