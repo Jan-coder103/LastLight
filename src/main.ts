@@ -4488,12 +4488,22 @@ function animate(now: number): void {
             updateDynamicNavigation();
           }
         }
+        const previousPlayerX = player.position.x;
+        const previousPlayerZ = player.position.z;
         player.update(
           fixedStep,
           cameraRig.mode,
           cameraRig.yaw,
           combat.adrenalineRemaining > 0 ? 1.5 : 1,
         );
+        const movedX = player.position.x - previousPlayerX;
+        const movedZ = player.position.z - previousPlayerZ;
+        if (
+          movedX * movedX + movedZ * movedZ > 0.0001 &&
+          (fieldHorde?.awarenessRadius ?? 0) < 10
+        ) {
+          emitFieldNoise(10 / 140);
+        }
         updateAutoAttack();
         if (wasDashing && !player.isDashing) replanNavigationTask();
         updateNavigationProgress();

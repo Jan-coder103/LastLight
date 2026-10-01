@@ -352,7 +352,7 @@ Update a checkbox only when the work and its verification are complete. Add the 
 
 - [x] Keep far agents dormant in a spatial index with their position, health, identity, and render tier intact; update only the active simulation roster.
 - [x] Wake agents inside the 92 m proximity radius; use deterministic local roaming and return them to dormancy when they leave that radius.
-- [x] Add a field noise meter and emit noise for rifle fire, dash, turret fire, artillery, and grenades; noise decays at 0.12 per second and drives awareness up to 140 m.
+- [x] Add a field noise meter: walking maintains a 10 m radius while moving, while rifle fire, dash, turret fire, artillery, and grenades can raise it up to 140 m; noise decays at 0.12 per second after movement and loud actions stop.
 - [x] Draw a subtle terrain-following circle around the scout that grows and fades with the current noise awareness radius.
 - [x] Have aware agents investigate the latest noise location, then focus on the scout; let focus fade after the awareness radius contracts past them.
 - [x] Preserve targeting, health, identity, and near/mid/far visuals as agents move between dormant and active state.
@@ -365,7 +365,7 @@ Update a checkbox only when the work and its verification are complete. Add the 
 
 - The simulation activates agents at 92 m, matching the existing far-to-mid visual boundary so dormant agents remain in the cylinder tier. Active agents that leave the radius sleep at their current location; their health and numeric ID remain in the same typed-array slot.
 - Each agent's local roaming stream is derived from the world/horde seed and stable ID. Its waypoints stay within a 16 m patch around its activation/roam anchor.
-- Noise level is normalized from 0 to 1, decays by 0.12 per second, and maps linearly to a 0–140 m radius from the latest loud action. Investigating lasts up to 1.1 seconds before focused pursuit; focus decays over 1.6 seconds after leaving the awareness radius.
+- Noise level is normalized from 0 to 1 and maps linearly to a 0–140 m radius. Walking refreshes a 10 m floor only when the scout is moving and the existing radius has decayed below that floor; after movement stops, noise decays by 0.12 per second. Investigating lasts up to 1.1 seconds before focused pursuit; focus decays over 1.6 seconds after leaving the awareness radius.
 - This is initial tuning pending a playable owner review. Outdoor simulation and noise decay continue to pause inside buildings and while the backpack is open.
 - The production build passes. Automated checks, browser smoke, and owner playtest have not been run for Phase 15 yet.
 
