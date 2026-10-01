@@ -10,6 +10,14 @@ const walkSpeed = 7.4;
 const bodyRadius = 0.58;
 const dashDuration = 0.22;
 const dashSpeed = 20;
+export const sprintSpeedMultiplier = 1.45;
+export const adrenalineSpeedMultiplier = 2.5;
+
+export function playerSpeedMultiplier(adrenalineActive: boolean, sprintHeld: boolean): number {
+  return (
+    (adrenalineActive ? adrenalineSpeedMultiplier : 1) * (sprintHeld ? sprintSpeedMultiplier : 1)
+  );
+}
 
 function angleTowards(current: number, target: number, blend: number): number {
   const difference = Math.atan2(Math.sin(target - current), Math.cos(target - current));
@@ -123,6 +131,10 @@ export class PlayerController {
 
   get isDashing(): boolean {
     return this.dashRemaining > 0;
+  }
+
+  get sprintHeld(): boolean {
+    return this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
   }
 
   get dashDirectionVector(): Vector3 {
@@ -354,6 +366,10 @@ export class PlayerController {
     if (event.code === 'KeyG') {
       event.preventDefault();
       if (!event.repeat) this.onGrenadeRequest();
+      return;
+    }
+    if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') {
+      this.keys.add(event.code);
       return;
     }
     if (isDashKey(event.code)) {

@@ -88,7 +88,9 @@ export class CombatSimulation {
       });
     });
     this.lastMessage =
-      initialHostiles > 0 ? 'Three hostiles detected. Stay mobile.' : 'Stay alert. The horde is out there.';
+      initialHostiles > 0
+        ? 'Three hostiles detected. Stay mobile.'
+        : 'Stay alert. The horde is out there.';
   }
 
   get livingZombieCount(): number {
@@ -215,6 +217,23 @@ export class CombatSimulation {
     if (!zombie || amount <= 0) return false;
     zombie.health = Math.max(0, zombie.health - amount);
     if (zombie.health === 0) zombie.alive = false;
+    return true;
+  }
+
+  applyShotKnockback(id: string, sourceX: number, sourceZ: number, distance = 0.26): boolean {
+    const zombie = this.zombies.find((candidate) => candidate.id === id && candidate.alive);
+    if (!zombie || !Number.isFinite(sourceX) || !Number.isFinite(sourceZ)) return false;
+    const directionX = zombie.position.x - sourceX;
+    const directionZ = zombie.position.z - sourceZ;
+    const length = Math.hypot(directionX, directionZ);
+    if (length < 0.001) return false;
+    const scale = Math.min(0.3, Math.max(0, distance)) / length;
+    const x = zombie.position.x + directionX * scale;
+    const z = zombie.position.z + directionZ * scale;
+    if (!this.navigator.isWalkable(x, z)) return false;
+    zombie.position.set(x, this.surfaceHeight(x, z), z);
+    zombie.path = [];
+    zombie.repathRemaining = 0;
     return true;
   }
 

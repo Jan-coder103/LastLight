@@ -54,10 +54,13 @@ import { buildCamp, updateCampWalkers } from './camp/buildCamp';
 import { buyCampItem, campPrices, sellCampItem } from './camp/campEconomy';
 import { campEntrances, campServices, createCampWorld } from './camp/campWorld';
 import { CameraRig } from './camera/CameraRig';
+import { BloodTrailGate, BloodTrailVisual, impactShakeStrength } from './game/CombatFeedback';
 import { CombatSimulation, type ZombieState } from './game/CombatSimulation';
+import { ExplosiveBarrelFuses } from './game/ExplosiveBarrel';
 import { benchmarkCountsForHorde, benchmarkHorde } from './game/HordeBenchmark';
 import { HordeSimulation, type HordeSpawnPattern } from './game/HordeSimulation';
 import { PerformanceWindow } from './game/PerformanceWindow';
+import { isPickupInRange, PickupFeed, PickupPressState } from './game/PickupFeed';
 import { openCache, placeLootCaches, type CacheSite, type LootDrop } from './game/loot';
 import { InventoryPanel } from './game/InventoryPanel';
 import {
@@ -82,13 +85,15 @@ import {
 } from './game/saveData';
 import {
   createZombieVisual,
+  setZombieHitFlash,
   syncZombieVisual,
   ZombieCrowdVisual,
 } from './game/zombieVisual';
 import { GridNavigator, type NavPoint } from './navigation/GridNavigator';
 import { buildInterior } from './interiors/buildInterior';
 import { generateInterior, interiorWorld, type InteriorLayout } from './interiors/interiorLayout';
-import { PlayerController } from './player/PlayerController';
+import { playerSpeedMultiplier, PlayerController } from './player/PlayerController';
+import { canRequestPointerLock } from './input/pointerLock';
 import { buildWorld, updateWorldLods } from './world/buildWorld';
 import {
   generateWorld,
@@ -194,6 +199,11 @@ const atmosphereRuntime = new AtmosphereRuntime(
   volumetricFogPass,
 );
 const particleBursts = new ParticleBursts(scene);
+const bloodTrailVisual = new BloodTrailVisual(scene);
+const bloodTrailGate = new BloodTrailGate();
+const pickupFeedModel = new PickupFeed();
+const pickupPressState = new PickupPressState();
+const pickupPromptElements = new Map<string, HTMLElement>();
 
 const elements = {
   seedForm: document.querySelector<HTMLFormElement>('#seed-form'),
@@ -226,6 +236,8 @@ const elements = {
   routeValue: document.querySelector<HTMLElement>('#route-value'),
   diagSeed: document.querySelector<HTMLElement>('#diag-seed'),
   controlsContent: document.querySelector<HTMLElement>('#controls-content'),
+  pickupPrompts: document.querySelector<HTMLElement>('#pickup-prompts'),
+  pickupFeed: document.querySelector<HTMLElement>('#pickup-feed'),
   hostileCount: document.querySelector<HTMLElement>('#hostile-count'),
   noiseStatus: document.querySelector<HTMLElement>('#noise-status'),
   noiseValue: document.querySelector<HTMLElement>('#noise-value'),
@@ -379,6 +391,19 @@ interface CampInteriorSession {
   returnPosition: Vector3;
 }
 
+interface WoundedTrailTarget {
+  kind: 'combat' | 'field-horde' | 'stress-horde';
+  index?: number;
+  x: number;
+  z: number;
+  elapsed: number;
+}
+
+interface ExplosiveBarrelRecord {
+  object: Object3D;
+  blinkMaterials: MeshStandardMaterial[];
+}
+
 let gamePhase: GamePhase = 'base';
 let stressActive = false;
 let hordeSimulation: HordeSimulation | undefined;
@@ -398,10 +423,10 @@ let hordeSyncCount = 0;
 function isFieldHordeGameplay(): boolean {
   return Boolean(
     fieldHorde &&
-      !stressActive &&
-      !interiorSession &&
-      gamePhase !== 'base' &&
-      gamePhase !== 'result',
+    !stressActive &&
+    !interiorSession &&
+    gamePhase !== 'base' &&
+    gamePhase !== 'result',
   );
 }
 
@@ -474,6 +499,13 @@ interface TimedEffect {
   onExpire?: () => void;
 }
 const timedEffects: TimedEffect[] = [];
+const woundedTrailTargets = new Map<string, WoundedTrailTarget>();
+const zombieHitFlashes = new Map<string, number>();
+let barrelFuses = new ExplosiveBarrelFuses();
+const explosiveBarrels = new Map<string, ExplosiveBarrelRecord>();
+let pickupUiRefresh = 0;
+let bloodTrailPopulationRefresh = 0;
+let bloodTrailCreationEnabled = true;
 interface ActiveTurret {
   object: Group;
   gun: Group;
@@ -624,6 +656,36 @@ function flashDamageFeedback(): void {
   audioFeedback.play('damage');
 }
 
+function showPointerLockFallback(): void {
+  elements.seedHint!.textContent =
+    'Mouse capture was blocked. Click the open scene to retry, or drag there to look around.';
+}
+
+function requestPointerLockForPlay(): boolean {
+  if (cameraRig.mode !== 'third-person' || document.pointerLockElement === canvas) return true;
+  try {
+    const request = canvas!.requestPointerLock();
+    if (request && typeof request.then === 'function') request.catch(showPointerLockFallback);
+    return true;
+  } catch {
+    showPointerLockFallback();
+    return false;
+  }
+}
+
+document.addEventListener('pointerlockchange', () => {
+  const locked = document.pointerLockElement === canvas;
+  document.querySelector('#game')?.classList.toggle('is-pointer-locked', locked);
+  if (locked) {
+    elements.seedHint!.textContent = 'Mouse captured · press Escape or Ctrl to release.';
+    elements.reticle!.style.left = '50%';
+    elements.reticle!.style.top = '50%';
+  } else if (cameraRig.mode === 'third-person' && gamePhase !== 'base') {
+    elements.seedHint!.textContent =
+      'Mouse released · click the open scene to capture again, or drag to look.';
+  }
+});
+
 function switchView(): void {
   if (gamePhase !== 'active' && gamePhase !== 'base' && !stressActive) return;
   cameraRig.switchMode(player.position);
@@ -631,6 +693,7 @@ function switchView(): void {
   autoAttackTargetId = undefined;
   player.clearKeyboardMovement();
   if (cameraRig.mode !== 'third-person') releaseLookDrag();
+  else requestPointerLockForPlay();
   canvas?.focus({ preventScroll: true });
   updateModeUi();
   if (cameraRig.mode === 'top-down' && navigationTask) replanNavigationTask();
@@ -664,6 +727,7 @@ function renderControls(): void {
       ? cameraRig.mode === 'third-person'
         ? [
             row('W A S D', 'Walk around camp'),
+            row('SHIFT', 'Hold to sprint'),
             row('DRAG', 'Look around'),
             row('F', 'Use nearby service / door'),
             row('M', 'Open camp terminal'),
@@ -672,6 +736,7 @@ function renderControls(): void {
           ]
         : [
             row('RMB', 'Click to move'),
+            row('SHIFT', 'Hold to sprint along route'),
             row('ESC', 'Cancel route'),
             row('F', 'Use nearby service / door'),
             row('M', 'Open camp terminal'),
@@ -681,7 +746,9 @@ function renderControls(): void {
       : cameraRig.mode === 'third-person'
         ? [
             row('W A S D', 'Move · camera-relative'),
-            row('DRAG', 'Look / aim'),
+            row('DRAG', 'Look / aim when mouse capture is unavailable'),
+            row('SHIFT', 'Hold to sprint'),
+            row('CTRL|ESC', 'Release mouse capture'),
             row('LMB', 'Fire equipped weapon'),
             row(
               'Q',
@@ -689,7 +756,7 @@ function renderControls(): void {
             ),
             row('1', 'Hold to preview · release to place · mouse click cancels'),
             row('2', 'Call artillery at cursor'),
-            row('3', 'Adrenaline'),
+            row('3', 'Adrenaline · 2.5× speed for 5 s'),
             row('G', `Throw grenade · ${grenadeCount} carried`),
             row('I', 'Open backpack / equip weapon'),
             row('X', 'Use carried supply'),
@@ -698,6 +765,7 @@ function renderControls(): void {
           ]
         : [
             row('RMB', 'Click to move'),
+            row('SHIFT', 'Hold to sprint along route'),
             row('ESC', 'Cancel route'),
             row('LMB', 'Fire at cursor'),
             row(
@@ -706,7 +774,7 @@ function renderControls(): void {
             ),
             row('W', 'Hold to preview · release to place · mouse click cancels'),
             row('E', 'Call artillery at cursor'),
-            row('R', 'Adrenaline'),
+            row('R', 'Adrenaline · 2.5× speed for 5 s'),
             row('G', `Throw grenade · ${grenadeCount} carried`),
             row('I', 'Open backpack / equip weapon'),
             row('X', 'Use carried supply'),
@@ -840,7 +908,10 @@ function updateCombatUi(): void {
   updateActionHud(healthPercent);
   elements.combatMessage!.textContent = combat.lastMessage;
   elements.runClock!.textContent = `${String(Math.floor(runElapsed / 60)).padStart(2, '0')}:${String(Math.floor(runElapsed % 60)).padStart(2, '0')}`;
-  elements.runClock!.classList.toggle('pressure-warning', gamePhase === 'active' && runElapsed >= 50);
+  elements.runClock!.classList.toggle(
+    'pressure-warning',
+    gamePhase === 'active' && runElapsed >= 50,
+  );
   const capacity = cargoCapacity(saveData);
   elements.cargoValue!.textContent = `${cargoWeight(cargo)} / ${capacity}`;
   elements.cargoBreakdown!.textContent = `GEAR ${cargo.gear} · SUP ${cargo.supplies} · GRENADES ${grenadeCount} · CR ${cargo.money} · FUEL ${cargo.fuel}`;
@@ -960,6 +1031,7 @@ function setSeed(seed: string): void {
 
   world = generateWorld(trimmed);
   worldGroup = buildWorld(world);
+  scanExplosiveBarrels();
   worldGroup.visible = false;
   scene.add(worldGroup);
   fieldNavigator = new GridNavigator(world);
@@ -986,9 +1058,7 @@ function setSeed(seed: string): void {
     'Field map regenerated. Camp storage and upgrades are unchanged.';
   elements.diagSeed!.textContent = world.seed;
   elements.entityValue!.textContent = String(
-    world.objectCount +
-      (fieldHorde?.livingCount ?? combat.livingZombieCount) +
-      1,
+    world.objectCount + (fieldHorde?.livingCount ?? combat.livingZombieCount) + 1,
   );
   updateModeUi();
   updateBaseUi();
@@ -1066,6 +1136,8 @@ function syncCombatZombieView(zombie: ZombieState): void {
   const visual = zombieViews.get(zombie.id);
   if (!visual) return;
   if (!zombie.alive) {
+    setZombieHitFlash(visual, false);
+    zombieHitFlashes.delete(zombie.id);
     visual.removeFromParent();
     zombieViews.delete(zombie.id);
     return;
@@ -1118,7 +1190,10 @@ function updateRenderDiagnosticsUi(): void {
   elements.memoryValue!.textContent = `${heap} · ${info.memory.geometries}g / ${info.memory.textures}t`;
   elements.resolutionValue!.textContent = `${renderer.domElement.width}×${renderer.domElement.height} @${renderer.getPixelRatio().toFixed(2)}x`;
   elements.effectsValue!.textContent = String(
-    timedEffects.length + particleBursts.activeCount + Number(atmosphereRuntime.isRaining),
+    timedEffects.length +
+      particleBursts.activeCount +
+      bloodTrailVisual.pool.marks.length +
+      Number(atmosphereRuntime.isRaining),
   );
 }
 
@@ -1936,6 +2011,7 @@ function collectLoot(view: InteractiveView): void {
     disposeTree(view.object);
     activeInteractiveViews().delete(view.id);
     combat.lastMessage = `Picked up ${name}.`;
+    addPickupFeedEntry(`Picked up ${name}`);
     inventoryPanel.render();
     updateCombatUi();
     return;
@@ -1948,6 +2024,7 @@ function collectLoot(view: InteractiveView): void {
   }
   view.drop.amount -= accepted;
   runLootCollected += accepted;
+  addPickupFeedEntry(`Picked up ${accepted} ${resourceNames[view.drop.kind]}`);
   if (interiorSession) interiorLootRemaining.set(view.id, view.drop.amount);
   combat.lastMessage = `Collected ${accepted} ${resourceNames[view.drop.kind]}.`;
   if (view.drop.amount <= 0) {
@@ -2590,6 +2667,16 @@ function updateNavigationProgress(): void {
 
 function clearRunScene(): void {
   cancelTurretPlacement();
+  for (const id of zombieHitFlashes.keys()) {
+    const visual = zombieViews.get(id);
+    if (visual) setZombieHitFlash(visual, false);
+  }
+  zombieHitFlashes.clear();
+  woundedTrailTargets.clear();
+  bloodTrailVisual.pool.marks.length = 0;
+  bloodTrailVisual.update(0);
+  for (const prompt of pickupPromptElements.values()) prompt.remove();
+  pickupPromptElements.clear();
   for (const turret of activeTurrets) {
     scene.remove(turret.object);
     disposeTree(turret.object);
@@ -2653,6 +2740,8 @@ function clearRunScene(): void {
 
 function startRun(): void {
   if (gamePhase !== 'base' || stressActive) return;
+  scanExplosiveBarrels();
+  requestPointerLockForPlay();
   inventoryPanel.close();
   if (campInteriorSession) leaveCampBuilding();
   clearRunScene();
@@ -3202,8 +3291,86 @@ function addBlastVisual(center: Vector3, radius: number, decalDuration: number):
       particleBursts.burst(smokePosition, '#777972', 7, 2.2, 1.3);
     }
     particleBursts.burst(center.clone().add(new Vector3(0, 0.7, 0)), '#dd8050', 8, 3.1, 0.75);
-    if (atmosphereSettings.shakeIntensity > 0)
-      cameraRig.kickShake(0.14 * atmosphereSettings.shakeIntensity, 0.32);
+    const shake = impactShakeStrength(
+      atmosphereSettings.reduceMotion,
+      atmosphereSettings.shakeIntensity,
+    );
+    if (shake > 0) cameraRig.kickShake(shake, 0.32);
+  }
+}
+
+function applySharedGroundExplosion(
+  center: Vector3,
+  radius: number,
+  decalDuration: number,
+  label: 'Artillery impact' | 'Grenade blast' | 'Barrel explosion',
+): void {
+  emitFieldNoise(1, center.x, center.z);
+  const affected = damageHostilesInRadius(center, radius, 100);
+  combat.lastMessage = `${label} · ${affected} hostile(s) caught in the blast.`;
+  addBlastVisual(center, radius, decalDuration);
+  audioFeedback.play('explosion');
+  updateCombatUi();
+}
+
+function scanExplosiveBarrels(): void {
+  explosiveBarrels.clear();
+  barrelFuses = new ExplosiveBarrelFuses();
+  worldGroup.traverse((object) => {
+    const id = object.userData.explosiveBarrelId as string | undefined;
+    if (!id) return;
+    const blinkMaterials: MeshStandardMaterial[] = [];
+    object.traverse((part) => {
+      if (!(part instanceof Mesh) || part.userData.explosiveBarrelBlink !== true) return;
+      const assigned = Array.isArray(part.material) ? part.material : [part.material];
+      for (const material of assigned)
+        if (material instanceof MeshStandardMaterial) blinkMaterials.push(material);
+    });
+    explosiveBarrels.set(id, { object, blinkMaterials });
+  });
+}
+
+function explosiveBarrelIdAt(object: Object3D | undefined): string | undefined {
+  let current = object;
+  while (current) {
+    const id = current.userData.explosiveBarrelId as string | undefined;
+    if (id) return id;
+    current = current.parent ?? undefined;
+  }
+  return undefined;
+}
+
+function triggerExplosiveBarrel(object: Object3D | undefined): boolean {
+  const id = explosiveBarrelIdAt(object);
+  if (!id || !barrelFuses.trigger(id)) return false;
+  combat.lastMessage = 'Explosive barrel hit · fuse started.';
+  audioFeedback.play('hit');
+  updateCombatUi();
+  return true;
+}
+
+function updateExplosiveBarrelBlinkMaterials(): void {
+  for (const [id, barrel] of explosiveBarrels) {
+    const intensity = barrelFuses.isBlinking(id) ? 1.8 : 0;
+    for (const material of barrel.blinkMaterials) material.emissiveIntensity = intensity;
+  }
+}
+
+function tickExplosiveBarrels(delta: number): void {
+  for (const id of barrelFuses.update(delta)) {
+    const barrel = explosiveBarrels.get(id);
+    if (!barrel) continue;
+    barrel.blinkMaterials.forEach((material) => {
+      material.emissiveIntensity = 0;
+      material.color.set('#211b18');
+    });
+    barrel.object.getWorldPosition(cameraFollowTarget);
+    const center = new Vector3(
+      cameraFollowTarget.x,
+      terrainHeightAt(world.seed, cameraFollowTarget.x, cameraFollowTarget.z),
+      cameraFollowTarget.z,
+    );
+    applySharedGroundExplosion(center, artilleryRadius, 10, 'Barrel explosion');
   }
 }
 
@@ -3253,12 +3420,7 @@ function fireArtilleryAtPointer(): void {
     object: mark,
     remaining: 1.2,
     onExpire: () => {
-      emitFieldNoise(1, target.x, target.z);
-      const affected = damageHostilesInRadius(target, artilleryRadius, 100);
-      combat.lastMessage = `Artillery impact · ${affected} hostile(s) caught in the blast.`;
-      addBlastVisual(target, artilleryRadius, 10);
-      audioFeedback.play('explosion');
-      updateCombatUi();
+      applySharedGroundExplosion(target, artilleryRadius, 10, 'Artillery impact');
     },
   });
   combat.lastMessage = 'Artillery inbound · impact in 1.2 seconds.';
@@ -3315,12 +3477,7 @@ function throwGrenadeAtPointer(): void {
 }
 
 function impactGrenade(point: Vector3): void {
-  emitFieldNoise(0.96, point.x, point.z);
-  const affected = damageHostilesInRadius(point, grenadeBlastRadius, 100);
-  combat.lastMessage = `Grenade blast · ${affected} hostile(s) caught in the explosion.`;
-  addBlastVisual(point, grenadeBlastRadius, 5);
-  audioFeedback.play('explosion');
-  updateCombatUi();
+  applySharedGroundExplosion(point, grenadeBlastRadius, 5, 'Grenade blast');
 }
 
 function animateFieldAbilities(delta: number): void {
@@ -3362,11 +3519,33 @@ function animateFieldAbilities(delta: number): void {
           const muzzle = turret.object.localToWorld(new Vector3(0.17, 1.48, -1.03));
           const hitPoint = target.position.clone().add(new Vector3(0, 1.05, 0));
           damageHostile(target.id, 22);
+          const remainingTarget = getHostileTarget(target.id);
+          if (remainingTarget) {
+            if (target.hordeIndex !== undefined) {
+              fieldHorde?.applyShotKnockback(target.hordeIndex, turret.x, turret.z);
+              if (!atmosphereSettings.reduceFlashes)
+                fieldHordeVisual?.flashAgent(target.hordeIndex);
+              trackShotWoundedEnemy(
+                target.id,
+                'field-horde',
+                remainingTarget.position,
+                target.hordeIndex,
+              );
+            } else {
+              combat.applyShotKnockback(target.id, turret.x, turret.z);
+              const visual = zombieViews.get(target.id);
+              if (!atmosphereSettings.reduceFlashes && visual) {
+                setZombieHitFlash(visual, true);
+                zombieHitFlashes.set(target.id, 0.14);
+              }
+              trackShotWoundedEnemy(target.id, 'combat', remainingTarget.position);
+            }
+          }
           emitFieldNoise(0.52, turret.x, turret.z);
           combat.lastMessage = `Auto turret hit ${target.id}.`;
           addShotEffect(muzzle, hitPoint);
-          if (!atmosphereSettings.reduceMotion)
-            particleBursts.burst(hitPoint, '#edc773', 4, 1.2, 0.2);
+          if (!atmosphereSettings.reduceMotion && !atmosphereSettings.reduceFlashes)
+            particleBursts.burst(hitPoint, '#b04c42', 3, 1.35, 0.2);
           audioFeedback.play('shot');
           updateCombatUi();
         }
@@ -3705,6 +3884,7 @@ window.addEventListener('keydown', (event) => {
   )
     return;
   event.preventDefault();
+  animatePickupPress(closestInteractive());
   interactNearest();
 });
 function pointerNdc(clientX: number, clientY: number): Vector2 {
@@ -3829,6 +4009,174 @@ function damageHostilesInRadius(center: Vector3, radius: number, amount: number)
   return combat.damageHostilesInRadius(center, radius, amount);
 }
 
+function trackShotWoundedEnemy(
+  id: string,
+  kind: WoundedTrailTarget['kind'],
+  position: Vector3,
+  index?: number,
+): void {
+  woundedTrailTargets.set(id, { kind, index, x: position.x, z: position.z, elapsed: 0 });
+}
+
+function updateCombatFeedback(delta: number): void {
+  bloodTrailPopulationRefresh -= delta;
+  if (bloodTrailPopulationRefresh <= 0) {
+    bloodTrailPopulationRefresh = 0.25;
+    const population = stressActive
+      ? (hordeSimulation?.livingCount ?? 0)
+      : (fieldHorde?.livingCount ?? combat.livingZombieCount);
+    bloodTrailCreationEnabled = bloodTrailGate.update(population);
+  }
+  for (const [id, remaining] of zombieHitFlashes) {
+    const next = remaining - delta;
+    if (next <= 0) {
+      const visual = zombieViews.get(id);
+      if (visual) setZombieHitFlash(visual, false);
+      zombieHitFlashes.delete(id);
+    } else zombieHitFlashes.set(id, next);
+  }
+  hordeVisual?.updateHitFlashes(delta);
+  fieldHordeVisual?.updateHitFlashes(delta);
+
+  for (const [id, target] of woundedTrailTargets) {
+    let x: number | undefined;
+    let z: number | undefined;
+    let health = 100;
+    let alive = false;
+    if (target.kind === 'combat') {
+      const zombie = combat.zombies.find((candidate) => candidate.id === id && candidate.alive);
+      if (zombie) {
+        x = zombie.position.x;
+        z = zombie.position.z;
+        health = zombie.health;
+        alive = zombie.alive;
+      }
+    } else {
+      const horde = target.kind === 'stress-horde' ? hordeSimulation : fieldHorde;
+      const index = target.index;
+      if (horde && index !== undefined && horde.alive[index] === 1) {
+        x = horde.x[index]!;
+        z = horde.z[index]!;
+        health = horde.health[index]!;
+        alive = true;
+      }
+    }
+    if (!alive || health >= 100 || x === undefined || z === undefined) {
+      woundedTrailTargets.delete(id);
+      continue;
+    }
+    target.elapsed += delta;
+    const moved = Math.hypot(x - target.x, z - target.z);
+    if (moved < 0.72 || target.elapsed < 0.22) continue;
+    if (bloodTrailCreationEnabled)
+      bloodTrailVisual.add(
+        new Vector3(x, terrainHeightAt(world.seed, x, z) + 0.035, z),
+        Math.atan2(z - target.z, x - target.x),
+      );
+    target.x = x;
+    target.z = z;
+    target.elapsed = 0;
+  }
+}
+
+function addPickupFeedEntry(text: string): void {
+  pickupFeedModel.add(text);
+  renderPickupFeed();
+}
+
+function renderPickupFeed(): void {
+  const root = elements.pickupFeed!;
+  const entries = pickupFeedModel.visibleEntries;
+  const alive = new Set(entries.map((entry) => String(entry.id)));
+  for (const child of [...root.children]) {
+    if (!alive.has((child as HTMLElement).dataset.entryId ?? '')) child.remove();
+  }
+  for (const entry of entries) {
+    let element = root.querySelector<HTMLElement>(`[data-entry-id="${entry.id}"]`);
+    if (!element) {
+      element = document.createElement('div');
+      element.className = 'pickup-feed-entry';
+      element.dataset.entryId = String(entry.id);
+      element.textContent = entry.text;
+      root.append(element);
+    }
+    element.style.opacity = String(entry.opacity);
+    root.append(element);
+  }
+}
+
+function promptLabel(drop: LootDrop): string {
+  return drop.itemId
+    ? itemDefinitions[drop.itemId].name.toUpperCase()
+    : `${drop.amount} ${resourceNames[drop.kind].toUpperCase()}`;
+}
+
+function updatePickupPrompts(): void {
+  const active = new Set<string>();
+  if (
+    (gamePhase === 'active' || gamePhase === 'base') &&
+    !inventoryPanel?.open &&
+    elements.settingsOverlay!.hasAttribute('hidden') &&
+    elements.baseOverlay!.hasAttribute('hidden')
+  ) {
+    camera.updateMatrixWorld(true);
+    for (const view of activeInteractiveViews().values()) {
+      const drop = view.kind === 'drop' ? view.drop : undefined;
+      if (
+        !drop ||
+        drop.collected ||
+        !isPickupInRange(player.position.x, player.position.z, view.x, view.z)
+      )
+        continue;
+      const id = view.id;
+      active.add(id);
+      let prompt = pickupPromptElements.get(id);
+      if (!prompt) {
+        prompt = document.createElement('div');
+        prompt.className = 'pickup-prompt';
+        prompt.dataset.pickupId = id;
+        const keycap = document.createElement('span');
+        keycap.className = 'pickup-key';
+        keycap.textContent = 'F';
+        const label = document.createElement('span');
+        label.textContent = `PICK UP · ${promptLabel(drop)}`;
+        prompt.append(keycap, label);
+        elements.pickupPrompts!.append(prompt);
+        pickupPromptElements.set(id, prompt);
+      }
+      prompt.classList.toggle('is-pressed', pickupPressState.isPressed(id));
+      const worldPoint = view.object.getWorldPosition(new Vector3());
+      worldPoint.y += 1.05;
+      const projected = worldPoint.project(camera);
+      const visible =
+        projected.z >= -1 &&
+        projected.z <= 1 &&
+        Math.abs(projected.x) <= 1.08 &&
+        Math.abs(projected.y) <= 1.08;
+      prompt.hidden = !visible;
+      if (visible) {
+        prompt.style.left = `${(projected.x * 0.5 + 0.5) * window.innerWidth}px`;
+        prompt.style.top = `${(-projected.y * 0.5 + 0.5) * window.innerHeight}px`;
+      }
+    }
+  }
+  for (const [id, prompt] of pickupPromptElements) {
+    if (active.has(id)) continue;
+    prompt.remove();
+    pickupPromptElements.delete(id);
+  }
+}
+
+function animatePickupPress(view: InteractiveView | undefined): void {
+  if (
+    view?.kind === 'drop' &&
+    view.drop &&
+    !view.drop.collected &&
+    isPickupInRange(player.position.x, player.position.z, view.x, view.z)
+  )
+    pickupPressState.press(view.id);
+}
+
 function nearestHostile(x: number, z: number, radius: number): HostileTarget | undefined {
   if (isFieldHordeGameplay() && fieldHorde) {
     const index = fieldHorde.findNearestAgent(x, z, radius);
@@ -3892,10 +4240,7 @@ function findFieldHordeAgentAlongRay(
 
 function firstWorldOrLivingHit(raycaster: Raycaster) {
   const objects = [activeWorldVisual(), activeLootVisual(), zombieGroup];
-  if (
-    isFieldHordeGameplay() &&
-    fieldHordeVisual?.group.visible
-  )
+  if (isFieldHordeGameplay() && fieldHordeVisual?.group.visible)
     objects.push(fieldHordeVisual.group);
   return raycaster.intersectObjects(objects, true).find((hit) => {
     const zombieId = findZombieId(hit.object, hit.instanceId);
@@ -3934,7 +4279,10 @@ function findAssistedZombie(
       if (fieldHorde.alive[index] !== 1) continue;
       const zombie = getHostileTarget(`field-horde-${fieldHorde.ids[index]}`);
       if (!zombie) continue;
-      const screen = zombie.position.clone().add(new Vector3(0, 1.05, 0)).project(camera);
+      const screen = zombie.position
+        .clone()
+        .add(new Vector3(0, 1.05, 0))
+        .project(camera);
       if (screen.z < -1 || screen.z > 1) continue;
       const screenX = ((screen.x + 1) * window.innerWidth) / 2;
       const screenY = ((1 - screen.y) * window.innerHeight) / 2;
@@ -4010,6 +4358,7 @@ function fireAlongRay(aimPoint: Vector3, preferredHordeIndex?: number): boolean 
   const weaponRay = new Raycaster(muzzle, shotDirection, 0, shotLength + 0.05);
   const weaponHit = firstWorldOrLivingHit(weaponRay);
   const hitPoint = weaponHit?.point ?? aimPoint;
+  const barrelId = explosiveBarrelIdAt(weaponHit?.object);
   const hitHordeIndex =
     weaponHit?.instanceId !== undefined && fieldHordeVisual
       ? fieldHordeVisual.agentIndexForInstance(weaponHit.object, weaponHit.instanceId)
@@ -4023,8 +4372,7 @@ function fireAlongRay(aimPoint: Vector3, preferredHordeIndex?: number): boolean 
           fieldHorde.z[preferredHordeIndex]! - muzzle.z,
         ) <= maximumRange
       : false;
-  const directHordeIndex =
-    preferredTargetInRange ? preferredHordeIndex : hitHordeIndex;
+  const directHordeIndex = preferredTargetInRange ? preferredHordeIndex : hitHordeIndex;
   const targetId =
     directHordeIndex !== undefined && fieldHorde
       ? `field-horde-${fieldHorde.ids[directHordeIndex]}`
@@ -4038,21 +4386,42 @@ function fireAlongRay(aimPoint: Vector3, preferredHordeIndex?: number): boolean 
   emitFieldNoise(weapon === 'shotgun' ? 0.74 : weapon === 'handgun' ? 0.48 : 0.62);
   if (hordeIndex !== undefined && targetId) {
     fieldHorde?.damageAgent(hordeIndex, damage);
+    if (fieldHorde?.alive[hordeIndex] === 1) {
+      fieldHorde.applyShotKnockback(hordeIndex, player.position.x, player.position.z);
+    }
     combat.lastMessage =
       fieldHorde?.alive[hordeIndex] === 1 ? 'Hostile hit.' : 'Hostile eliminated.';
+  } else if (targetId && targetBeforeHit) {
+    combat.applyShotKnockback(targetId, player.position.x, player.position.z);
   }
+  if (barrelId) triggerExplosiveBarrel(weaponHit?.object);
   audioFeedback.play('shot');
   if (targetId) {
-    const aliveAfterHit = getHostileTarget(targetId) !== undefined;
+    const targetAfterHit = getHostileTarget(targetId);
+    const aliveAfterHit = targetAfterHit !== undefined;
     audioFeedback.play('hit');
-    if (!atmosphereSettings.reduceMotion)
+    if (!atmosphereSettings.reduceMotion && !atmosphereSettings.reduceFlashes)
       particleBursts.burst(
         hitPoint,
-        targetBeforeHit?.alive && aliveAfterHit ? '#e8d18f' : '#cf9870',
-        targetBeforeHit?.alive && aliveAfterHit ? 5 : 8,
-        1.9,
-        0.24,
+        aliveAfterHit ? '#b04c42' : '#87352d',
+        aliveAfterHit ? 4 : 6,
+        1.45,
+        0.22,
       );
+    if (aliveAfterHit && targetAfterHit) {
+      const hitIndex = targetAfterHit.hordeIndex;
+      if (hitIndex !== undefined) {
+        if (!atmosphereSettings.reduceFlashes) fieldHordeVisual?.flashAgent(hitIndex);
+        trackShotWoundedEnemy(targetId, 'field-horde', targetAfterHit.position, hitIndex);
+      } else {
+        const visual = zombieViews.get(targetId);
+        if (!atmosphereSettings.reduceFlashes && visual) {
+          setZombieHitFlash(visual, true);
+          zombieHitFlashes.set(targetId, 0.14);
+        }
+        trackShotWoundedEnemy(targetId, 'combat', targetAfterHit.position);
+      }
+    }
     elements.reticle!.classList.add('hit');
     window.setTimeout(() => elements.reticle!.classList.remove('hit'), 120);
   }
@@ -4066,10 +4435,7 @@ function fireAlongRay(aimPoint: Vector3, preferredHordeIndex?: number): boolean 
 }
 
 function fireAtZombie(zombie: HostileTarget): boolean {
-  return fireAlongRay(
-    zombie.position.clone().add(new Vector3(0, 1.05, 0)),
-    zombie.hordeIndex,
-  );
+  return fireAlongRay(zombie.position.clone().add(new Vector3(0, 1.05, 0)), zombie.hordeIndex);
 }
 
 function fireAt(event: PointerEvent): void {
@@ -4091,6 +4457,9 @@ function fireAt(event: PointerEvent): void {
       hordeSimulation.damageAgent(stressIndex, 50)
     ) {
       const index = stressIndex;
+      if (hordeSimulation.alive[index] === 1) {
+        hordeSimulation.applyShotKnockback(index, player.position.x, player.position.z);
+      }
       const position = new Vector3(
         hordeSimulation.x[index]!,
         hordeSimulation.y[index]! + 0.9,
@@ -4098,7 +4467,18 @@ function fireAt(event: PointerEvent): void {
       );
       audioFeedback.play('shot');
       audioFeedback.play('hit');
-      if (!atmosphereSettings.reduceMotion) particleBursts.burst(position, '#e8d18f', 5, 1.9, 0.24);
+      if (!atmosphereSettings.reduceMotion && !atmosphereSettings.reduceFlashes)
+        particleBursts.burst(position, '#ad493f', 4, 1.45, 0.22);
+      if (hordeSimulation.alive[index] === 1) {
+        if (!atmosphereSettings.reduceFlashes) hordeVisual?.flashAgent(index);
+        trackShotWoundedEnemy(
+          `stress-horde-${hordeSimulation.ids[index]}`,
+          'stress-horde',
+          position,
+          index,
+        );
+      }
+      updateHordeVisual();
       updateHordeUi();
       elements.hordeStatus!.textContent = `Agent #${hordeSimulation.ids[index]} hit · ${hordeSimulation.health[index]} health remaining.`;
     }
@@ -4182,6 +4562,19 @@ function moveToPointer(event: MouseEvent): void {
 }
 
 window.addEventListener('keydown', (event) => {
+  if (
+    document.pointerLockElement === canvas &&
+    (event.code === 'ControlLeft' || event.code === 'ControlRight') &&
+    !event.repeat
+  ) {
+    event.preventDefault();
+    releaseMouseCapture();
+    return;
+  }
+  if (event.code === 'Escape' && document.pointerLockElement === canvas) {
+    releaseMouseCapture();
+    return;
+  }
   if (event.code !== 'Escape') return;
   if (cancelTurretPlacement()) {
     combat.lastMessage = 'Turret placement cancelled.';
@@ -4224,10 +4617,7 @@ canvas.addEventListener(
   },
   { passive: false },
 );
-document.addEventListener('pointerlockerror', () => {
-  elements.seedHint!.textContent =
-    'Mouse capture was blocked. Drag on the open scene to look around instead.';
-});
+document.addEventListener('pointerlockerror', showPointerLockFallback);
 document.addEventListener('mousemove', (event) => {
   pointerX = event.clientX;
   pointerY = event.clientY;
@@ -4260,6 +4650,10 @@ canvas.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
   pointerStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
   if (cameraRig.mode !== 'third-person' || document.pointerLockElement === canvas) return;
+  if (canRequestPointerLock(cameraRig.mode, event.target === canvas, false)) {
+    requestPointerLockForPlay();
+    return;
+  }
   canvas?.focus({ preventScroll: true });
   canvas.setPointerCapture(event.pointerId);
 });
@@ -4450,6 +4844,7 @@ function animate(now: number): void {
       updateNavigationProgress();
     } else if (gamePhase === 'active' || gamePhase === 'extracting') {
       combat.tickCooldowns(fixedStep);
+      if (!interiorSession) tickExplosiveBarrels(fixedStep);
       if (gamePhase === 'active') {
         if (!interiorSession) runElapsed += fixedStep;
       }
@@ -4494,15 +4889,12 @@ function animate(now: number): void {
           fixedStep,
           cameraRig.mode,
           cameraRig.yaw,
-          combat.adrenalineRemaining > 0 ? 1.5 : 1,
+          playerSpeedMultiplier(combat.adrenalineRemaining > 0, player.sprintHeld),
         );
         const movedX = player.position.x - previousPlayerX;
         const movedZ = player.position.z - previousPlayerZ;
-        if (
-          movedX * movedX + movedZ * movedZ > 0.0001 &&
-          (fieldHorde?.awarenessRadius ?? 0) < 10
-        ) {
-          emitFieldNoise(10 / 140);
+        if (movedX * movedX + movedZ * movedZ > 0.0001 && (fieldHorde?.awarenessRadius ?? 0) < 10) {
+          emitFieldNoise((player.sprintHeld ? 20 : 10) / 140);
         }
         updateAutoAttack();
         if (wasDashing && !player.isDashing) replanNavigationTask();
@@ -4524,6 +4916,7 @@ function animate(now: number): void {
     simulationAccumulator -= fixedStep;
   }
   simulationFrameTimes.add(performance.now() - simulationStartedAt);
+  updateCombatFeedback(delta);
   if (wasAlive && !combat.alive) {
     finishDeath();
   }
@@ -4550,6 +4943,9 @@ function animate(now: number): void {
     rainCanRender,
   );
   particleBursts.update(delta);
+  bloodTrailVisual.update(delta);
+  pickupPressState.update(delta);
+  updateExplosiveBarrelBlinkMaterials();
   if (cameraRig.mode === 'third-person') {
     player.setFacingDirection(
       cameraRig.currentTarget.x - camera.position.x,
@@ -4584,6 +4980,13 @@ function animate(now: number): void {
         index += 1;
       }
     }
+  }
+  updatePickupPrompts();
+  pickupFeedModel.update(delta);
+  pickupUiRefresh += delta;
+  if (pickupUiRefresh >= 0.12) {
+    pickupUiRefresh = 0;
+    renderPickupFeed();
   }
   routeRefresh += delta;
   updateRouteLine();

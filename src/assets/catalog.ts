@@ -18,6 +18,7 @@ import { coastalLighthouse } from './coastalLighthouse';
 import { communicationTruck } from './communicationTruck';
 import { dryDockCrane } from './dryDockCrane';
 import { electricalSubstation } from './electricalSubstation';
+import { explosiveBarrel } from './explosiveBarrel';
 import { farmTractor } from './farmTractor';
 import { fireLookout } from './fireLookout';
 import { farmGrainSilo } from './farmGrainSilo';
@@ -50,6 +51,7 @@ const authoredAssets: AuthoredAsset[] = [
   pineTree,
   dryDockCrane,
   electricalSubstation,
+  explosiveBarrel,
   abandonedSubstation,
   fireLookout,
   radarDish,

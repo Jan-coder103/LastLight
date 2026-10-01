@@ -51,8 +51,7 @@ const terrainColors = new Map(
     new Color(definition.terrainColor),
   ]),
 );
-const lowDetailDistance = 58;
-const veryLowDetailDistance = 200;
+export const worldLodDistances = { near: 58, veryFar: 120 } as const;
 const lodViewer = new PerspectiveCamera();
 
 export function updateWorldLods(world: Group, viewerPosition: Vector3): void {
@@ -180,10 +179,10 @@ export function buildWorld(world: WorldData): Group {
         const lod = new LOD();
         lod.addLevel(highDetail, 0);
         const lowDetail = asset.createLowDetailVisual(placement.variant, highDetail);
-        lod.addLevel(lowDetail, lowDetailDistance);
+        lod.addLevel(lowDetail, worldLodDistances.near);
         lod.levels[1]!.hysteresis = 0.12;
         const veryLowDetail = asset.createVeryLowDetailVisual(placement.variant, highDetail);
-        lod.addLevel(veryLowDetail, veryLowDetailDistance);
+        lod.addLevel(veryLowDetail, worldLodDistances.veryFar);
         lod.levels[2]!.hysteresis = 0.12;
         prototype = lod;
       } else {
@@ -200,6 +199,17 @@ export function buildWorld(world: WorldData): Group {
     });
     if (visual instanceof LOD) lodObjects.push(visual);
     visual.name = `${placement.assetId} instance`;
+    visual.userData.assetId = placement.assetId;
+    visual.userData.assetPlacementIndex = placementIndex;
+    if (placement.assetId === 'explosive-barrel') {
+      visual.userData.explosiveBarrelId = `barrel-${placementIndex}`;
+      visual.traverse((object) => {
+        if (!(object instanceof Mesh) || object.userData.explosiveBarrelBlink !== true) return;
+        object.material = Array.isArray(object.material)
+          ? object.material.map((material) => material.clone())
+          : object.material.clone();
+      });
+    }
     if (placement.assetId === 'building-shell') {
       const nearVisual = visual instanceof LOD ? visual.levels[0]?.object : visual;
       const door = nearVisual?.children[2];

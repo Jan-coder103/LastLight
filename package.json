@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --maxWorkers=1",
+    "test:watch": "vitest --maxWorkers=1",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

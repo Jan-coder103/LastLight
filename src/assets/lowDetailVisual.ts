@@ -228,8 +228,7 @@ function createDetailVisual(source: Group, assetId: string, profile: DetailProfi
   const sourceBounds = new Box3().setFromObject(source);
   const sourceSize = sourceBounds.getSize(new Vector3());
   const sourceSpan = Math.max(sourceSize.x, sourceSize.y, sourceSize.z);
-  const preserveThinFeatureSpan =
-    sourceSpan * (profile.preserveThinFeatureSpanRatio ?? 0);
+  const preserveThinFeatureSpan = sourceSpan * (profile.preserveThinFeatureSpanRatio ?? 0);
   const buckets = new Map<string, { material: Material; geometries: BufferGeometry[] }>();
   const unmerged: Mesh[] = [];
 
@@ -296,7 +295,7 @@ function createDetailVisual(source: Group, assetId: string, profile: DetailProfi
     mesh.receiveShadow = false;
     detail.add(mesh);
   }
-  detail.add(...unmerged);
+  if (unmerged.length > 0) detail.add(...unmerged);
   return detail;
 }
 

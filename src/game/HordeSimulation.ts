@@ -236,7 +236,12 @@ export class HordeSimulation {
       }
     }
     if (!point) {
-      const fallback = this.spawnPoint(index, this.random, 'ring', Math.ceil(Math.sqrt(this.count)));
+      const fallback = this.spawnPoint(
+        index,
+        this.random,
+        'ring',
+        Math.ceil(Math.sqrt(this.count)),
+      );
       point = this.nearestWalkable(fallback.x, fallback.z);
     }
     this.initializeAgent(index, point.x, point.z);
@@ -277,6 +282,29 @@ export class HordeSimulation {
       else this.removeActiveAgent(index);
       this.behavior[index] = defeatedState;
     }
+    this.markVisualChanged(index, transformChanged);
+    return true;
+  }
+
+  applyShotKnockback(index: number, sourceX: number, sourceZ: number, distance = 0.26): boolean {
+    if (
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= this.activeCount ||
+      this.alive[index] === 0
+    )
+      return false;
+    const directionX = this.x[index]! - sourceX;
+    const directionZ = this.z[index]! - sourceZ;
+    const length = Math.hypot(directionX, directionZ);
+    if (length < 0.001) return false;
+    const step = Math.min(0.3, Math.max(0, distance)) / length;
+    const x = this.x[index]! + directionX * step;
+    const z = this.z[index]! + directionZ * step;
+    if (!this.navigator.isWalkable(x, z)) return false;
+    this.x[index] = x;
+    this.z[index] = z;
+    this.y[index] = terrainHeightAt(this.world.seed, x, z);
     this.markVisualChanged(index, transformChanged);
     return true;
   }

@@ -262,6 +262,11 @@ describe('generateWorld', () => {
   });
 
   it('keeps world-data generation within a measured 50 ms p95 budget', () => {
+    // Let the runtime optimize the generation path before collecting the timing samples.
+    for (let index = 0; index < 4; index += 1) {
+      generateWorld(`PHASE4-LOAD-WARMUP-${index}`);
+    }
+
     const durations: number[] = [];
     for (let index = 0; index < 24; index += 1) {
       const start = performance.now();

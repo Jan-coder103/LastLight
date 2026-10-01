@@ -35,6 +35,16 @@ describe('CombatSimulation', () => {
     expect(combat.zombies[0].alive).toBe(false);
   });
 
+  it('applies a small shot knockback only to a living hostile on walkable ground', () => {
+    const combat = makeCombat();
+    const zombie = combat.zombies[0]!;
+    const before = zombie.position.clone();
+    expect(combat.applyShotKnockback(zombie.id, before.x - 1, before.z)).toBe(true);
+    expect(zombie.position.x - before.x).toBeCloseTo(0.26);
+    expect(zombie.position.distanceTo(before)).toBeLessThan(0.31);
+    expect(combat.applyShotKnockback('missing', before.x, before.z)).toBe(false);
+  });
+
   it('gives dash and abilities cooldowns without a resource cost', () => {
     const combat = makeCombat();
     const player = new Vector3(0, 0, -5);

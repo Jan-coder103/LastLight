@@ -167,11 +167,15 @@ export class ZombieCrowdVisual {
   readonly parts: readonly InstancedMesh[];
   private readonly instance = new Object3D();
   private readonly tierColor = new Color();
+  private readonly hitColor = new Color('#ffd7bd');
   private readonly facingRotation = new Quaternion();
   private readonly detailedSlotByAgent: Int32Array;
   private readonly farSlotByAgent: Int32Array;
   private readonly detailedAgentAtSlot: Uint32Array;
   private readonly farAgentAtSlot: Uint32Array;
+  private readonly tierByAgent: Uint8Array;
+  private readonly hitRemaining: Float32Array;
+  private readonly flashingAgents: number[] = [];
   private readonly detailedUpdates: DirtyInstanceUpdates;
   private readonly farUpdates: DirtyInstanceUpdates;
   private detailedCount = 0;
@@ -196,6 +200,8 @@ export class ZombieCrowdVisual {
     this.farSlotByAgent = new Int32Array(capacity).fill(-1);
     this.detailedAgentAtSlot = new Uint32Array(capacity);
     this.farAgentAtSlot = new Uint32Array(capacity);
+    this.tierByAgent = new Uint8Array(capacity);
+    this.hitRemaining = new Float32Array(capacity);
     this.detailedUpdates = { mesh: detailedMesh, matrixIndices: [], colorIndices: [] };
     this.farUpdates = { mesh: farMesh, matrixIndices: [], colorIndices: [] };
     this.parts = [detailedMesh, farMesh];
@@ -211,6 +217,7 @@ export class ZombieCrowdVisual {
     scale: number,
     tier: number,
   ): void {
+    this.tierByAgent[index] = tier;
     if (tier === 2) {
       this.removeFromDetailed(index);
       this.addToFar(index);
@@ -228,9 +235,50 @@ export class ZombieCrowdVisual {
     const updates = tier === 2 ? this.farUpdates : this.detailedUpdates;
     const slot = tier === 2 ? this.farSlotByAgent[index]! : this.detailedSlotByAgent[index]!;
     updates.mesh.setMatrixAt(slot, this.instance.matrix);
-    updates.mesh.setColorAt(slot, this.tierColor);
+    updates.mesh.setColorAt(slot, this.hitRemaining[index]! > 0 ? this.hitColor : this.tierColor);
     updates.matrixIndices.push(slot);
     updates.colorIndices.push(slot);
+  }
+
+  flashAgent(index: number, duration = 0.14): void {
+    if (index < 0 || index >= this.hitRemaining.length) return;
+    if (this.hitRemaining[index] === 0) this.flashingAgents.push(index);
+    this.hitRemaining[index] = Math.max(this.hitRemaining[index]!, duration);
+    this.writeAgentColor(index, this.hitColor);
+  }
+
+  updateHitFlashes(deltaSeconds: number): void {
+    const delta = Math.max(0, deltaSeconds);
+    for (let cursor = this.flashingAgents.length - 1; cursor >= 0; cursor -= 1) {
+      const index = this.flashingAgents[cursor]!;
+      this.hitRemaining[index] = Math.max(0, this.hitRemaining[index]! - delta);
+      if (this.hitRemaining[index]! > 0) continue;
+      this.tierColor.setHex(
+        this.tierByAgent[index] === 0
+          ? 0xffffff
+          : this.tierByAgent[index] === 1
+            ? 0xd6d8d0
+            : 0x969d91,
+      );
+      this.writeAgentColor(index, this.tierColor);
+      this.flashingAgents[cursor] = this.flashingAgents[this.flashingAgents.length - 1]!;
+      this.flashingAgents.pop();
+    }
+  }
+
+  private writeAgentColor(index: number, color: Color): void {
+    let mesh: InstancedMesh | undefined;
+    let slot = -1;
+    if (this.detailedSlotByAgent[index]! >= 0) {
+      mesh = this.detailedUpdates.mesh;
+      slot = this.detailedSlotByAgent[index]!;
+      this.detailedUpdates.colorIndices.push(slot);
+    } else if (this.farSlotByAgent[index]! >= 0) {
+      mesh = this.farUpdates.mesh;
+      slot = this.farSlotByAgent[index]!;
+      this.farUpdates.colorIndices.push(slot);
+    }
+    if (mesh && slot >= 0) mesh.setColorAt(slot, color);
   }
 
   hideAgent(index: number): void {
@@ -254,8 +302,7 @@ export class ZombieCrowdVisual {
 
   consumeDirtyUpdates(visit: (updates: DirtyInstanceUpdates) => void): void {
     for (const updates of [this.detailedUpdates, this.farUpdates]) {
-      if (updates.matrixIndices.length > 0 || updates.colorIndices.length > 0)
-        visit(updates);
+      if (updates.matrixIndices.length > 0 || updates.colorIndices.length > 0) visit(updates);
       updates.matrixIndices.length = 0;
       updates.colorIndices.length = 0;
     }
@@ -357,6 +404,32 @@ export function createZombieVisual(zombie: ZombieState): Group {
   root.add(shadow);
   syncZombieVisual(root, zombie);
   return root;
+}
+
+export function setZombieHitFlash(root: Group, active: boolean): void {
+  const originals = root.userData.hitFlashMaterials as Map<Mesh, MeshStandardMaterial> | undefined;
+  if (!active) {
+    if (!originals) return;
+    for (const [mesh, original] of originals) {
+      const flash = mesh.material as MeshStandardMaterial;
+      mesh.material = original;
+      flash.dispose();
+    }
+    delete root.userData.hitFlashMaterials;
+    return;
+  }
+  if (originals) return;
+  const saved = new Map<Mesh, MeshStandardMaterial>();
+  root.traverse((object) => {
+    if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
+    const original = object.material;
+    const flash = original.clone();
+    flash.emissive.set('#c84938');
+    flash.emissiveIntensity = 0.62;
+    object.material = flash;
+    saved.set(object, original);
+  });
+  root.userData.hitFlashMaterials = saved;
 }
 
 export function syncZombieVisual(root: Group, zombie: ZombieState): void {

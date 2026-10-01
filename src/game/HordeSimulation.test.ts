@@ -71,6 +71,16 @@ describe('HordeSimulation', () => {
     expect(horde.findNearestAgent(after.x, after.z, 1)).toBe(0);
   });
 
+  it('gives an individual horde hit a small walkable knockback without changing agent identity', () => {
+    const horde = new HordeSimulation(10, 'STRESS-KNOCKBACK', 'ring', world, navigator);
+    const before = horde.snapshot(0);
+    expect(horde.applyShotKnockback(0, before.x - 1, before.z)).toBe(true);
+    const after = horde.snapshot(0);
+    expect(after.id).toBe(before.id);
+    expect(after.x - before.x).toBeCloseTo(0.26);
+    expect(Math.hypot(after.x - before.x, after.z - before.z)).toBeLessThan(0.31);
+  });
+
   it('removes a defeated agent from living counts and spatial queries without reusing its ID', () => {
     const horde = new HordeSimulation(4, 'STRESS-DAMAGE', 'ring', world, navigator);
     const id = horde.ids[0];

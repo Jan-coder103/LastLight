@@ -43,6 +43,7 @@ export const WORLD_THEME_DEFINITIONS: Readonly<Record<WorldTheme, RegionThemeDef
       'scrap-station': 0.32,
       'street-light': 0.85,
       'barricade-gate': 0.22,
+      'explosive-barrel': 0.24,
     },
     variantCounts: {
       'building-shell': 3,
@@ -59,6 +60,7 @@ export const WORLD_THEME_DEFINITIONS: Readonly<Record<WorldTheme, RegionThemeDef
       'scrap-station': 3,
       'street-light': 3,
       'barricade-gate': 3,
+      'explosive-barrel': 3,
     },
     requiredAssetIds: [
       'burned-corner-store',
@@ -72,6 +74,7 @@ export const WORLD_THEME_DEFINITIONS: Readonly<Record<WorldTheme, RegionThemeDef
       'rooftop-water-tank',
       'scrap-station',
       'street-light',
+      'explosive-barrel',
     ],
   },
   forest: {
