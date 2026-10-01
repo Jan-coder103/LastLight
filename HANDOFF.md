@@ -29,6 +29,7 @@ Phases 1–13 are **Accepted**. Phase 14, extraction horde pressure, is **Revisi
 
 ## Phase 16 implementation — awaiting owner playtest
 
+- Implementation commit: `3b63ee8`.
 - Shot hits now emit bounded pooled blood feedback, briefly tint the struck enemy, and apply modest navigation-safe knockback. Artillery uses the existing ground-impact shake through the reduced-motion and shake-intensity settings.
 - Moving shot-wounded enemies can leave pooled ground marks. Marks expire after 10 seconds; creation disables above 500 living hostiles and resumes below 100.
 - In-range pickups show an animated F keycap. A FIFO pickup feed stays visible for three seconds and fades entries before removing them. Shift sprint is 1.45× base speed; adrenaline is 2.5× base speed, and both multiply to 3.625× when combined.
