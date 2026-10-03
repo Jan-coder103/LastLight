@@ -2079,3 +2079,64 @@ kbd {
 .sortie-panel button:disabled {
   opacity: 0.45;
 }
+
+.pause-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 12, 10, 0.82);
+  backdrop-filter: blur(5px);
+}
+.pause-overlay[hidden],
+.pause-actions button[hidden] {
+  display: none;
+}
+.pause-panel {
+  width: min(420px, 100%);
+  padding: 38px;
+  border: 1px solid rgba(211, 181, 110, 0.3);
+  background: #151b16;
+  text-align: center;
+  box-shadow: 0 24px 70px #0008;
+}
+.pause-panel h2 {
+  margin: 16px 0;
+  color: #f0eddf;
+  font: 700 46px/1 var(--condensed);
+  letter-spacing: 0.1em;
+}
+.pause-panel p {
+  color: #a9ad9e;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.pause-actions {
+  display: grid;
+  gap: 12px;
+  margin: 28px 0;
+}
+.pause-actions button {
+  min-height: 46px;
+  color: #eadfc1;
+  border: 1px solid #d3b56e66;
+  background: #d3b56e18;
+  font: 12px var(--mono);
+  cursor: pointer;
+}
+.pause-actions button:hover,
+.pause-actions button:focus-visible {
+  background: #d3b56e40;
+}
+.settings-overlay {
+  z-index: 31;
+}
+.settings-panel {
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+.is-paused * {
+  animation-play-state: paused !important;
+}

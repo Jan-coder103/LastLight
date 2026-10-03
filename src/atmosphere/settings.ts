@@ -11,6 +11,10 @@ export interface AtmosphereSettings {
   rainVisuals: boolean;
   audioCues: boolean;
   shakeIntensity: number;
+  masterVolume: number;
+  effectsVolume: number;
+  ambienceVolume: number;
+  bloodEnabled: boolean;
 }
 
 export interface RunAtmosphere {
@@ -29,7 +33,17 @@ export function defaultAtmosphereSettings(prefersReducedMotion = false): Atmosph
     rainVisuals: true,
     audioCues: true,
     shakeIntensity: 0.55,
+    masterVolume: 0.8,
+    effectsVolume: 0.85,
+    ambienceVolume: 0.6,
+    bloodEnabled: true,
   };
+}
+
+export function volumeSetting(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : fallback;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -55,6 +69,11 @@ export function parseAtmosphereSettings(
     return {
       time,
       weather,
+      masterVolume: volumeSetting(record.masterVolume, defaults.masterVolume),
+      effectsVolume: volumeSetting(record.effectsVolume, defaults.effectsVolume),
+      ambienceVolume: volumeSetting(record.ambienceVolume, defaults.ambienceVolume),
+      bloodEnabled:
+        typeof record.bloodEnabled === 'boolean' ? record.bloodEnabled : defaults.bloodEnabled,
       reduceMotion:
         typeof record.reduceMotion === 'boolean' ? record.reduceMotion : defaults.reduceMotion,
       reduceFlashes:

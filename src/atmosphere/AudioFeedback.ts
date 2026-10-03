@@ -1,5 +1,5 @@
 import type { Firearm } from '../game/progression';
-import type { Weather } from './settings';
+import { volumeSetting, type Weather } from './settings';
 
 export type AudioCue =
   'shot' | 'hit' | 'damage' | 'dash' | 'shock' | 'heal' | 'adrenaline' | 'thunder' | 'explosion';
@@ -10,15 +10,37 @@ export class AudioFeedback {
   private shotEnds: number[] = [];
   private shotSerial = 0;
   private enabled = true;
+  private paused = false;
+  private masterVolume = 0.8;
+  private effectsVolume = 0.85;
+  private ambienceVolume = 0.6;
+  private masterGain: GainNode | undefined;
+  private effectsGain: GainNode | undefined;
+  private ambienceGain: GainNode | undefined;
   private rainEnabled = true;
   private rainSource: AudioBufferSourceNode | undefined;
   private rainGain: GainNode | undefined;
   private noiseBuffer: AudioBuffer | undefined;
 
   unlock(): void {
-    if (!this.enabled) return;
+    if (!this.enabled || this.paused) return;
     try {
-      this.context ??= new AudioContext();
+      if (!this.context) {
+        const context = (this.context = new AudioContext());
+        this.masterGain = context.createGain();
+        this.effectsGain = context.createGain();
+        this.ambienceGain = context.createGain();
+        const limiter = context.createDynamicsCompressor();
+        limiter.threshold.value = -8;
+        limiter.knee.value = 6;
+        limiter.ratio.value = 8;
+        limiter.attack.value = 0.003;
+        limiter.release.value = 0.12;
+        this.effectsGain.connect(this.masterGain);
+        this.ambienceGain.connect(this.masterGain);
+        this.masterGain.connect(limiter).connect(context.destination);
+        this.syncVolumes();
+      }
       void this.context.resume().catch(() => undefined);
       this.syncRain();
     } catch {
@@ -29,12 +51,33 @@ export class AudioFeedback {
   setOptions(enabled: boolean, weather: Weather): void {
     this.enabled = enabled;
     this.rainEnabled = enabled && weather === 'rain';
+    this.syncVolumes();
     this.syncRain();
+  }
+
+  setVolumes(master: number, effects: number, ambience: number): void {
+    this.masterVolume = volumeSetting(master, this.masterVolume);
+    this.effectsVolume = volumeSetting(effects, this.effectsVolume);
+    this.ambienceVolume = volumeSetting(ambience, this.ambienceVolume);
+    this.syncVolumes();
+  }
+
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    if (paused) void this.context?.suspend().catch(() => undefined);
+    else this.unlock();
+  }
+
+  private syncVolumes(): void {
+    const now = this.context?.currentTime ?? 0;
+    this.masterGain?.gain.setTargetAtTime(this.enabled ? this.masterVolume : 0, now, 0.02);
+    this.effectsGain?.gain.setTargetAtTime(this.effectsVolume * 6, now, 0.02);
+    this.ambienceGain?.gain.setTargetAtTime(this.ambienceVolume * 2, now, 0.02);
   }
 
   play(cue: AudioCue): void {
     const context = this.context;
-    if (!this.enabled || !context || context.state === 'closed') return;
+    if (this.paused || !this.enabled || !context || context.state === 'closed') return;
     const now = context.currentTime;
     if (cue === 'shot' || cue === 'dash') {
       const source = context.createBufferSource();
@@ -47,7 +90,7 @@ export class AudioFeedback {
       gain.gain.setValueAtTime(0.0001, now);
       gain.gain.linearRampToValueAtTime(cue === 'shot' ? 0.055 : 0.038, now + 0.006);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-      source.connect(filter).connect(gain).connect(context.destination);
+      source.connect(filter).connect(gain).connect(this.effectsGain!);
       source.start(now);
       source.stop(now + duration);
       return;
@@ -66,7 +109,10 @@ export class AudioFeedback {
         now + (cue === 'thunder' ? 0.26 : 0.025),
       );
       gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-      source.connect(filter).connect(gain).connect(context.destination);
+      source
+        .connect(filter)
+        .connect(gain)
+        .connect(cue === 'thunder' ? this.ambienceGain! : this.effectsGain!);
       source.start(now);
       source.stop(now + duration + 0.05);
       return;
@@ -91,7 +137,7 @@ export class AudioFeedback {
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.linearRampToValueAtTime(volume, now + 0.012);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    oscillator.connect(gain).connect(context.destination);
+    oscillator.connect(gain).connect(this.effectsGain!);
     oscillator.start(now);
     oscillator.stop(now + duration + 0.01);
   }
@@ -99,7 +145,7 @@ export class AudioFeedback {
   /** Original procedural synthesis; no sampled recordings or third-party licenses. */
   playWeapon(weapon: Firearm): void {
     const context = this.context;
-    if (!this.enabled || !context || context.state !== 'running') return;
+    if (this.paused || !this.enabled || !context || context.state !== 'running') return;
     const now = context.currentTime;
     this.shotEnds = this.shotEnds.filter((end) => end > now);
     if (this.shotEnds.length >= 4) return;
@@ -119,7 +165,7 @@ export class AudioFeedback {
     const gain = context.createGain();
     gain.gain.setValueAtTime(volume, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    source.connect(filter).connect(gain).connect(context.destination);
+    source.connect(filter).connect(gain).connect(this.effectsGain!);
     source.start(now);
     source.stop(now + duration);
     source.onended = () => {
@@ -166,7 +212,7 @@ export class AudioFeedback {
     const gain = context.createGain();
     gain.gain.setValueAtTime(0.0001, context.currentTime);
     gain.gain.linearRampToValueAtTime(0.012, context.currentTime + 0.4);
-    source.connect(filter).connect(gain).connect(context.destination);
+    source.connect(filter).connect(gain).connect(this.ambienceGain!);
     source.start();
     this.rainSource = source;
     this.rainGain = gain;

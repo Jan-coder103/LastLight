@@ -93,6 +93,7 @@ export class HordeSimulation {
   private noiseLevelValue = 0;
   private noiseX = 0;
   private noiseZ = 0;
+  private alarm: { x: number; z: number; radius: number } | undefined;
   playerHealth = 100;
   totalPlayerHits = 0;
   lastStepMs = 0;
@@ -169,7 +170,21 @@ export class HordeSimulation {
     return { ...this.tierCounts };
   }
 
+  setAlarm(x: number, z: number, radius: number): void {
+    this.alarm = { x, z, radius };
+  }
+
+  private hearsAlarm(index: number): boolean {
+    const alarm = this.alarm;
+    return Boolean(
+      alarm &&
+      (this.x[index]! - alarm.x) ** 2 + (this.z[index]! - alarm.z) ** 2 <= alarm.radius ** 2,
+    );
+  }
+
   calmArea(x: number, z: number, radius: number): void {
+    if (this.alarm && Math.hypot(this.alarm.x - x, this.alarm.z - z) <= radius)
+      this.alarm = undefined;
     if (Math.hypot(this.noiseX - x, this.noiseZ - z) <= radius) this.noiseLevelValue = 0;
     for (let i = 0; i < this.activeCount; i++)
       if (Math.hypot(this.x[i]! - x, this.z[i]! - z) <= radius) {
@@ -203,6 +218,7 @@ export class HordeSimulation {
     this.dormantCellHeads.fill(-1);
     this.dormantCountValue = 0;
     this.noiseLevelValue = 0;
+    this.alarm = undefined;
     this.noiseX = this.world.spawn.x;
     this.noiseZ = this.world.spawn.z;
     const columns = Math.ceil(Math.sqrt(this.count));
@@ -533,9 +549,10 @@ export class HordeSimulation {
             this.roamAnchorZ[index] = this.z[index]!;
             this.chooseRoamTarget(index);
             if (
-              awareness > 0 &&
-              (this.noiseX - this.x[index]!) ** 2 + (this.noiseZ - this.z[index]!) ** 2 <=
-                awarenessSquared
+              this.hearsAlarm(index) ||
+              (awareness > 0 &&
+                (this.noiseX - this.x[index]!) ** 2 + (this.noiseZ - this.z[index]!) ** 2 <=
+                  awarenessSquared)
             )
               this.beginInvestigation(index);
             else this.behavior[index] = roamingState;
@@ -601,7 +618,9 @@ export class HordeSimulation {
     const awareness = this.awarenessRadius;
     const noiseDistanceSquared =
       (this.x[index]! - this.noiseX) ** 2 + (this.z[index]! - this.noiseZ) ** 2;
-    const aware = awareness > 0 && noiseDistanceSquared <= awareness * awareness;
+    const hearsPlayer = awareness > 0 && noiseDistanceSquared <= awareness * awareness;
+    const alarm = !hearsPlayer && this.hearsAlarm(index) ? this.alarm : undefined;
+    const aware = hearsPlayer || Boolean(alarm);
     let state = this.behavior[index]!;
     if (aware) {
       this.focusRemaining[index] = focusDecayDuration;
@@ -623,8 +642,8 @@ export class HordeSimulation {
     let speed = 0.52;
     if (state === investigatingState) {
       this.behaviorTimer[index] = Math.max(0, this.behaviorTimer[index]! - delta);
-      targetX = this.noiseX;
-      targetZ = this.noiseZ;
+      targetX = alarm?.x ?? this.noiseX;
+      targetZ = alarm?.z ?? this.noiseZ;
       speed = 1.35;
       const noiseDistance = Math.hypot(targetX - this.x[index]!, targetZ - this.z[index]!);
       if (noiseDistance <= 1.8 || this.behaviorTimer[index] === 0) {
@@ -633,8 +652,8 @@ export class HordeSimulation {
       }
     }
     if (state === focusedState) {
-      targetX = playerX;
-      targetZ = playerZ;
+      targetX = alarm?.x ?? playerX;
+      targetZ = alarm?.z ?? playerZ;
       speed = this.tier[index] === 0 ? 1.85 : 1.6;
     } else if (state === roamingState) {
       const roamDistance = Math.hypot(targetX - this.x[index]!, targetZ - this.z[index]!);

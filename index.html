@@ -31,7 +31,7 @@
             aria-haspopup="dialog"
             aria-controls="settings-overlay"
           >
-            ATMOSPHERE <span class="button-key">O</span>
+            SETTINGS <span class="button-key">O</span>
           </button>
           <form class="seed-card" id="seed-form">
             <label for="seed-input">WORLD SEED</label>
@@ -113,6 +113,29 @@
       </section>
 
       <section
+        id="pause-overlay"
+        class="pause-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pause-title"
+        hidden
+      >
+        <div class="pause-panel">
+          <span class="eyebrow" id="pause-status">GAME PAUSED</span>
+          <h2 id="pause-title">LAST LIGHT</h2>
+          <p id="pause-note">Take a breath. The world is paused.</p>
+          <div class="pause-actions">
+            <button id="pause-resume" type="button">Resume Game</button>
+            <button id="pause-settings" type="button">Settings</button>
+            <button id="pause-exit" type="button">Exit Game</button>
+          </div>
+          <p class="settings-note">
+            Exit returns to the title screen. Your camp progress is saved; unfinished sorties are
+            abandoned.
+          </p>
+        </div>
+      </section>
+      <section
         class="settings-overlay"
         id="settings-overlay"
         role="dialog"
@@ -124,18 +147,30 @@
           <div class="settings-heading">
             <div>
               <span class="eyebrow">FIELD OPTIONS</span>
-              <h2 id="settings-title">ATMOSPHERE & ACCESSIBILITY</h2>
+              <h2 id="settings-title">SETTINGS</h2>
               <p>Visual presets lock when you deploy. Accessibility changes take effect now.</p>
             </div>
             <button
               id="settings-close"
               class="icon-button"
               type="button"
-              aria-label="Close field options"
+              aria-label="Back to pause menu"
             >
               ×
             </button>
           </div>
+          <label class="shake-control" for="master-volume"
+            ><span>MASTER VOLUME</span><output id="master-volume-value">80%</output
+            ><input id="master-volume" type="range" min="0" max="100" value="80"
+          /></label>
+          <label class="shake-control" for="effects-volume"
+            ><span>SOUND EFFECTS</span><output id="effects-volume-value">85%</output
+            ><input id="effects-volume" type="range" min="0" max="100" value="85"
+          /></label>
+          <label class="shake-control" for="ambience-volume"
+            ><span>WEATHER & AMBIENCE</span><output id="ambience-volume-value">60%</output
+            ><input id="ambience-volume" type="range" min="0" max="100" value="60"
+          /></label>
           <div class="settings-selects">
             <label for="time-preference">LIGHTING PRESET</label>
             <select id="time-preference">
@@ -152,14 +187,13 @@
             </select>
           </div>
           <div class="settings-toggles">
+            <label><input id="blood-enabled" type="checkbox" checked /> Show blood effects</label>
             <label
               ><input id="reduce-motion" type="checkbox" /> Reduce motion and camera shake</label
             >
             <label><input id="reduce-flashes" type="checkbox" /> Reduce bright flashes</label>
             <label><input id="rain-visuals" type="checkbox" /> Show rain particles</label>
-            <label
-              ><input id="audio-cues" type="checkbox" /> Play quiet action and weather cues</label
-            >
+            <label><input id="audio-cues" type="checkbox" /> Enable audio</label>
           </div>
           <label class="shake-control" for="shake-intensity">
             <span>IMPACT SHAKE</span><output id="shake-value" for="shake-intensity">55%</output>

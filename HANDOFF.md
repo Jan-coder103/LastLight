@@ -6,6 +6,33 @@ Updated: 2026-10-03
 
 Phases 1–17 remain accepted. Phase 18 is implemented and awaits its own owner playtest. Earlier pending-review notes are historical and do not reopen previous gates. The supplied Phase 18 scope in `plan.md` was preserved.
 
+## Phase 18 owner fix — top-down targeting after insertion grace — 2026-10-03
+
+- Crowd instance matrices changed during pursuit without updating Three.js's cached InstancedMesh raycast sphere. Once agents moved outside its old extent, rays could reject the entire tier pool, breaking direct clicking and the render-hit visibility requirement used by assist/sustained fire. Each transformed agent now grows its tier pool's conservative sphere in constant time; LOD moves and compacted removals retain valid bounds without a per-frame full-horde bounds rebuild.
+- Assist and sustained-fire visibility now test the live target point against world/loot scenery, instead of requiring a hit on an earlier render pose or a particular multipart silhouette. Moving targets retain their lock across fixed simulation steps; actual scenery still occludes them. Existing cooldown, range, defeat, navigation and view/context cancellation rules remain in force.
+- Verification: all 38 files / 119 tests and production build pass, with the existing shared-chunk advisory. New regressions cover ray hits/identity after movement beyond initial bounds, tier migration/compaction, moving-target assist despite a stale render pose, and obstacle occlusion. Scoped formatting and whitespace checks pass. Owner should confirm selecting and sustained fire on chasing zombies after 12 seconds; Phase 18 remains awaiting acceptance.
+
+## Phase 18 owner follow-up — pause menu, volume and blood settings — 2026-10-03
+
+- Esc opens a centered Last Light menu with Resume Game, Settings and Exit Game. Settings opened via O/the toolbar also pauses. Menus stop the entire frame's simulation/animation updates (camp, field, interiors, arrival and extraction) and suspend Web Audio. Resume clears accumulated simulation time and restores controls only when the current phase/other dialogs allow them. Focus cycles inside the active menu; input cannot trigger gameplay behind it. Browser-native capture loss opens the pause menu; intentional capture release/view changes do not.
+- Exit abandons an unfinished sortie through existing death/backpack-loss handling, retaining banked progress. A completed boarding result stays awarded. It returns to a paused title screen with Play Game, which resumes at camp; a browser page cannot reliably close its hosting window. Pending sortie menus and camp interiors are cleaned up on exit.
+- Persistent settings add Master / Sound Effects / Weather & Ambience sliders (80/85/60% defaults) and Show Blood Effects. Existing version-1 options migrate with defaults. Effects route through a 6× gain stage and ambience through 2× before their individual/master volumes and a compressor; default effects are approximately 4.08× their former gain. Thunder follows ambience volume; all action/explosion/weapon cues follow effects volume. Master zero and audio disable mute the shared output.
+- Blood-off prevents shot/turret/horde bursts and wound trails, and removes existing blood particles/marks immediately while retaining non-blood ability particles and hit feedback.
+- Verification: 37 test files / 116 tests pass; production build passes with the existing shared-chunk advisory. Regressions cover paused menu/settings/title transitions, preference migration/clamping/persistence, independent audio buses/master mute/audio suspension, and blood removal. Browser menu smoke verified Esc, settings sliders/blood, saved 70%/blood-off after reload, Back, Exit/title and Play/camp; defaults restored, warning/error log empty. Settings/menu screenshots are in `docs/phase18-settings.jpg` and `docs/phase18-pause-menu.jpg`. Listening levels and active-sortie pause/exit remain owner playtest items; Phase 18 stays awaiting acceptance.
+
+## Phase 18 owner fix — simultaneous aim, look and fire — 2026-10-03
+
+- Perspective aiming and held fire now use independent mouse-button down/up events. Mouse Pointer Events only report the first button press/final release, so holding RMB previously prevented a subsequent LMB press from reaching the fire handler. Releasing LMB stops firing while retaining RMB aim; releasing RMB restores the camera independently.
+- When Pointer Lock is unavailable, holding RMB also rotates the camera with mouse movement in third/first person. Captured mouse-look runs once through the mousemove handler, avoiding duplicate rotation from drag handling. Top-down input and unaimed click/drag behavior remain intact; turret placement cancellation still consumes its pointer press.
+- Verification: a direct handler smoke exercised RMB→LMB chords, independent releases, fallback look in both perspective views and single captured-look updates. Production build and all 35 test files / 111 tests pass, with the existing shared-chunk advisory. Scoped formatting and whitespace checks pass. Owner visual playtest remains open.
+
+## Phase 18 owner fixes — noise, aggro and fog — 2026-10-03
+
+- The optional alarm was calling `emitNoise` every simulation step, pinning the scout HUD near 49 m and replacing the scout hearing location with the distant alarm. It now has a separate persistent 49 m local hearing source; local zombies approach the alarm, scout noise takes priority when heard, and shutdown removes the source and calms the local group. Alarm awareness does not fill the scout meter.
+- Movement refreshes the scout hearing location every moving step, sustaining 10 m walking / 20 m sprinting noise while retaining louder action peaks. Idle scout noise decays normally. The outdoor pause and insertion grace remain in force.
+- Field horde instances and mission loot/objectives now receive the same scout-centered fog as world scenery: clear to 150 m and fully blended at 200 m. Fog installation tracks material identity with a WeakSet, so cloned materials cannot falsely claim to have inherited shader callbacks through copied userData.
+- Verification: all 35 test files / 111 tests pass; production build passes with the existing shared asset-document chunk advisory. Regressions cover distant alarm/scout separation, local alarm attraction/shutdown and cloned fog materials. Scoped formatting and whitespace checks pass. Visual strength and full gameplay remain for the owner playtest; Phase 18 remains awaiting acceptance.
+
 ## Phase 18 implementation — 2026-10-03
 
 Implementation commit: `3117b5f`.

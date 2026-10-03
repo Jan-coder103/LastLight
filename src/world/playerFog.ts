@@ -1,6 +1,7 @@
 import { Material, Object3D, Vector3 } from 'three';
 const center = { value: new Vector3() };
 const enabled = { value: 0 };
+const installed = new WeakSet<Material>();
 /** World-space horizontal fog distance stays centered on the scout in every camera view. */
 export function updatePlayerFog(position: Vector3, active: boolean): void {
   center.value.copy(position);
@@ -10,7 +11,8 @@ export function installPlayerFog(root: Object3D): void {
   root.traverse((object) => {
     const materials = (object as Object3D & { material?: Material | Material[] }).material;
     for (const material of Array.isArray(materials) ? materials : materials ? [materials] : []) {
-      if (material.userData.playerFog) continue;
+      if (installed.has(material)) continue;
+      installed.add(material);
       material.userData.playerFog = true;
       const original = material.onBeforeCompile;
       const key = material.customProgramCacheKey.bind(material);

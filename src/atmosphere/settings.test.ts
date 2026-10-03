@@ -38,6 +38,10 @@ describe('atmosphere options', () => {
       rainVisuals: false,
       audioCues: false,
       shakeIntensity: 1,
+      masterVolume: 0.8,
+      effectsVolume: 0.85,
+      ambienceVolume: 0.6,
+      bloodEnabled: true,
     });
   });
 
@@ -74,4 +78,31 @@ describe('atmosphere options', () => {
       weather: 'mist',
     });
   });
+});
+
+it('clamps audio levels, preserves mute and blood settings, and migrates legacy options', () => {
+  const settings = parseAtmosphereSettings(
+    JSON.stringify({
+      version: 1,
+      masterVolume: -1,
+      effectsVolume: 2,
+      ambienceVolume: 0,
+      bloodEnabled: false,
+    }),
+  );
+  expect(settings).toMatchObject({
+    masterVolume: 0,
+    effectsVolume: 1,
+    ambienceVolume: 0,
+    bloodEnabled: false,
+  });
+  let raw = '';
+  saveAtmosphereSettings(settings, {
+    setItem: (_key, value) => {
+      raw = value;
+    },
+  });
+  expect(parseAtmosphereSettings(raw)).toEqual(settings);
+  expect(parseAtmosphereSettings('{"version":1}')).toEqual(defaultAtmosphereSettings());
+  expect(parseAtmosphereSettings('{"version":1,"masterVolume":"loud"}').masterVolume).toBe(0.8);
 });

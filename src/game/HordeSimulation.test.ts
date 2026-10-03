@@ -135,3 +135,40 @@ it('alarm shutdown clears local awareness without damaging or removing horde age
   expect(Array.from(horde.ids)).toEqual(ids);
   expect(horde.livingCount).toBe(40);
 });
+
+it('keeps alarm awareness separate from the scout meter and hearing position', () => {
+  const world = generateWorld('ALARM-CALM');
+  const horde = new HordeSimulation(100, 'ALARM', 'ring', world, new GridNavigator(world), 40, {
+    dormantActivation: true,
+  });
+  const agent = horde.snapshot(0);
+  const playerX = agent.x + 7;
+  const playerZ = agent.z;
+  horde.setAlarm(playerX + 150, playerZ, 49);
+  for (let i = 0; i < 120; i++) horde.tick(1 / 60, playerX, playerZ);
+  expect(horde.awarenessRadius).toBe(0);
+  expect(horde.snapshot(0).behavior).toBe('roaming');
+  for (let i = 0; i < 12; i++) {
+    horde.emitNoise(playerX, playerZ, 10 / 140);
+    horde.tick(1 / 60, playerX, playerZ);
+  }
+  expect(horde.awarenessRadius).toBeLessThanOrEqual(10);
+  expect(horde.snapshot(0).behavior).toBe('investigating');
+  for (let i = 0; i < 120; i++) horde.tick(1 / 60, playerX, playerZ);
+  expect(horde.awarenessRadius).toBe(0);
+});
+
+it('attracts local zombies to an alarm without filling the scout noise meter, and calms on shutdown', () => {
+  const world = generateWorld('ALARM-CALM');
+  const horde = new HordeSimulation(100, 'ALARM', 'ring', world, new GridNavigator(world), 40, {
+    dormantActivation: true,
+  });
+  const agent = horde.snapshot(0);
+  horde.setAlarm(agent.x, agent.z, 49);
+  for (let i = 0; i < 30; i++) horde.tick(1 / 60, agent.x + 60, agent.z);
+  expect(horde.awarenessRadius).toBe(0);
+  expect(horde.snapshot(0).behavior).toBe('focused');
+  horde.calmArea(agent.x, agent.z, 30);
+  for (let i = 0; i < 120; i++) horde.tick(1 / 60, agent.x + 60, agent.z);
+  expect(horde.snapshot(0).behavior).toBe('roaming');
+});

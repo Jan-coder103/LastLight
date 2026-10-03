@@ -15,6 +15,7 @@ interface Particle {
   life: number;
   duration: number;
   color: Color;
+  blood: boolean;
 }
 
 const capacity = 36;
@@ -51,7 +52,14 @@ export class ParticleBursts {
     return this.particles.length;
   }
 
-  burst(position: Vector3, color: string, count = 6, speed = 1.5, duration = 0.28): void {
+  burst(
+    position: Vector3,
+    color: string,
+    count = 6,
+    speed = 1.5,
+    duration = 0.28,
+    blood = false,
+  ): void {
     const origin = position.clone();
     const tint = new Color(color);
     for (let index = 0; index < count; index += 1) {
@@ -69,8 +77,15 @@ export class ParticleBursts {
         life: duration,
         duration,
         color: tint.clone(),
+        blood,
       });
     }
+    this.syncInstances();
+  }
+
+  clearBlood(): void {
+    for (let i = this.particles.length - 1; i >= 0; i--)
+      if (this.particles[i]!.blood) this.particles.splice(i, 1);
     this.syncInstances();
   }
 

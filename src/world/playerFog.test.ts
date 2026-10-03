@@ -36,3 +36,21 @@ it('uses the same scout-centered fog uniforms for regular and instanced world ge
   installPlayerFog(root);
   expect(material.onBeforeCompile).toBe(callback);
 });
+
+it('installs fog on cloned materials even when their userData carries the original marker', () => {
+  const material = new MeshStandardMaterial();
+  const root = new Group();
+  root.add(new Mesh(new BoxGeometry(), material));
+  installPlayerFog(root);
+  const clone = material.clone();
+  const clonedRoot = new Group();
+  clonedRoot.add(new Mesh(new BoxGeometry(), clone));
+  installPlayerFog(clonedRoot);
+  const shader = {
+    uniforms: {},
+    vertexShader: ShaderLib.standard.vertexShader,
+    fragmentShader: ShaderLib.standard.fragmentShader,
+  };
+  clone.onBeforeCompile(shader as Parameters<typeof clone.onBeforeCompile>[0], {} as WebGLRenderer);
+  expect(shader.fragmentShader).toContain('length(vFieldFogPosition.xz - fieldFogCenter.xz)');
+});

@@ -1,4 +1,6 @@
-import { updatePlayerFog } from './world/playerFog';
+import { hasClearTargetLine } from './game/targetVisibility';
+import { PauseMenu } from './game/PauseMenu';
+import { installPlayerFog, updatePlayerFog } from './world/playerFog';
 import { FirePatchPool } from './game/FirePatches';
 import { chooseAssistedTarget, extractionArrowVisible } from './game/targeting';
 import { seededMissionEvents, residentRoles } from './game/missionObjectives';
@@ -245,6 +247,11 @@ const elements = {
   seedForm: document.querySelector<HTMLFormElement>('#seed-form'),
   seedInput: document.querySelector<HTMLInputElement>('#seed-input'),
   seedHint: document.querySelector<HTMLElement>('#seed-hint'),
+  pauseOverlay: document.querySelector<HTMLElement>('#pause-overlay'),
+  pauseResume: document.querySelector<HTMLButtonElement>('#pause-resume'),
+  pauseSettings: document.querySelector<HTMLButtonElement>('#pause-settings'),
+  pauseExit: document.querySelector<HTMLButtonElement>('#pause-exit'),
+  bloodEnabled: document.querySelector<HTMLInputElement>('#blood-enabled'),
   settingsButton: document.querySelector<HTMLButtonElement>('#settings-button'),
   settingsOverlay: document.querySelector<HTMLElement>('#settings-overlay'),
   settingsClose: document.querySelector<HTMLButtonElement>('#settings-close'),
@@ -492,6 +499,9 @@ const firePatches = new FirePatchPool<Mesh>();
 let lastAttackTargetId: string | undefined;
 let lastEarnedPoints = 0;
 let attackIntentRemaining = 0;
+const pauseMenu = new PauseMenu();
+let pointerLockReleaseRequested = false;
+let hadPointerLock = false;
 let fireHeld = false;
 let droppedItemNumber = 0;
 let inventoryPanel: InventoryPanel;
@@ -598,7 +608,6 @@ let pointerStart: { id: number; x: number; y: number } | undefined;
 let wasAlive = combat.alive;
 let lastFeedbackHealth = 100;
 let feedbackTimeout = 0;
-let optionsReturnFocus: HTMLElement | null = null;
 let lastUiTime = 0;
 let routeRefresh = 0;
 let hoverRefresh = 0;
@@ -663,6 +672,17 @@ function applyAccessibilityOptions(): void {
   game?.classList.toggle('reduce-motion', atmosphereSettings.reduceMotion);
   game?.classList.toggle('reduce-flashes', atmosphereSettings.reduceFlashes);
   audioFeedback.setOptions(atmosphereSettings.audioCues, atmosphereRuntime.weather);
+  audioFeedback.setVolumes(
+    atmosphereSettings.masterVolume,
+    atmosphereSettings.effectsVolume,
+    atmosphereSettings.ambienceVolume,
+  );
+  if (!atmosphereSettings.bloodEnabled) {
+    bloodTrailVisual.pool.marks.length = 0;
+    bloodTrailVisual.update(0);
+    woundedTrailTargets.clear();
+    particleBursts.clearBlood();
+  }
 }
 
 function settingsStatusText(): string {
@@ -688,6 +708,12 @@ function updateSettingsControls(): void {
   elements.reduceFlashes!.checked = atmosphereSettings.reduceFlashes;
   elements.rainVisuals!.checked = atmosphereSettings.rainVisuals;
   elements.audioCues!.checked = atmosphereSettings.audioCues;
+  elements.bloodEnabled!.checked = atmosphereSettings.bloodEnabled;
+  for (const key of ['master', 'effects', 'ambience'] as const) {
+    const value = Math.round(atmosphereSettings[`${key}Volume`] * 100);
+    document.querySelector<HTMLInputElement>(`#${key}-volume`)!.value = String(value);
+    document.querySelector<HTMLOutputElement>(`#${key}-volume-value`)!.value = `${value}%`;
+  }
   elements.shakeIntensity!.value = String(Math.round(atmosphereSettings.shakeIntensity * 100));
   elements.shakeValue!.value = `${Math.round(atmosphereSettings.shakeIntensity * 100)}%`;
   elements.settingsNote!.textContent = settingsStatusText();
@@ -708,18 +734,67 @@ function setCampAtmosphere(): void {
   updateSettingsControls();
 }
 
+function syncPauseMenu(): void {
+  const paused = pauseMenu.paused;
+  document.querySelector('#game')?.classList.toggle('is-paused', paused);
+  elements.pauseOverlay!.hidden = !paused || pauseMenu.page === 'settings';
+  elements.settingsOverlay!.hidden = pauseMenu.page !== 'settings';
+  const title = pauseMenu.page === 'title';
+  elements.pauseResume!.textContent = title ? 'Play Game' : 'Resume Game';
+  elements.pauseExit!.hidden = title;
+  document.querySelector('#pause-status')!.textContent = title ? 'WAYFARER CAMP' : 'GAME PAUSED';
+  document.querySelector('#pause-note')!.textContent = title
+    ? 'Return to camp when you are ready.'
+    : 'Take a breath. The world is paused.';
+  audioFeedback.setPaused(paused);
+  simulationAccumulator = 0;
+  if (paused) {
+    player.setEnabled(false);
+    releaseMouseCapture();
+    releaseLookDrag();
+    pointerStart = undefined;
+    (pauseMenu.page === 'settings' ? elements.settingsClose : elements.pauseResume)!.focus();
+  } else {
+    const playable =
+      (gamePhase === 'base' || gamePhase === 'active' || stressActive) &&
+      !inventoryPanel.open &&
+      elements.baseOverlay!.hidden &&
+      !document.querySelector('.sortie-panel');
+    player.setEnabled(playable);
+    canvas!.focus({ preventScroll: true });
+    if (playable && cameraRig.mode !== 'top-down') requestPointerLockForPlay();
+  }
+}
+
+function openPauseMenu(): void {
+  inventoryPanel.close();
+  pauseMenu.open();
+  syncPauseMenu();
+}
+
 function openAtmosphereOptions(): void {
-  optionsReturnFocus =
-    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  if (!pauseMenu.paused) openPauseMenu();
+  pauseMenu.settings();
   updateSettingsControls();
-  elements.settingsOverlay!.removeAttribute('hidden');
-  elements.settingsClose!.focus();
+  syncPauseMenu();
 }
 
 function closeAtmosphereOptions(): void {
-  elements.settingsOverlay!.setAttribute('hidden', '');
-  (optionsReturnFocus ?? elements.settingsButton!).focus();
-  optionsReturnFocus = null;
+  pauseMenu.back();
+  syncPauseMenu();
+}
+
+function exitGame(): void {
+  document.querySelector('.sortie-panel')?.remove();
+  if (campInteriorSession) leaveCampBuilding();
+  closeBaseTerminal();
+  if (stressActive) stopHordeTest();
+  if (gamePhase === 'takeoff') finishSuccess();
+  else if (gamePhase !== 'base' && gamePhase !== 'result') finishDeath();
+  if (gamePhase === 'result') returnToBase();
+  storeSave(saveData);
+  pauseMenu.exit();
+  syncPauseMenu();
 }
 
 function flashDamageFeedback(): void {
@@ -756,6 +831,11 @@ function requestPointerLockForPlay(): boolean {
 
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === canvas;
+  const lostCapture = hadPointerLock && !locked;
+  hadPointerLock = locked;
+  const requestedRelease = pointerLockReleaseRequested;
+  pointerLockReleaseRequested = false;
+  if (lostCapture && !requestedRelease && !pauseMenu.paused) openPauseMenu();
   document.querySelector('#game')?.classList.toggle('is-pointer-locked', locked);
   if (locked) {
     elements.seedHint!.textContent = 'Mouse captured · press Escape or Ctrl to release.';
@@ -769,6 +849,8 @@ document.addEventListener('pointerlockchange', () => {
 
 function switchView(): void {
   if (gamePhase !== 'active' && gamePhase !== 'base' && !stressActive) return;
+  if (cameraRig.mode === 'third-person' && document.pointerLockElement === canvas)
+    pointerLockReleaseRequested = true;
   cameraRig.switchMode(player.position);
   if (cameraRig.mode !== 'first-person') elements.hordeCamera!.value = cameraRig.mode;
   autoAttackTargetId = undefined;
@@ -785,7 +867,10 @@ function switchView(): void {
 function releaseMouseCapture(): void {
   cameraRig.setAiming(false);
   fireHeld = false;
-  if (document.pointerLockElement === canvas) document.exitPointerLock();
+  if (document.pointerLockElement === canvas) {
+    pointerLockReleaseRequested = true;
+    document.exitPointerLock();
+  }
 }
 
 function releaseLookDrag(): void {
@@ -3125,7 +3210,7 @@ function createOptionalEvents(): void {
       z: eventZ,
       object,
     });
-    if (index === 0) emitFieldNoise(0.5, site.x, site.z);
+    if (index === 0) fieldHorde?.setAlarm(eventX, eventZ, 49);
   }
 }
 function completeOptionalEvent(view: InteractiveView): void {
@@ -3203,6 +3288,7 @@ function startRun(): void {
   fieldHordeVisual.group.visible = false;
   fieldHordeRenderTier = new Uint8Array(fieldHordeCapacity);
   fieldHordeRenderTier.fill(255);
+  installPlayerFog(fieldHordeVisual.group);
   scene.add(fieldHordeVisual.group);
   createNoiseRadiusVisual();
   fieldHordeSpawnRemaining = 2;
@@ -3215,6 +3301,7 @@ function startRun(): void {
   createRunLoot();
   runObjectives = [];
   createOptionalEvents();
+  installPlayerFog(lootGroup);
   if (companionHired) addFollower('hired-companion', true, player.position);
   companionHired = false;
   chopper = createChopper();
@@ -4010,7 +4097,8 @@ function animateFieldAbilities(delta: number): void {
           combat.lastMessage = `Auto turret hit ${target.id}.`;
           addShotEffect(muzzle, hitPoint);
           if (!atmosphereSettings.reduceMotion && !atmosphereSettings.reduceFlashes)
-            particleBursts.burst(hitPoint, '#b04c42', 3, 1.35, 0.2);
+            if (atmosphereSettings.bloodEnabled)
+              particleBursts.burst(hitPoint, '#b04c42', 3, 1.35, 0.2, true);
           audioFeedback.play('shot');
           updateCombatUi();
         }
@@ -4165,6 +4253,12 @@ elements.seedForm!.addEventListener('submit', (event) => {
   event.preventDefault();
   setSeed(elements.seedInput!.value);
 });
+elements.pauseResume!.addEventListener('click', () => {
+  pauseMenu.resume();
+  syncPauseMenu();
+});
+elements.pauseSettings!.addEventListener('click', openAtmosphereOptions);
+elements.pauseExit!.addEventListener('click', exitGame);
 elements.settingsButton!.addEventListener('click', openAtmosphereOptions);
 elements.settingsClose!.addEventListener('click', closeAtmosphereOptions);
 elements.settingsOverlay!.addEventListener('click', (event) => {
@@ -4201,11 +4295,22 @@ for (const [input, key] of [
   [elements.reduceFlashes!, 'reduceFlashes'],
   [elements.rainVisuals!, 'rainVisuals'],
   [elements.audioCues!, 'audioCues'],
+  [elements.bloodEnabled!, 'bloodEnabled'],
 ] as const) {
   input.addEventListener('change', () => {
     atmosphereSettings[key] = input.checked;
     applyAccessibilityOptions();
     if (key === 'audioCues' && input.checked) audioFeedback.unlock();
+    persistAtmosphereSettings();
+  });
+}
+for (const key of ['master', 'effects', 'ambience'] as const) {
+  document.querySelector<HTMLInputElement>(`#${key}-volume`)!.addEventListener('input', (event) => {
+    const value = Number((event.target as HTMLInputElement).value) / 100;
+    atmosphereSettings[`${key}Volume`] = value;
+    document.querySelector<HTMLOutputElement>(`#${key}-volume-value`)!.value =
+      `${Math.round(value * 100)}%`;
+    applyAccessibilityOptions();
     persistAtmosphereSettings();
   });
 }
@@ -4278,6 +4383,32 @@ elements.buyCargoButton!.addEventListener('click', () => {
 window.addEventListener(
   'keydown',
   (event) => {
+    if (event.code === 'Escape' && !event.repeat) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!pauseMenu.paused) openPauseMenu();
+      else {
+        pauseMenu.escape();
+        syncPauseMenu();
+      }
+      return;
+    }
+    if (pauseMenu.paused) {
+      if (event.key === 'Tab') {
+        const overlay =
+          pauseMenu.page === 'settings' ? elements.settingsOverlay! : elements.pauseOverlay!;
+        const controls = Array.from(
+          overlay.querySelectorAll<HTMLElement>(
+            'button:not([hidden]):not(:disabled), input:not(:disabled), select:not(:disabled)',
+          ),
+        );
+        const index = controls.indexOf(document.activeElement as HTMLElement);
+        event.preventDefault();
+        controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length]?.focus();
+      }
+      event.stopImmediatePropagation();
+      return;
+    }
     const typing =
       event.target instanceof HTMLElement &&
       ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName);
@@ -4494,6 +4625,7 @@ function trackShotWoundedEnemy(
   position: Vector3,
   index?: number,
 ): void {
+  if (!atmosphereSettings.bloodEnabled) return;
   woundedTrailTargets.set(id, { kind, index, x: position.x, z: position.z, elapsed: 0 });
 }
 
@@ -4547,7 +4679,7 @@ function updateCombatFeedback(delta: number): void {
     target.elapsed += delta;
     const moved = Math.hypot(x - target.x, z - target.z);
     if (moved < 0.72 || target.elapsed < 0.22) continue;
-    if (bloodTrailCreationEnabled)
+    if (atmosphereSettings.bloodEnabled && bloodTrailCreationEnabled)
       bloodTrailVisual.add(
         new Vector3(x, terrainHeightAt(world.seed, x, z) + 0.035, z),
         Math.atan2(z - target.z, x - target.x),
@@ -4737,12 +4869,7 @@ function firstWorldOrLivingHit(raycaster: Raycaster) {
 function canSeeZombie(zombie: HostileTarget): boolean {
   const origin = camera.getWorldPosition(new Vector3());
   const aimPoint = zombie.position.clone().add(new Vector3(0, 1.05, 0));
-  const direction = aimPoint.sub(origin);
-  const distance = direction.length();
-  direction.normalize();
-  const raycaster = new Raycaster(origin, direction, 0, distance + 0.05);
-  const hit = firstWorldOrLivingHit(raycaster);
-  return findZombieId(hit?.object, hit?.instanceId) === zombie.id;
+  return hasClearTargetLine(origin, aimPoint, [activeWorldVisual(), activeLootVisual()]);
 }
 
 function findAssistedZombie(
@@ -4862,13 +4989,18 @@ function fireAlongRay(aimPoint: Vector3, preferredHordeIndex?: number): boolean 
     const targetAfterHit = getHostileTarget(targetId);
     const aliveAfterHit = targetAfterHit !== undefined;
     audioFeedback.play('hit');
-    if (!atmosphereSettings.reduceMotion && !atmosphereSettings.reduceFlashes)
+    if (
+      atmosphereSettings.bloodEnabled &&
+      !atmosphereSettings.reduceMotion &&
+      !atmosphereSettings.reduceFlashes
+    )
       particleBursts.burst(
         hitPoint,
         aliveAfterHit ? '#b04c42' : '#87352d',
         aliveAfterHit ? 4 : 6,
         1.45,
         0.22,
+        true,
       );
     if (aliveAfterHit && targetAfterHit) {
       const hitIndex = targetAfterHit.hordeIndex;
@@ -4930,7 +5062,8 @@ function fireAt(event: Pick<MouseEvent, 'clientX' | 'clientY'>): void {
       audioFeedback.play('shot');
       audioFeedback.play('hit');
       if (!atmosphereSettings.reduceMotion && !atmosphereSettings.reduceFlashes)
-        particleBursts.burst(position, '#ad493f', 4, 1.45, 0.22);
+        if (atmosphereSettings.bloodEnabled)
+          particleBursts.burst(position, '#ad493f', 4, 1.45, 0.22, true);
       if (hordeSimulation.alive[index] === 1) {
         if (!atmosphereSettings.reduceFlashes) hordeVisual?.flashAgent(index);
         trackShotWoundedEnemy(
@@ -5060,6 +5193,10 @@ window.addEventListener('keydown', (event) => {
 });
 
 canvas.addEventListener('contextmenu', (event) => {
+  if (pauseMenu.paused) {
+    event.preventDefault();
+    return;
+  }
   event.preventDefault();
   if (suppressPlacementContextMenu) {
     suppressPlacementContextMenu = false;
@@ -5076,7 +5213,7 @@ canvas.addEventListener('contextmenu', (event) => {
 canvas.addEventListener(
   'wheel',
   (event) => {
-    if (event.ctrlKey) return;
+    if (pauseMenu.paused || event.ctrlKey) return;
     event.preventDefault();
     const delta =
       event.deltaMode === WheelEvent.DOM_DELTA_LINE
@@ -5090,12 +5227,16 @@ canvas.addEventListener(
 );
 document.addEventListener('pointerlockerror', showPointerLockFallback);
 document.addEventListener('mousemove', (event) => {
+  if (pauseMenu.paused) return;
   pointerX = event.clientX;
   pointerY = event.clientY;
   if (document.pointerLockElement === canvas) {
     cameraRig.lookBy(event.movementX, event.movementY);
     updateEnemyHover(window.innerWidth / 2, window.innerHeight / 2, true);
     return;
+  }
+  if (cameraRig.aiming && cameraRig.mode !== 'top-down' && (event.buttons & 2) !== 0) {
+    cameraRig.lookBy(event.movementX, event.movementY);
   }
   if (cameraRig.mode === 'third-person') {
     elements.reticle!.style.left = `${event.clientX}px`;
@@ -5109,24 +5250,19 @@ document.addEventListener('mousemove', (event) => {
     event.target === canvas || canvas.contains(event.target as Node),
   );
 });
-canvas.addEventListener('pointerdown', (event) => {
-  if (turretPreview && (event.button === 0 || event.button === 2)) {
-    event.preventDefault();
-    cancelTurretPlacement();
-    combat.lastMessage = 'Turret placement cancelled.';
-    updateCombatUi();
-    suppressPlacementContextMenu = event.button === 2;
-    return;
-  }
+canvas.addEventListener('mousedown', (event) => {
+  if (pauseMenu.paused) return;
   if (event.button === 2 && cameraRig.mode !== 'top-down') {
+    releaseLookDrag();
+    pointerStart = undefined;
     cameraRig.setAiming(true);
     event.preventDefault();
     return;
   }
   if (event.button !== 0) return;
-  pointerStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
   if (cameraRig.mode === 'top-down') return;
-  if (document.pointerLockElement === canvas) {
+  if (document.pointerLockElement === canvas || cameraRig.aiming) {
+    pointerStart = undefined;
     if (gamePhase === 'active') {
       fireHeld = true;
       fireAt(event);
@@ -5137,10 +5273,33 @@ canvas.addEventListener('pointerdown', (event) => {
     requestPointerLockForPlay();
     return;
   }
-  canvas?.focus({ preventScroll: true });
+});
+canvas.addEventListener('pointerdown', (event) => {
+  if (pauseMenu.paused) return;
+  if (turretPreview && (event.button === 0 || event.button === 2)) {
+    event.preventDefault();
+    cancelTurretPlacement();
+    combat.lastMessage = 'Turret placement cancelled.';
+    updateCombatUi();
+    suppressPlacementContextMenu = event.button === 2;
+    return;
+  }
+
+  if (
+    event.button !== 0 ||
+    turretPreview ||
+    cameraRig.aiming ||
+    document.pointerLockElement === canvas
+  )
+    return;
+  pointerStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
+  if (cameraRig.mode === 'top-down') return;
+  canvas.focus({ preventScroll: true });
   canvas.setPointerCapture(event.pointerId);
 });
 canvas.addEventListener('pointermove', (event) => {
+  if (pauseMenu.paused) return;
+  if (document.pointerLockElement === canvas || cameraRig.aiming) return;
   if (pointerStart?.id === event.pointerId && dragPointerId === undefined) {
     const distance = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
     if (distance >= 7) {
@@ -5156,12 +5315,16 @@ canvas.addEventListener('pointermove', (event) => {
     elements.reticle!.style.top = `${event.clientY}px`;
   }
 });
-window.addEventListener('pointerup', (event) => {
-  if (event.button === 2) cameraRig.setAiming(false);
+window.addEventListener('mouseup', (event) => {
+  if (event.button === 2) {
+    cameraRig.setAiming(false);
+    releaseLookDrag();
+    pointerStart = undefined;
+  }
   if (event.button === 0) fireHeld = false;
 });
 canvas.addEventListener('pointerup', (event) => {
-  if (pointerStart?.id === event.pointerId) {
+  if (event.button === 0 && !cameraRig.aiming && pointerStart?.id === event.pointerId) {
     const distance = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
     if (distance < 7) fireAt(event);
     pointerStart = undefined;
@@ -5218,6 +5381,10 @@ function animate(now: number): void {
   const delta = Math.min(frameIntervalMs / 1000, 0.1);
   frameIntervals.add(frameIntervalMs);
   previousTime = now;
+  if (pauseMenu.paused) {
+    requestAnimationFrame(animate);
+    return;
+  }
   frameCount += 1;
   if (gamePhase === 'base' && !campInteriorSession) {
     updateGate(delta);
@@ -5392,7 +5559,7 @@ function animate(now: number): void {
         );
         const movedX = player.position.x - previousPlayerX;
         const movedZ = player.position.z - previousPlayerZ;
-        if (movedX * movedX + movedZ * movedZ > 0.0001 && (fieldHorde?.awarenessRadius ?? 0) < 10) {
+        if (movedX * movedX + movedZ * movedZ > 0.0001) {
           emitFieldNoise((player.sprintHeld ? 20 : 10) / 140);
         }
         if (fireHeld && cameraRig.mode !== 'top-down' && combat.fireCooldownRemaining <= 0)
@@ -5400,10 +5567,6 @@ function animate(now: number): void {
         updateAutoAttack();
         tickFollowers(fixedStep);
         tickFirePatches(fixedStep);
-        if (!interiorSession) {
-          const alarm = interactiveViews.get('alarm-station');
-          if (alarm) fieldHorde?.emitNoise(alarm.x, alarm.z, 0.35);
-        }
         if (wasDashing && !player.isDashing) replanNavigationTask();
         updateNavigationProgress();
         observedDash = player.isDashing;

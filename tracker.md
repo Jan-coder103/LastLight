@@ -35,7 +35,13 @@ Next: playtest Phase 18 using the checklist in `README.md`. Optional phone testi
 
 ## Phase 18 checklist — 2026-10-03
 
+Top-down chase-targeting follow-up: fixed stale crowd raycast bounds and live-position visibility for assist/sustained fire. Movement/LOD/occlusion regressions pass; latest suite is 38 files / 119 tests. Owner repeats targeting after the 12-second grace period.
+
+Owner-requested pause/settings follow-up: Escape menu, full-frame/audio pause, title-screen exit, persistent master/effects/ambience volumes, louder effects and blood toggle implemented. Regression/build/menu smoke pass (37 files / 116 tests); owner still reviews actual sound levels and active-sortie pause/exit.
+
 Implementation commit: `3117b5f`.
+
+Owner follow-up: corrected alarm/scout noise separation, movement hearing refresh, fog coverage for horde/loot and cloned materials, and simultaneous RMB aim/mouse-look/LMB fire. All 35 files / 111 tests and production build pass; visual gameplay review remains open.
 
 - [x] Perspective-only held aim, enlarged top-down target assistance, persistent engagement, and distinct bounded procedural firearm sounds.
 - [x] Connected, pannable/zoomable progression web; permanent credit-funded SMG/M4A; point-funded character, grenade, turret and companion branches; free skill-point respec.

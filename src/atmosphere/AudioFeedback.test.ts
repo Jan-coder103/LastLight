@@ -12,7 +12,18 @@ it('plays distinct bounded weapon voices, respects mute, varies pitch narrowly, 
     }
     sampleRate = 100;
     destination = {};
-    resume = () => Promise.resolve();
+    resume = vi.fn(() => Promise.resolve());
+    suspend = vi.fn(() => Promise.resolve());
+    createDynamicsCompressor() {
+      return {
+        threshold: {},
+        knee: {},
+        ratio: {},
+        attack: {},
+        release: {},
+        connect: (node: unknown) => node,
+      };
+    }
     createBuffer = (_channels: number, samples: number) => ({
       getChannelData: () => new Float32Array(samples),
     });
@@ -46,8 +57,12 @@ it('plays distinct bounded weapon voices, respects mute, varies pitch narrowly, 
     }
     createGain() {
       return {
-        gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
-        connect: () => {},
+        gain: {
+          setValueAtTime: vi.fn(),
+          exponentialRampToValueAtTime: vi.fn(),
+          setTargetAtTime: vi.fn(),
+        },
+        connect: (node: unknown) => node,
         disconnect: vi.fn(),
       };
     }
@@ -69,8 +84,66 @@ it('plays distinct bounded weapon voices, respects mute, varies pitch narrowly, 
   currentTime = 1;
   audio.playWeapon('rifle');
   expect(sources).toHaveLength(5);
+  audio.setPaused(true);
+  audio.playWeapon('smg');
+  expect(sources).toHaveLength(5);
+  audio.setPaused(false);
   audio.setOptions(false, 'clear');
   audio.playWeapon('smg');
   expect(sources).toHaveLength(5);
   vi.unstubAllGlobals();
+});
+
+it('routes independently adjustable effects and ambience through a master limiter, and suspends while paused', () => {
+  const gains: Array<{
+    gain: { setTargetAtTime: ReturnType<typeof vi.fn> };
+    connect: ReturnType<typeof vi.fn>;
+  }> = [];
+  const resume = vi.fn(() => Promise.resolve());
+  const suspend = vi.fn(() => Promise.resolve());
+  const destination = {};
+  const limiter = {
+    threshold: { value: 0 },
+    knee: { value: 0 },
+    ratio: { value: 0 },
+    attack: { value: 0 },
+    release: { value: 0 },
+    connect: vi.fn(),
+  };
+  class Context {
+    currentTime = 1;
+    destination = destination;
+    resume = resume;
+    suspend = suspend;
+    createGain() {
+      const node = { gain: { setTargetAtTime: vi.fn() }, connect: vi.fn((target) => target) };
+      gains.push(node);
+      return node;
+    }
+    createDynamicsCompressor() {
+      return limiter;
+    }
+  }
+  vi.stubGlobal('AudioContext', Context);
+  try {
+    const audio = new AudioFeedback();
+    audio.setOptions(true, 'clear');
+    audio.unlock();
+    expect(gains[1]!.connect).toHaveBeenCalledWith(gains[0]);
+    expect(gains[2]!.connect).toHaveBeenCalledWith(gains[0]);
+    expect(gains[0]!.connect).toHaveBeenCalledWith(limiter);
+    expect(limiter.connect).toHaveBeenCalledWith(destination);
+    audio.setVolumes(0, 1, 0.25);
+    expect(gains[0]!.gain.setTargetAtTime).toHaveBeenLastCalledWith(0, 1, 0.02);
+    expect(gains[1]!.gain.setTargetAtTime).toHaveBeenLastCalledWith(6, 1, 0.02);
+    expect(gains[2]!.gain.setTargetAtTime).toHaveBeenLastCalledWith(0.5, 1, 0.02);
+    audio.setPaused(true);
+    audio.unlock();
+    expect(suspend).toHaveBeenCalledOnce();
+    expect(resume).toHaveBeenCalledOnce();
+    audio.setPaused(false);
+    expect(resume).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

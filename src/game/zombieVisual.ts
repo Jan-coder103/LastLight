@@ -12,6 +12,7 @@ import {
   Matrix4,
   Object3D,
   Quaternion,
+  Sphere,
   SphereGeometry,
   Vector3,
 } from 'three';
@@ -166,6 +167,7 @@ export class ZombieCrowdVisual {
   readonly group: Group;
   readonly parts: readonly InstancedMesh[];
   private readonly instance = new Object3D();
+  private readonly agentBounds = new Sphere();
   private readonly tierColor = new Color();
   private readonly hitColor = new Color('#ffd7bd');
   private readonly facingRotation = new Quaternion();
@@ -235,6 +237,10 @@ export class ZombieCrowdVisual {
     const updates = tier === 2 ? this.farUpdates : this.detailedUpdates;
     const slot = tier === 2 ? this.farSlotByAgent[index]! : this.detailedSlotByAgent[index]!;
     updates.mesh.setMatrixAt(slot, this.instance.matrix);
+    // InstancedMesh does not refresh cached raycast bounds when its matrices change.
+    // Grow a conservative bound in constant time; removals can safely retain old space.
+    this.agentBounds.copy(updates.mesh.geometry.boundingSphere!).applyMatrix4(this.instance.matrix);
+    updates.mesh.boundingSphere!.union(this.agentBounds);
     updates.mesh.setColorAt(slot, this.hitRemaining[index]! > 0 ? this.hitColor : this.tierColor);
     updates.matrixIndices.push(slot);
     updates.colorIndices.push(slot);
@@ -322,6 +328,7 @@ export class ZombieCrowdVisual {
     mesh.castShadow = false;
     mesh.receiveShadow = false;
     mesh.count = 0;
+    mesh.boundingSphere = new Sphere().makeEmpty();
     return mesh;
   }
 
