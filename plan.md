@@ -2,11 +2,11 @@
 
 ## Project status — 2026-10-03
 
-Phases 1–17 are complete and owner-reviewed. Phase acceptance gates are closed. The backlog below records possible future work; it does not reopen a completed phase. Detailed evidence and the final owner report are in `tracker.md` and `HANDOFF.md`.
+Phases 1–17 are complete and owner-reviewed, with their acceptance gates closed. Phase 18 is implemented and **Awaiting owner playtest**. Detailed evidence and the final owner report for completed work are in `tracker.md` and `HANDOFF.md`.
 
 ## Vision
 
-Build a single-player browser game and technical demo in Three.js: land in a zombie apocalypse zone, scavenge under growing pressure, and reach the chopper before a horde overwhelms you. The signature features are a smooth, usable transition between top-down and third-person cameras and a measurable simulation of up to 10,000 active hostile agents. Runs feed a persistent, walkable base camp.
+Build a single-player browser game and technical demo in Three.js: land in a zombie apocalypse zone, scavenge under growing pressure, and reach the chopper before a horde overwhelms you. The signature features are smooth top-down, third-person, and first-person views and a measurable simulation of up to 10,000 active hostile agents. Runs feed a persistent, walkable base camp.
 
 The game should feel responsive before it becomes large. Each phase below ends in a playable build, an automated verification pass, and a playtest by the project owner. Only the owner starts the next phase after requested fixes are complete.
 
@@ -15,11 +15,11 @@ The game should feel responsive before it becomes large. Each phase below ends i
 - **Initial platform:** desktop browser with keyboard and mouse. Mobile, multiplayer, and networked accounts are outside the initial scope.
 - **Initial vehicle:** chopper. It handles arrival and extraction in the first complete loop. A plane can be added later as a vehicle variant.
 - **Camera during a run:** arrival begins in third person; disembarking moves smoothly to the angled top-down camera. The player can switch views while on foot. The transition must preserve the player's position, heading, and current action as far as possible. Interior spaces have their own camera constraints.
-- **Controls:** third person uses WASD and mouse aim/look; top-down uses right-click to move and context-sensitive left-click to attack or interact. Q is a short, free dash with a 2-second cooldown. Top-down W/E/R deploy a hold-to-place turret, call cursor-aimed artillery, and activate adrenaline; third-person 1/2/3 mirror those abilities. G throws a carried grenade when one remains in the backpack.
-- **Persistence:** carried loot and equipment are lost on death. Items and fuel deposited at base are safe. A successful extraction transfers carried loot to base. Exact starting gear, recoverability, and economic balance are tuning decisions, not blockers for the first loop.
+- **Controls:** third person and first person use WASD and mouse aim/look; holding right mouse enters a temporary aimed/zoomed view in those two modes only. Top-down uses right-click to move and context-sensitive left-click to attack or interact. Q is a short, free dash with a 2-second cooldown. Top-down W/E/R deploy a hold-to-place turret, call cursor-aimed artillery, and activate adrenaline; perspective 1/2/3 mirror those abilities. G throws a carried grenade charge.
+- **Persistence:** carried loot and equipment are lost on death. Items and fuel deposited at base are safe. A successful extraction transfers carried loot to base. Phase 18 makes the handgun the initial firearm, saves weapon unlocks permanently, and restocks grenade charges for free between runs.
 - **Time and weather:** each run chooses one time of day and one weather preset at creation. They remain stable during that run. Atmospheric effects may animate without changing the preset.
 - **Horde target:** 10,000 means 10,000 individually tracked agents in a benchmark scene. Nearby agents need believable movement and combat; distant agents can update less often and use simplified rendering. The target is not a promise that 10,000 full-detail animated models are simultaneously visible. Phase 6 proves simulation scale; phase 7 proves an acceptable playable frame rate.
-- **Procedural generation:** generate layout from a saved seed, then place reusable authored buildings and props. Start with a city–forest region. Military base and large city maps come later; the starting map is free, other maps can require safely banked fuel after the economy exists.
+- **Procedural generation:** generate layout from a saved seed, then place reusable authored buildings and props. Start with a city–forest region. Military base and large city maps come later; the starting map remains free, other destinations can require safely banked fuel, and Phase 18 adds a fuel-paid high-risk variant of the selected destination.
 - **Visual direction:** stylized, low-poly, readable at both camera distances. Mood and effects must not obscure attacks, interactables, or the extraction direction.
 
 ## Success criteria
@@ -38,7 +38,7 @@ One city–forest map, one chopper, one player, a small set of loot and weapons,
 
 ### Later content, after the core loop and performance gates
 
-Military base and large city maps with fuel costs; mutated animals, giant spiders, janky robots, human survivors, and bandits; gates and fences; a companion bot; rain puddles and wet-ground reflections. These are candidate milestones in the backlog, not hidden requirements for earlier phase acceptance. Noise awareness, exploding barrels, and combat/readability feedback are scoped in Phases 15 and 16.
+Military base and large city maps with fuel costs; mutated animals, giant spiders, janky robots, hostile human survivors and bandits; rain puddles and wet-ground reflections. These remain candidate milestones, not hidden requirements for earlier phase acceptance. The camp perimeter, companion, rescued-civilian roster, interactive points of interest, fuelled sortie option, and combat/readability work requested for the next milestone are scoped in Phase 18. Noise awareness, exploding barrels, and combat/readability feedback are scoped in Phases 15 and 16.
 
 ## Proposed technical shape
 
@@ -281,16 +281,67 @@ Phone testing remains deferred and is not part of the completed desktop phase. I
 
 **Historical phase-start note:** Phase 17 began while Phases 14–16 had open review gates. The owner has since completed and reviewed all Phases 1–17; see the project status at the top of this document and the acceptance record in `tracker.md`.
 
-## Backlog after phase 17
+## Phase 18 — Aim, arsenal progression, companion, and expanded regions
 
-Prioritize by playtest value and measured cost: military-base and large-city destination generation, props, loot, and fuel pricing; interactive gate controls; companion bot; additional enemy families and survivor/bandit behavior; optimized rain puddles/wet reflections; plane variant. Promote an item to a scoped phase or subphase before implementing it, with acceptance criteria and tests recorded in `tracker.md`.
+**Status:** Awaiting owner playtest.
+
+**Goal:** make perspective combat tactile, make top-down target engagement dependable, give successful runs a satisfying branching skill-tree progression, add a useful run-by-run companion, and connect the fortified camp to a readable surrounding landscape.
+
+1. **Aiming and combat sound:** In third-person and first-person only, hold right mouse to enter a shoulder/aim view with a closer field of view; releasing it restores the prior view. Keep top-down right-click mapped to movement. In top-down, one left-click on a valid enemy creates a persistent attack target: the scout keeps firing at that enemy until it dies, without requiring repeated clicks. Expand the cursor assist area so a near miss still selects the intended enemy; prefer an enemy under the cursor, then the nearest valid enemy inside the assist area. The lock ends when the target dies or becomes invalid, and a new target click replaces it. Add distinct handgun, SMG, and M4A shot sounds with restrained pitch/timing variation and mix limits so rapid fire remains clear. Track the audio source and license.
+2. **Walkable camp edge:** Complete the scrap fence around the hub with gates that close the perimeter and can be opened by the player to pass in either direction. Extend the terrain seamlessly beyond the camp as a modest, low-poly walkable area with gentle hills, paths, and trees reused from the existing asset set. Keep gate animation, collision, and navigation state in sync; maintain reachable services and a clear route back through the gate.
+3. **Branching skill tree, armory, and item list:** Replace the one-off upgrade menu with a camp skill-tree screen laid out as a zoomable, pannable web of connected nodes, starting at a central **Field Operator** node and branching outward. The starting node grants the handgun as the only firearm and one grenade charge. Require a connected path before a node can be purchased; show prerequisites, credit or skill-point cost, and a plain-language stat preview on hover/focus. Keep banked credits for permanent weapon unlocks and the per-run companion hire. Award one permanent skill point on each successful extraction, with small first-clear bonuses for optional mission objectives; spend skill points on connected character and ability upgrades. Unbanked loot and points are never awarded on death. Keep point costs and branch depth tuned so the first new firearm is reachable after roughly one or two successful extractions and early skill points quickly reveal useful choices. Allow the player to reassign skill-point nodes at camp between runs without undoing permanent weapon unlocks, so trying a different branch does not risk a long grind.
+
+   - **Arsenal branch:** permanently unlock the SMG (fast fire, lower damage per shot) and M4A (slower than the SMG, higher damage per shot) for credits. Extend each route with a few modest handling choices, such as SMG control/reload feel or M4A accuracy, while keeping the handgun useful throughout the game.
+   - **Grenadier branch:** start at one charge, then unlock two and three grenade charges with skill points. Used charges refill free at the start of each run. Fork deeper upgrades between a larger blast and an incendiary upgrade that leaves a damaging fire patch for up to 30 seconds. Cap persistent patches and prevent duration stacking from becoming a cheap way to clear the horde.
+   - **Fieldcraft branch:** offer small, capped choices for maximum health, movement speed, and dash recovery, so the player can build toward toughness or mobility without breaking run pacing.
+   - **Turret Workshop branch:** improve the existing turret ability with options such as setup speed, uptime, or target coverage. Keep its damage and uptime within the current horde performance budget.
+   - **Companion Bench branch:** improve companions hired for an individual run, with options such as tighter follow/regroup behavior, durability, or close-threat response. Upgrades apply to any hired companion; they do not remove the per-run hire cost or let the companion wake distant enemies while the scout is idle.
+
+   Keep the branch origins near the central node and let each route fork into short upgrade paths, with a few cross-links as later goals. Use one readable tree rather than separate upgrade screens for each system. Replace the spatial backpack grid/slot arrangement with an inventory list showing an icon, item name, quantity, and weight where relevant. Add separate Armory and Skill Tree tabs: Armory lists permanently unlocked weapons and selects the active firearm for the next run; Skill Tree allocates the connected upgrades. Preserve credits, carried items, unlocked firearms, grenade capacity, and allocated progression during save migration; convert legacy owned firearms into permanent unlocks rather than deleting them. Show extraction earnings, newly earned skill points, and the nearest affordable nodes in the return-to-camp summary so every successful run makes progress visible.
+4. **Run-hired companion:** Let the player hire a companion at the hub for one run at a time, with a clearly shown credit cost. During the run, keep the companion close, follow the scout through doors and into buildings, and regroup without blocking routes. Mirror the scout's current enemy target when the scout attacks. If an enemy enters a small defensive radius, let the companion attack even when the scout has no target; distant enemies must remain calm when the scout is idle, so the companion does not pull the horde from across the map. Reuse the established enemy damage/targeting and distance tiers, and retain the companion through interior transitions and extraction/death cleanup.
+5. **Rescue missions and interactive points of interest:** Add one or two optional, seed-selected events to a run at existing landmarks or enterable buildings. Examples include restoring a substation to open a powered supply room while its generator noise attracts nearby hostiles, or reaching an alarm station and shutting it down to calm an area after a difficult approach. Make the choice, risk, and reward clear before interaction; keep event placement and escape routes reachable. Add occasional stranded survivors who can be freed and escorted to the chopper using reliable follow/door navigation. A survivor joins the permanent Wayfarer Camp roster only after a successful extraction; death or leaving them behind grants no rescue reward, and previously rescued residents remain safe. Give each rescued resident a recognizable name/role and a modest camp service, information, or cosmetic contribution that makes the hub feel earned without replacing the skill tree or making rescue mandatory. Award the optional-objective skill-point bonus only after extracting successfully with the objective complete.
+6. **Chopper deployment and fuelled salvage sorties:** Before each deployment, open a clear choice at the parked chopper. **Standard sortie** costs no fuel and preserves the current map, crate density, and enemy pressure. **High-yield sortie** spends banked fuel for the same selected destination with roughly twice the reachable supply crates and higher-value loot rolls, but doubles enemy population rather than enemy health or damage. Use a first-pass cost of **2 banked fuel units**; show the cost, current balance, crate preview, starting threat, and spawn pace before the player commits. For the current field horde, start with 40 hostiles instead of 20 and spawn one per outdoor second instead of one every two seconds; double local encounter counts as well. Keep seeded placement, the existing 10,000-agent cap and LOD tiers, and the indoor pause/resume rules. Consume fuel only once liftoff/deployment begins; do not refund it after a failed run. Extracted fuel remains safely banked and can fund a later sortie. Keep this risk modifier separate from fuel costs for selecting future destinations, and tune the 2-unit price and reward value in playtests.
+7. **Mission scenery and range readability:** Reuse the camp panorama (`skybox_hub.png`) as the skybox/background for extraction missions. Add player-centered distance fog that starts near 150 m and becomes strong by about 200 m, blending distant LOD silhouettes while keeping nearby threats, the extraction marker, and navigation landmarks readable. Bring the Phase 17 grass and pebble assets into missions as close-range dressing only, using batched instances and culling them promptly at distance. Increase tree density in the forest with existing tree assets while preserving trails, sightlines, and navigation clearance. Animate simple, low-cost waves on the beach/harbor water; keep the shoreline and water boundary consistent with movement and collision.
+8. **Extraction guidance:** Hide the floating chopper-direction arrow above the scout for the first 60 seconds after the run becomes active, then reveal it. Keep the existing arrow behavior after it appears and ensure the delay is legible without suggesting that extraction is unavailable.
+9. **Regression and playtest:** Cover perspective-only hold-to-aim, top-down persistent target lock and enlarged assist selection, weapon sound playback/mixing, connected tree prerequisites and costs, extraction skill-point awards, respec behavior, firearm and grenade unlock/save migration, grenade refill and fire-patch limits, inventory/Armory/tree navigation, character/turret/companion upgrade effects, companion follow/target/defend/indoor behavior, survivor escort/extraction and camp roster persistence, seeded POI rewards and route clearance, chopper menu/costs, standard versus doubled crate/enemy counts, fuel consumption and loss on death, gate traversal and exterior navigation, decoration/tree distance and route clearance, mission skybox/fog, delayed extraction guidance, and animated coastal water. Build and smoke-test the full loop in all three views; profile high-yield horde scale, the companion, scenery, and effects at the desktop target.
+
+**Progression tree sketch:**
+
+```mermaid
+flowchart TB
+    Core["Field Operator · handgun · 1 grenade"]
+    Core --> Arsenal["Arsenal · credits"]
+    Core --> Grenades["Grenadier · skill points"]
+    Core --> Fieldcraft["Fieldcraft · skill points"]
+    Core --> Turret["Turret Workshop · skill points"]
+    Core --> Companion["Companion Bench · skill points"]
+    Arsenal --> SMG["SMG unlock"]
+    Arsenal --> M4A["M4A unlock"]
+    Arsenal --> Handling["Weapon handling"]
+    Grenades --> Capacity["2 → 3 charges"]
+    Grenades --> Blast["Larger blast"]
+    Grenades --> Fire["30-second fire patch"]
+    Fieldcraft --> Health["Health"]
+    Fieldcraft --> Speed["Movement speed"]
+    Fieldcraft --> Dash["Dash recovery"]
+    Turret --> Setup["Setup speed / uptime"]
+    Turret --> Coverage["Target coverage"]
+    Companion --> Follow["Follow / regroup"]
+    Companion --> Guard["Durability / defense"]
+```
+
+**Acceptance:** holding right mouse zooms only in third-person and first-person, while top-down right-click movement remains unchanged; one top-down click reliably selects a nearby intended enemy and sustains fire until it is defeated; the three firearms sound distinct without harsh rapid-fire buildup; the tree opens at its central starting node, only connected nodes can be purchased, weapon unlocks use credits, extraction skill points persist through death, respec preserves permanent firearms, grenade capacity and effects work within their caps, and legacy saves retain owned gear; the inventory is a readable item list with separate working Armory and Skill Tree tabs; rescued survivors join the camp only after extraction and previously recruited residents persist; optional POIs offer clear rewards, complete their world-state change, and never block required routes; the chopper menu always offers a free standard run and clearly previews the fuel cost/risk/reward of the high-yield run; spending 2 fuel units launches a seeded sortie with roughly twice the reachable crates and twice the enemy counts/spawn pace, without doubling enemy health/damage, while staying within the horde cap and existing performance target; fuel is consumed on deployment and a failed run does not refund it; the run-hired companion stays close, follows indoors, assists the scout's target, and ignores distant threats while the scout is idle; the player can open and cross the camp gates into the adjoining hills and return; extraction missions share the hub panorama, near-only ground dressing and denser forest render cleanly, fog blends distant LODs by about 200 m, coastal water visibly waves, and the floating extraction arrow appears only after 60 seconds; regression checks and build pass, and the owner playtests combat, progression, rescues, POIs, fuelled sorties, companion behavior, hub traversal, and mission scenery.
+
+## Backlog after phase 18
+
+Prioritize by playtest value and measured cost: military-base and large-city destination generation, props, loot, and fuel pricing; additional enemy families and survivor/bandit behavior; optimized rain puddles/wet reflections; plane variant. Promote an item to a scoped phase or subphase before implementing it, with acceptance criteria and tests recorded in `tracker.md`.
 
 ## Open choices to settle during implementation
 
 - Reference desktop/browser and final FPS/frame-time/memory targets, after baseline measurements.
 - Whether the camera switch key should be rebindable; it is Tab in the phase 2 field test.
-- Run duration, extraction countdown, inventory capacity, starter kit, and fuel/economy values, after phase 3 playtests.
+- Run duration, extraction countdown, inventory capacity/weight, and fuel/economy values remain tuning decisions. Phase 18 sets the initial firearm to the handgun, defines persistent weapon and grenade-capacity progression, and uses 2 fuel units as the first-pass cost for a high-yield sortie.
 - Final art/audio sources and licenses, before shipping public builds.
 - Exterior simulation behavior during interiors (resolved in phase 8): pause the outdoor timer and hostiles while inside; keep player health and ability/weapon cooldowns active, and run the interior encounter normally.
 
-These decisions should be recorded in `HANDOFF.md` when made and reflected here if they change the roadmap. Phases 1–17 are now closed; any selected backlog item should be scoped as new future work rather than treated as an open phase gate.
+These decisions should be recorded in `HANDOFF.md` when made and reflected here if they change the roadmap. Phases 1–17 are closed; Phase 18 is awaiting its own owner playtest and does not reopen any accepted phase gate.

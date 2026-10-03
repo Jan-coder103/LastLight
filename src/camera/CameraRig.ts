@@ -41,6 +41,8 @@ export class CameraRig {
   yaw = 0;
   pitch = 0.2;
   zoomScale = 1;
+  aiming = false;
+  private priorAimFov = 53;
   currentTarget = new Vector3();
   private world: WorldData;
   private readonly canvas: HTMLCanvasElement;
@@ -62,6 +64,17 @@ export class CameraRig {
     this.camera.lookAt(this.currentTarget);
   }
 
+  setAiming(held: boolean): void {
+    const next = held && this.mode !== 'top-down';
+    if (next === this.aiming) return;
+    if (next) {
+      this.priorAimFov = this.camera.fov;
+      this.camera.fov = Math.max(30, this.camera.fov * 0.72);
+    } else this.camera.fov = this.priorAimFov;
+    this.aiming = next;
+    this.camera.updateProjectionMatrix();
+  }
+
   get isTransitioning(): boolean {
     return this.transition !== undefined;
   }
@@ -80,6 +93,7 @@ export class CameraRig {
   }
 
   switchMode(playerPosition: Vector3): CameraMode {
+    this.setAiming(false);
     const modes: CameraMode[] = ['third-person', 'top-down', 'first-person'];
     this.mode = modes[(modes.indexOf(this.mode) + 1) % modes.length]!;
     if (this.mode !== 'first-person' && this.camera.fov !== 53) {
@@ -104,6 +118,7 @@ export class CameraRig {
   }
 
   zoomBy(deltaY: number): void {
+    if (this.aiming) return;
     if (!Number.isFinite(deltaY) || deltaY === 0) return;
     if (this.mode === 'first-person') {
       this.camera.fov = Math.max(42, Math.min(68, this.camera.fov * Math.exp(deltaY * 0.001)));
@@ -144,6 +159,7 @@ export class CameraRig {
   }
 
   reset(playerPosition: Vector3): void {
+    this.setAiming(false);
     this.transition = undefined;
     this.shakeRemaining = 0;
     this.shakeStrength = 0;
@@ -200,7 +216,7 @@ export class CameraRig {
       );
       return;
     }
-    const distance = 9.3 * this.zoomScale;
+    const distance = (this.aiming ? 4.3 : 9.3) * this.zoomScale;
     const pivotHeight = 2.65;
     const minimumCameraHeight = 0.65;
     const shoulderAngle = Math.atan2(0.95, distance);

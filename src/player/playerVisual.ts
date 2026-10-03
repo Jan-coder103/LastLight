@@ -1,3 +1,4 @@
+import type { Firearm } from '../game/progression';
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, Object3D, SphereGeometry } from 'three';
 
 export interface PlayerVisualRig {
@@ -163,4 +164,42 @@ export function createFirstPersonWeapon(): FirstPersonWeapon {
   visual.add(muzzle);
   visual.name = 'First-person rifle';
   return { visual, muzzle };
+}
+
+export function createFirearmVisual(weapon: Firearm): Group {
+  if (weapon === 'rifle' || weapon === 'shotgun') return buildRifle();
+  const gun = new Group();
+  gun.name = weapon;
+  if (weapon === 'handgun') {
+    addBox(gun, 0.1, 0.12, 0.32, mutedMetal, 0, 0, -0.12, false);
+    addBox(gun, 0.09, 0.22, 0.12, gear, 0, -0.13, 0.01, false);
+    addBox(gun, 0.055, 0.055, 0.12, metal, 0, 0, -0.31, false);
+  } else {
+    addBox(gun, 0.13, 0.17, 0.42, mutedMetal, 0, 0, -0.1, false);
+    addBox(gun, 0.08, 0.07, 0.23, metal, 0, 0, -0.43, false);
+    addBox(gun, 0.11, 0.29, 0.12, gear, 0, -0.19, -0.02, false);
+    addBox(gun, 0.12, 0.1, 0.2, gear, 0, 0, 0.21, false);
+  }
+  return gun;
+}
+function replaceGunGeometry(root: Group, weapon: Firearm): void {
+  root.traverse((object) => {
+    if (object instanceof Mesh) object.geometry.dispose();
+  });
+  root.clear();
+  root.add(createFirearmVisual(weapon));
+}
+export function setScoutFirearm(visual: Group, weapon: Firearm): void {
+  const rig = visual.userData.rig as PlayerVisualRig;
+  if (rig) replaceGunGeometry(rig.rifle, weapon);
+}
+export function setFirstPersonFirearm(view: FirstPersonWeapon, weapon: Firearm): void {
+  replaceGunGeometry(view.visual, weapon);
+  view.visual.add(view.muzzle);
+  view.muzzle.position.set(
+    0,
+    0.035,
+    weapon === 'handgun' ? -0.38 : weapon === 'smg' ? -0.56 : -0.82,
+  );
+  view.visual.name = `First-person ${weapon}`;
 }

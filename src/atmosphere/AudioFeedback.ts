@@ -1,3 +1,4 @@
+import type { Firearm } from '../game/progression';
 import type { Weather } from './settings';
 
 export type AudioCue =
@@ -6,6 +7,8 @@ export type AudioCue =
 /** Small Web Audio cues; the context is created only after a user gesture. */
 export class AudioFeedback {
   private context: AudioContext | undefined;
+  private shotEnds: number[] = [];
+  private shotSerial = 0;
   private enabled = true;
   private rainEnabled = true;
   private rainSource: AudioBufferSourceNode | undefined;
@@ -91,6 +94,40 @@ export class AudioFeedback {
     oscillator.connect(gain).connect(context.destination);
     oscillator.start(now);
     oscillator.stop(now + duration + 0.01);
+  }
+
+  /** Original procedural synthesis; no sampled recordings or third-party licenses. */
+  playWeapon(weapon: Firearm): void {
+    const context = this.context;
+    if (!this.enabled || !context || context.state !== 'running') return;
+    const now = context.currentTime;
+    this.shotEnds = this.shotEnds.filter((end) => end > now);
+    if (this.shotEnds.length >= 4) return;
+    const profile =
+      weapon === 'smg'
+        ? [1500, 0.055, 0.032]
+        : weapon === 'handgun'
+          ? [750, 0.12, 0.055]
+          : [430, 0.16, 0.055];
+    const [frequency, duration, volume] = profile as [number, number, number];
+    const source = context.createBufferSource();
+    source.buffer = this.getNoiseBuffer(context);
+    source.playbackRate.value = 0.97 + (this.shotSerial++ % 7) * 0.01;
+    const filter = context.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = frequency;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(volume, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    source.connect(filter).connect(gain).connect(context.destination);
+    source.start(now);
+    source.stop(now + duration);
+    source.onended = () => {
+      source.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
+    this.shotEnds.push(now + duration);
   }
 
   dispose(): void {

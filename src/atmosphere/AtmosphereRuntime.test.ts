@@ -44,7 +44,7 @@ describe('AtmosphereRuntime', () => {
   });
 });
 
-it('reuses the loaded panorama across camp returns and does not replace the field sky on late load', () => {
+it('shares the panorama with missions including late loads, and uses 150–200 m fog', () => {
   const scene = new Scene();
   scene.background = new Color('#a9a488');
   scene.fog = new Fog('#a9a488', 175, 390);
@@ -57,13 +57,16 @@ it('reuses the loaded panorama across camp returns and does not replace the fiel
     () => {},
   );
   runtime.setRun({ time: 'low-sun', weather: 'clear' }, 'PANORAMA');
-  const fieldSky = scene.background;
   const panorama = new Texture();
   runtime.setCampBackground(panorama);
-  expect(scene.background).toBe(fieldSky);
+  expect(scene.background).toBe(panorama);
   runtime.setCamp();
   expect(scene.background).toBe(panorama);
   runtime.setRun({ time: 'high-moon', weather: 'clear' }, 'PANORAMA');
+  expect(scene.background).toBe(panorama);
+  expect(scene.fog).toBeInstanceOf(Fog);
+  expect((scene.fog as Fog).near).toBe(150);
+  expect((scene.fog as Fog).far).toBe(200);
   runtime.setCamp();
   expect(scene.background).toBe(panorama);
 });

@@ -44,9 +44,7 @@ describe('shaped backpack', () => {
     delete record.scrap;
     delete record.backpackInitialized;
     expect(parseSave(JSON.stringify(record)).storedItems.items.map((item) => item.id)).toEqual([
-      'rifle',
-      'grenade',
-      'grenade',
+      'handgun',
       'grenade',
     ]);
     expect(parseSave(JSON.stringify(record)).scrap).toBe(0);
@@ -76,6 +74,18 @@ describe('shaped backpack', () => {
     expect(recovered.storedItems.items).toEqual([...starting, pickedUp]);
     const reset = resetBackpackAfterDeath(save);
     expect(reset).toBe(save.storedItems);
-    expect(reset.items.map((item) => item.id)).toEqual(['rifle', 'grenade', 'grenade', 'grenade']);
+    expect(reset.items.map((item) => item.id)).toEqual(['handgun', 'grenade']);
   });
+});
+
+it('uses weight-based list capacity after migration and refills charges even with a full backpack', () => {
+  const save = createDefaultSave();
+  const grid = save.storedItems;
+  expect(grid.layout).toBe('list');
+  // Handgun uses 4 old capacity units; eleven 4-unit batteries fill the remaining weight.
+  for (let i = 0; i < 11; i++) expect(addItem(grid, 'battery', 6)).toBeDefined();
+  expect(addItem(grid, 'water', 6)).toBeUndefined();
+  expect(addItem(grid, 'grenade', 6)).toBeDefined();
+  const loaded = parseSave(JSON.stringify(save));
+  expect(loaded.storedItems.items.map((i) => i.id)).toEqual(grid.items.map((i) => i.id));
 });

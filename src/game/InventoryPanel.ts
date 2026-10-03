@@ -1,16 +1,15 @@
+import { renderProgression } from './ProgressionPanel';
 import {
   addItem,
-  gridColumns,
   gridRows,
   itemDefinitions,
-  moveItem,
   removeItem,
   type ItemGrid,
   type ItemId,
 } from './itemInventory';
 import type { SaveData } from './saveData';
 
-type PanelMode = 'inventory' | 'scrap' | 'food';
+type PanelMode = 'inventory' | 'scrap' | 'food' | 'armory' | 'tree';
 
 export class InventoryPanel {
   private overlay: HTMLElement;
@@ -18,11 +17,10 @@ export class InventoryPanel {
   private trade: HTMLElement;
   private status: HTMLElement;
   private heading: HTMLElement;
+  private tabs: HTMLElement;
+  private progressionView: HTMLElement;
   private heldUid = '';
-  private dragOffsetX = 0;
-  private dragOffsetY = 0;
   private mode: PanelMode = 'inventory';
-  private readonly cell = 42;
   readonly closeButton: HTMLButtonElement;
 
   constructor(
@@ -40,8 +38,27 @@ export class InventoryPanel {
     this.overlay.setAttribute('aria-modal', 'true');
     this.overlay.setAttribute('aria-label', 'Backpack');
     this.overlay.hidden = true;
-    this.overlay.innerHTML = `<div class="inventory-panel"><header class="inventory-heading"><div><span class="eyebrow">WAYFARER / FIELD KIT</span><h2 id="inventory-title">BACKPACK</h2><p id="inventory-status" aria-live="polite"></p></div><button class="inventory-close" type="button" aria-label="Close inventory">×</button></header><div class="inventory-columns"><div class="inventory-character"><span class="eyebrow">SCOUT</span><div class="scout-figure"><i class="scout-head"></i><i class="scout-torso"></i><i class="scout-arm left"></i><i class="scout-arm right"></i><i class="scout-leg left"></i><i class="scout-leg right"></i></div><p>Click a weapon to equip it.<br>Drag items to rearrange.</p><strong id="inventory-wallet"></strong></div><div class="inventory-right"><div class="inventory-grid-wrap"><div class="inventory-grid" aria-label="Backpack grid"></div></div><div class="inventory-throw" role="button" tabindex="0" aria-label="Drop selected item on ground">↓ <span>DROP ON GROUND</span></div><div class="inventory-trade"></div></div></div></div>`;
+    this.overlay.innerHTML = `<div class="inventory-panel"><header class="inventory-heading"><div><span class="eyebrow">WAYFARER / FIELD KIT</span><h2 id="inventory-title">BACKPACK</h2><p id="inventory-status" aria-live="polite"></p></div><button class="inventory-close" type="button" aria-label="Close inventory">×</button></header><div class="inventory-columns"><div class="inventory-character"><span class="eyebrow">SCOUT</span><div class="scout-figure"><i class="scout-head"></i><i class="scout-torso"></i><i class="scout-arm left"></i><i class="scout-arm right"></i><i class="scout-leg left"></i><i class="scout-leg right"></i></div><p>Click a weapon to equip it.<br>Select an item to drop it.</p><strong id="inventory-wallet"></strong></div><div class="inventory-right"><div class="inventory-grid-wrap"><div class="inventory-grid" aria-label="Inventory list"></div></div><div class="inventory-throw" role="button" tabindex="0" aria-label="Drop selected item on ground">↓ <span>DROP ON GROUND</span></div><div class="inventory-trade"></div></div></div></div>`;
     document.querySelector('#game')!.append(this.overlay);
+    this.tabs = document.createElement('nav');
+    this.tabs.className = 'inventory-tabs';
+    for (const [mode, title] of [
+      ['inventory', 'Inventory'],
+      ['armory', 'Armory'],
+      ['tree', 'Skill Tree'],
+    ] as const) {
+      const button = document.createElement('button');
+      button.textContent = title;
+      button.onclick = () => {
+        this.mode = mode;
+        this.render();
+      };
+      this.tabs.append(button);
+    }
+    this.overlay.querySelector('.inventory-heading')!.after(this.tabs);
+    this.progressionView = document.createElement('div');
+    this.progressionView.className = 'progression-view';
+    this.overlay.querySelector('.inventory-panel')!.append(this.progressionView);
     this.grid = this.overlay.querySelector('.inventory-grid')!;
     this.trade = this.overlay.querySelector('.inventory-trade')!;
     this.status = this.overlay.querySelector('#inventory-status')!;
@@ -50,19 +67,6 @@ export class InventoryPanel {
     this.closeButton.addEventListener('click', () => this.close());
     this.overlay.addEventListener('click', (event) => {
       if (event.target === this.overlay) this.close();
-    });
-    this.grid.addEventListener('dragover', (event) => event.preventDefault());
-    this.grid.addEventListener('drop', (event) => {
-      event.preventDefault();
-      const uid = event.dataTransfer?.getData('text/plain') || this.heldUid;
-      const rect = this.grid.getBoundingClientRect();
-      const x = Math.floor((event.clientX - rect.left) / this.cell) - this.dragOffsetX;
-      const y = Math.floor((event.clientY - rect.top) / this.cell) - this.dragOffsetY;
-      if (moveItem(this.getGrid(), uid, x, y, gridRows(this.save.cargoUpgrade))) {
-        this.status.textContent = 'Item moved.';
-        this.onChange();
-        this.render();
-      } else this.status.textContent = 'That shape does not fit there.';
     });
     const dropZone = this.overlay.querySelector<HTMLElement>('.inventory-throw')!;
     dropZone.addEventListener('dragover', (event) => event.preventDefault());
@@ -85,7 +89,7 @@ export class InventoryPanel {
     this.overlay.hidden = false;
     this.status.textContent =
       mode === 'inventory'
-        ? 'Fit your loot into the grid.'
+        ? 'Carried items · select to equip or drop.'
         : mode === 'scrap'
           ? 'Break down scrap items or exchange scrap for credits.'
           : 'Buy or sell food for credits.';
@@ -148,39 +152,48 @@ export class InventoryPanel {
 
   render(): void {
     if (!this.open) return;
+    this.tabs.hidden = !this.isBase() || this.mode === 'scrap' || this.mode === 'food';
+    const progression = this.isBase() && (this.mode === 'armory' || this.mode === 'tree');
+    (this.overlay.querySelector('.inventory-columns') as HTMLElement).hidden = progression;
+    this.progressionView.hidden = !progression;
+    if (progression) {
+      this.heading.textContent = this.mode === 'tree' ? 'SKILL TREE' : 'ARMORY';
+      renderProgression(
+        this.progressionView,
+        this.save,
+        this.mode as 'armory' | 'tree',
+        this.onChange,
+        this.onEquip,
+      );
+      return;
+    }
     const grid = this.getGrid();
-    const rows = gridRows(this.save.cargoUpgrade);
     this.heading.textContent =
       this.mode === 'scrap' ? 'SCRAP YARD' : this.mode === 'food' ? 'FOOD STAND' : 'BACKPACK';
-    this.grid.style.width = `${gridColumns * this.cell}px`;
-    this.grid.style.height = `${rows * this.cell}px`;
+    this.grid.style.width = '100%';
+    this.grid.style.height = 'auto';
+    this.grid.classList.add('inventory-list');
     this.grid.innerHTML = '';
-    for (const item of grid.items) {
+    for (const item of grid.items.filter(
+      (entry, i, items) => items.findIndex((other) => other.id === entry.id) === i,
+    )) {
       const definition = itemDefinitions[item.id];
       const tile = document.createElement('button');
       tile.className = `inventory-item inventory-${definition.category}`;
       if (definition.width === 1 && definition.height === 1)
         tile.classList.add('inventory-item-small');
       tile.type = 'button';
-      tile.draggable = true;
-      tile.style.left = `${item.x * this.cell}px`;
-      tile.style.top = `${item.y * this.cell}px`;
-      tile.style.width = `${definition.width * this.cell}px`;
-      tile.style.height = `${definition.height * this.cell}px`;
       tile.style.setProperty('--item-color', definition.color);
-      tile.title = `${definition.name} · ${definition.width}×${definition.height}`;
+      const quantity = grid.items.filter((entry) => entry.id === item.id).length;
+      const weight =
+        item.id === 'grenade' ? 0 : definition.width * definition.height * 0.15 * quantity;
+      tile.title = `${definition.name} · ${weight.toFixed(2)} kg`;
       tile.setAttribute('aria-label', tile.title);
-      tile.innerHTML = `<strong aria-hidden="true">${definition.symbol}</strong><span>${definition.name}</span>`;
-      tile.addEventListener('dragstart', (event) => {
-        this.heldUid = item.uid;
-        this.dragOffsetX = Math.floor(event.offsetX / this.cell);
-        this.dragOffsetY = Math.floor(event.offsetY / this.cell);
-        event.dataTransfer?.setData('text/plain', item.uid);
-      });
+      tile.innerHTML = `<strong aria-hidden="true">${definition.symbol}</strong><span>${definition.name}</span><span>×${quantity} · ${weight.toFixed(2)} kg</span>`;
       tile.addEventListener('click', () => {
         this.heldUid = item.uid;
         if (definition.category === 'weapon' && item.id !== 'grenade') this.onEquip(item.id);
-        this.status.textContent = `${definition.name} selected · drag to move or drop.`;
+        this.status.textContent = `${definition.name} selected · click DROP ON GROUND to discard.`;
       });
       this.grid.append(tile);
     }
@@ -191,13 +204,13 @@ export class InventoryPanel {
     if (this.mode === 'inventory') {
       if (this.save.storedReserve.length > 0) {
         const label = document.createElement('p');
-        label.textContent = `CAMP RESERVE · ${this.save.storedReserve.length} safe item(s) awaiting grid space`;
+        label.textContent = `CAMP RESERVE · ${this.save.storedReserve.length} safe item(s) awaiting backpack capacity`;
         this.trade.append(label);
         this.save.storedReserve.forEach((id, index) => {
           this.trade.append(
-            this.tradeButton(`PLACE ${itemDefinitions[id].name.toUpperCase()} IN GRID`, () => {
+            this.tradeButton(`PLACE ${itemDefinitions[id].name.toUpperCase()} IN BACKPACK`, () => {
               if (!addItem(this.getGrid(), id, gridRows(this.save.cargoUpgrade))) {
-                this.status.textContent = 'Make room in the grid first.';
+                this.status.textContent = 'Make room in the backpack first.';
                 return;
               }
               this.save.storedReserve.splice(index, 1);

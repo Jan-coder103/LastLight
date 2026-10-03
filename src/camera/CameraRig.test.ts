@@ -63,3 +63,35 @@ describe('first-person camera', () => {
     expect(rig.yaw).toBe(Math.PI / 2);
   });
 });
+
+it('holds aim only in perspective views and restores prior FOV on release or view changes', () => {
+  vi.stubGlobal('document', { pointerLockElement: null });
+  const camera = new PerspectiveCamera(61, 1, 0.1, 500);
+  const rig = new CameraRig(
+    camera,
+    {} as HTMLCanvasElement,
+    { colliders: [] } as unknown as WorldData,
+  );
+  const player = new Vector3();
+  rig.setAiming(true);
+  expect(camera.fov).toBeCloseTo(61 * 0.72);
+  rig.setAiming(true);
+  rig.setAiming(false);
+  expect(camera.fov).toBe(61);
+  rig.switchMode(player);
+  rig.setAiming(true);
+  expect(rig.aiming).toBe(false);
+  expect(camera.fov).toBe(53);
+  rig.switchMode(player);
+  rig.zoomBy(-100);
+  const original = camera.fov;
+  rig.setAiming(true);
+  expect(camera.fov).toBeLessThan(original);
+  rig.setAiming(false);
+  expect(camera.fov).toBe(original);
+  rig.setAiming(true);
+  rig.switchMode(player);
+  expect(rig.aiming).toBe(false);
+  expect(camera.fov).toBe(53);
+  vi.unstubAllGlobals();
+});

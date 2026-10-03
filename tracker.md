@@ -2,11 +2,11 @@
 
 Last updated: 2026-10-03
 
-Current status: Phases 1–17 are **Accepted** and owner-reviewed. All phase acceptance gates are closed. The owner confirms completion and review of Phases 14–17 on 2026-10-03. Phase 7 desktop performance review remains accepted; phone testing is an optional future follow-up. The phase table and checklists below reflect this final status; dated implementation entries preserve the status at the time they were written.
+Current status: Phases 1–17 remain **Accepted** and owner-reviewed. Phase 18 is **Awaiting owner playtest**. Its implementation, regression tests and deployment/UI smoke checks are complete; the full extraction/escort/interior flow and reference-desktop performance review remain open for the owner. No earlier phase gate is reopened.
 
 Phase 10 accepted scope: the camp and field use the same shaped backpack without adding items on deployment. Extraction preserves contents and layout; death loses carried contents and reissues the starter rifle and three grenades while banked resources and safe-reserve items remain protected. The inventory supports item dragging, ground drops/pickups, equipped firearms, field cache items, a scrap-to-credit service, and a food buy/sell stand. The scrap hut, worker, piles, and navigation colliders were moved to the east side of camp, clear of the chopper pad. The 2026-09-27 follow-up reports a passing build, 55 tests, and browser checks of both inventory screens, a dropped grenade carried through deployment, and the relocated vendor. The owner completed the Phase 10 playtest and accepted it on 2026-09-29 after the reported fixes.
 
-Next: choose and scope any future backlog work. No phase review, verification, or owner-playtest gate remains open. Optional per-scenario performance profiles or Pixel-class phone testing remain non-blocking follow-ups for Phase 7.
+Next: playtest Phase 18 using the checklist in `README.md`. Optional phone testing remains outside this desktop phase.
 
 ## Phase status
 
@@ -30,6 +30,26 @@ Next: choose and scope any future backlog work. No phase review, verification, o
 | 15 | Dormant horde and noise awareness | Accepted | Accepted | Owner reviewed dormant activation, local roaming, noise response, focus decay, and pause behavior; gate closed 2026-10-03. |
 | 16 | Combat feedback and field interaction polish | Accepted | Accepted | Owner reviewed combat and pickup feedback, movement abilities, pointer behavior, explosive barrels, blood trails, and world LOD changes; gate closed 2026-10-03. |
 | 17 | Camp atmosphere, settlement density, and first-person view | Accepted | Accepted | Owner reviewed camp presentation, panorama, gate and service routes, all three camera views, controls, and performance; gate closed 2026-10-03. |
+
+| 18 | Aim, progression tree, companion/rescues, sorties, camp edge and mission scenery | Awaiting owner playtest | Pending | Automated regressions and production build pass; camp/menu/deployment/all-view smoke passed. Full extraction/escort/interior gameplay and reference-desktop profiling require owner review. |
+
+## Phase 18 checklist — 2026-10-03
+
+- [x] Perspective-only held aim, enlarged top-down target assistance, persistent engagement, and distinct bounded procedural firearm sounds.
+- [x] Connected, pannable/zoomable progression web; permanent credit-funded SMG/M4A; point-funded character, grenade, turret and companion branches; free skill-point respec.
+- [x] Handgun starter, free capacity-based grenade refill, capped non-stacking incendiary patches, readable item list, and separate Armory/Skill Tree tabs.
+- [x] Save migration retains credits, gear, reserve, grenade capacity and legacy firearms as permanent unlocks; extraction grants permanent points and first-clear bonuses; death preserves banked progression.
+- [x] Run-only companion hire, navigation/follow/regroup, scout-target mirroring and bounded local defense; survivor escort retains health/context across door transitions without teleporting distant survivors into safety.
+- [x] Seeded alarm event and occasional survivor event at reachable cache/landmark approaches, extraction-only objective rewards and permanent named resident contributions.
+- [x] Free standard and 2-fuel high-yield previews/deployment; doubled reachable crates, initial population, reinforcement pace and indoor encounters; higher-value loot; unchanged hostile health/damage and 10,000 cap.
+- [x] Closed/open animated camp gates, synchronized collision/navigation and a walkable exterior with shared tree colliders and LODs.
+- [x] Mission panorama, player-centered 150–200 m fog, close-only batched ground dressing, denser route-safe forest, shoreline-preserving waves and 60-second floating-arrow delay.
+- [x] Regression suite: 35 files / 108 tests; production build, scoped formatting and whitespace checks pass. The local 10,000-agent + companion/fire simulation sample measured 0.90 ms mean / 4.20 ms p95; rendering and reference-desktop validation are excluded.
+- [x] Browser smoke: camp inventory/Armory/tree, hire, risk/fuel previews, high-yield launch, all three views, delayed guidance, no console warnings/errors, and zero-fuel standard availability.
+- [ ] Owner verifies successful extraction summary, respec/weapon handling, fire, escorted rescues, alarm shutdown, interior transitions, gate traversal and return routes.
+- [ ] Owner profiles high-yield horde/companions/scenery/effects on the Phase 7 reference desktop and reviews pacing, audio and scenery.
+- [ ] Owner explicitly accepts Phase 18.
+
 
 ## Phase 1 checklist
 

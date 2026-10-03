@@ -60,7 +60,8 @@ export function placeLootCaches(
       const z = centerZ + Math.sin(angle) * distance;
       if (!navigator.isWalkable(x, z)) continue;
       if (Math.hypot(x - world.spawn.x, z - world.spawn.z) < 20) continue;
-      if (sites.some((site) => Math.hypot(x - site.x, z - site.z) < 18)) continue;
+      if (sites.some((site) => Math.hypot(x - site.x, z - site.z) < (targetCount > 7 ? 10 : 18)))
+        continue;
       if (routeLength(x, z) > 145) continue;
       sites.push({ id: `cache-${sites.length + 1}`, x, z, zoneId });
       return true;
@@ -82,7 +83,7 @@ export function placeLootCaches(
   return sites;
 }
 
-export function openCache(site: CacheSite, seed: string): LootDrop[] {
+export function openCache(site: CacheSite, seed: string, valueMultiplier = 1): LootDrop[] {
   const random = createRandom(`${seed}:contents:${site.id}`);
   const count = 2 + Math.floor(random() * 2);
   const resources: LootDrop[] = Array.from({ length: count }, (_, index) => {
@@ -93,7 +94,7 @@ export function openCache(site: CacheSite, seed: string): LootDrop[] {
       id: `${site.id}-drop-${index + 1}`,
       cacheId: site.id,
       kind,
-      amount,
+      amount: Math.ceil(amount * valueMultiplier),
       x: site.x + spread,
       z: site.z + (index % 2 === 0 ? 0.65 : -0.65),
       collected: false,

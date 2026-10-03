@@ -1948,3 +1948,134 @@ kbd {
     font-size: 20px;
   }
 }
+
+.inventory-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 16px;
+}
+.inventory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: none;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+.inventory-list .inventory-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  width: 100%;
+  min-height: 46px;
+  padding: 8px 12px;
+  text-align: left;
+}
+.inventory-list .inventory-item span {
+  position: static;
+  font-size: 12px;
+}
+.progression-view {
+  min-width: 0;
+}
+.progression-view > button {
+  margin: 8px;
+}
+.skill-viewport {
+  height: 58vh;
+  min-height: 350px;
+  overflow: hidden;
+  position: relative;
+  background: #141e1c;
+  touch-action: none;
+}
+.skill-web {
+  width: 1100px;
+  height: 850px;
+  position: absolute;
+  transform-origin: 0 0;
+}
+.skill-links {
+  width: 1100px;
+  height: 850px;
+  position: absolute;
+  pointer-events: none;
+}
+.skill-links line {
+  stroke: #62756a;
+  stroke-width: 3;
+}
+.skill-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 150px;
+  min-height: 58px;
+  white-space: pre-line;
+  background: #26312c;
+  border: 2px solid #586258;
+  border-radius: 12px;
+}
+.skill-node.owned {
+  border-color: #b9cb7c;
+  background: #384d32;
+}
+.skill-node.available {
+  border-color: #e5c475;
+}
+.sortie-panel {
+  position: fixed;
+  inset: 15% 15%;
+  z-index: 45;
+  padding: 30px;
+  background: #17221f;
+  border: 1px solid #b7b998;
+  overflow: auto;
+}
+.sortie-panel button {
+  margin: 8px;
+  padding: 14px;
+}
+.inventory-columns[hidden],
+.progression-view[hidden],
+.inventory-tabs[hidden] {
+  display: none;
+}
+.inventory-list .inventory-item {
+  flex-direction: row;
+  cursor: pointer;
+}
+.inventory-list .inventory-item span {
+  display: inline;
+}
+.inventory-tabs button,
+.progression-view button,
+.sortie-panel button {
+  color: #ece9db;
+  background: #2d3b33;
+  border: 1px solid #8b967e;
+  border-radius: 4px;
+  padding: 9px 12px;
+  font: 12px var(--mono);
+}
+.progression-view .skill-node {
+  border-width: 2px;
+  padding: 8px;
+}
+.progression-view .skill-node.owned {
+  border-color: #b9cb7c;
+  background: #384d32;
+}
+.progression-view .skill-node.available {
+  border-color: #e5c475;
+}
+.progression-view button:focus-visible,
+.inventory-tabs button:focus-visible,
+.sortie-panel button:focus-visible {
+  outline: 3px solid #e5c475;
+  outline-offset: 3px;
+}
+.sortie-panel button:disabled {
+  opacity: 0.45;
+}

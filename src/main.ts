@@ -1,3 +1,27 @@
+import { updatePlayerFog } from './world/playerFog';
+import { FirePatchPool } from './game/FirePatches';
+import { chooseAssistedTarget, extractionArrowVisible } from './game/targeting';
+import { seededMissionEvents, residentRoles } from './game/missionObjectives';
+import { Follower } from './game/Followers';
+import {
+  weaponStats,
+  refillGrenades,
+  isFirearm,
+  owns,
+  grenadeCapacity,
+  sortieRules,
+  payForSortie,
+  awardObjectives,
+  canPurchase,
+  skillNodes,
+  type Sortie,
+} from './game/progression';
+import {
+  setScoutFirearm,
+  setFirstPersonFirearm,
+  createPlayerVisual,
+  type PlayerVisualRig,
+} from './player/playerVisual';
 import {
   AmbientLight,
   ACESFilmicToneMapping,
@@ -53,9 +77,9 @@ import {
   type AtmosphereSettings,
   type RunAtmosphere,
 } from './atmosphere/settings';
-import { buildCamp, updateCampWalkers } from './camp/buildCamp';
+import { buildCamp, updateCampWalkers, addCampExterior, animateCampGate } from './camp/buildCamp';
 import { buyCampItem, campPrices, sellCampItem } from './camp/campEconomy';
-import { campEntrances, campServices, createCampWorld } from './camp/campWorld';
+import { campEntrances, campServices, createCampWorld, campHeightAt } from './camp/campWorld';
 import { CameraRig } from './camera/CameraRig';
 import { BloodTrailGate, BloodTrailVisual, impactShakeStrength } from './game/CombatFeedback';
 import { CombatSimulation, type ZombieState } from './game/CombatSimulation';
@@ -100,7 +124,7 @@ import { playerSpeedMultiplier, PlayerController } from './player/PlayerControll
 import { createFirstPersonWeapon } from './player/playerVisual';
 import { playerPresentation } from './player/presentation';
 import { canRequestPointerLock } from './input/pointerLock';
-import { buildWorld, updateWorldLods } from './world/buildWorld';
+import { buildWorld, updateWorldLods, animateCoastalWater } from './world/buildWorld';
 import {
   generateWorld,
   terrainHeightAt,
@@ -325,12 +349,15 @@ let currentRunAtmosphere: RunAtmosphere = resolveRunAtmosphere(world.seed, atmos
 let worldGroup = buildWorld(world);
 scene.add(worldGroup);
 worldGroup.visible = false;
-const campWorld = createCampWorld();
+let campWorld = createCampWorld();
+let gateOpen = false;
+let gatePending: boolean | undefined;
 const campGroup = buildCamp();
+addCampExterior(campGroup);
 scene.add(campGroup);
 const campChopperRotor = campGroup.getObjectByName('Camp helicopter main rotor');
 const campChopperTailRotor = campGroup.getObjectByName('Camp helicopter tail rotor');
-const campNavigator = new GridNavigator(campWorld);
+let campNavigator = new GridNavigator(campWorld);
 let fieldNavigator = new GridNavigator(world);
 let navigator = campNavigator;
 // Player routes add moving-hostile blockers; pursuit paths need their own static grid.
@@ -360,7 +387,10 @@ type InteractiveKind =
   | 'camp-operations'
   | 'camp-departure'
   | 'camp-scrap'
-  | 'camp-food';
+  | 'camp-food'
+  | 'camp-gate'
+  | 'objective'
+  | 'survivor';
 
 interface InteractiveView {
   id: string;
@@ -432,7 +462,6 @@ let fieldHordeSpawnRemaining = 2;
 let hordeRenderTier = new Uint8Array();
 let fieldHordeRenderTier = new Uint8Array();
 const fieldHordeCapacity = 10_000;
-const fieldHordeInitialCount = 20;
 let hordeSyncMs = 0;
 let hordeSyncCount = 0;
 
@@ -453,14 +482,27 @@ function emitFieldNoise(intensity: number, x = player.position.x, z = player.pos
 let saveData: SaveData = loadSave();
 let cargo = emptyInventory();
 let runItems: ItemGrid = saveData.storedItems;
-let equippedWeapon: ItemId = 'rifle';
+let equippedWeapon: ItemId = saveData.progression.activeWeapon;
+let lastVisualWeapon: ItemId | undefined;
+let sortie: Sortie = 'standard';
+let companionHired = false;
+let runObjectives: string[] = [];
+const followers: { actor: Follower; visual: Group; context?: string }[] = [];
+const firePatches = new FirePatchPool<Mesh>();
+let lastAttackTargetId: string | undefined;
+let lastEarnedPoints = 0;
+let attackIntentRemaining = 0;
+let fireHeld = false;
 let droppedItemNumber = 0;
 let inventoryPanel: InventoryPanel;
 function activeItems(): ItemGrid {
   return runItems;
 }
 function syncGrenades(): void {
-  grenadeCount = runItems.items.filter((item) => item.id === 'grenade').length;
+  grenadeCount = Math.min(
+    grenadeCapacity(saveData),
+    runItems.items.filter((item) => item.id === 'grenade').length,
+  );
 }
 let runElapsed = 0;
 let arrivalElapsed = 0;
@@ -540,7 +582,7 @@ interface GrenadeProjectile {
 }
 const activeTurrets: ActiveTurret[] = [];
 const grenadeProjectiles: GrenadeProjectile[] = [];
-let grenadeCount = 3;
+let grenadeCount = grenadeCapacity(saveData);
 let grenadeCooldownRemaining = 0;
 let turretPreview: Group | undefined;
 let turretRangeMarker: Mesh | undefined;
@@ -571,7 +613,7 @@ let pointerY = window.innerHeight / 2;
 let suppressPlacementContextMenu = false;
 let observedDash = false;
 let autoAttackTargetId: string | undefined;
-const enemyAimAssistRadius = 44;
+const enemyAimAssistRadius = 68;
 
 function updateModeUi(): void {
   const label =
@@ -593,6 +635,11 @@ function updateModeUi(): void {
 }
 
 function syncPlayerPresentation(): void {
+  if (lastVisualWeapon !== equippedWeapon && isFirearm(equippedWeapon)) {
+    setScoutFirearm(player.visual, equippedWeapon);
+    setFirstPersonFirearm(firstPersonWeapon, equippedWeapon);
+    lastVisualWeapon = equippedWeapon;
+  }
   const presentation = playerPresentation(cameraRig.mode, cameraRig.isTransitioning, gamePhase);
   player.visual.visible = presentation.body;
   firstPersonWeapon.visual.visible = presentation.weapon;
@@ -736,6 +783,8 @@ function switchView(): void {
 }
 
 function releaseMouseCapture(): void {
+  cameraRig.setAiming(false);
+  fireHeld = false;
   if (document.pointerLockElement === canvas) document.exitPointerLock();
 }
 
@@ -810,6 +859,7 @@ function renderControls(): void {
             row('SHIFT', 'Hold to sprint'),
             row('CTRL|ESC', 'Release mouse capture'),
             row('LMB', firstPerson ? 'Fire from the center reticle' : 'Fire equipped weapon'),
+            row('RMB', 'Hold to aim · release to restore view'),
             row(
               'Q',
               `Dash${combat.dashCooldownRemaining > 0 ? ` · ${combat.dashCooldownRemaining.toFixed(1)}s` : ''}`,
@@ -972,17 +1022,14 @@ function updateBaseUi(): void {
   elements.storageFuel!.textContent = String(saveData.base.fuel);
   elements.runCount!.textContent = String(saveData.completedRuns);
   elements.harnessStatus!.textContent = saveData.cargoUpgrade
-    ? `Cargo ${cargoCapacity(saveData)} units · backpack 8×8 · upgraded`
-    : `Cargo ${cargoCapacity(saveData)} units · backpack 8×6`;
+    ? `Cargo ${cargoCapacity(saveData)} units · backpack 9.6 kg · upgraded`
+    : `Cargo ${cargoCapacity(saveData)} units · backpack 7.2 kg`;
   elements.buySuppliesButton!.disabled = saveData.base.money < campPrices.supplies;
   elements.buyGearButton!.disabled = saveData.base.money < campPrices.gear;
   elements.sellSuppliesButton!.disabled = saveData.base.supplies < 1 || saveData.base.money >= 9999;
   elements.sellGearButton!.disabled = saveData.base.gear < 1 || saveData.base.money >= 9999;
-  elements.buyCargoButton!.disabled =
-    saveData.cargoUpgrade || saveData.base.money < campPrices.cargoUpgrade;
-  elements.buyCargoButton!.innerHTML = saveData.cargoUpgrade
-    ? 'BACKPACK & HARNESS UPGRADED <span>✓</span>'
-    : 'UPGRADE BACKPACK & HARNESS <span>90 CR</span>';
+  elements.buyCargoButton!.disabled = false;
+  elements.buyCargoButton!.textContent = 'OPEN ARMORY & SKILL TREE';
   elements.zoneStatus!.textContent = gamePhase === 'base' ? 'BASE' : 'ENGAGED';
 }
 
@@ -997,6 +1044,11 @@ function updateExtractionGuide(): void {
   const screenUp = deltaX * sin - deltaZ * cos;
   elements.guideArrow!.style.transform = `rotate(${Math.atan2(screenRight, screenUp) * (180 / Math.PI)}deg)`;
   if (extractionGuideArrow) {
+    extractionGuideArrow.visible = extractionArrowVisible(
+      runElapsed,
+      gamePhase === 'active',
+      !interiorSession,
+    );
     const direction = new Vector3(deltaX, 0, deltaZ);
     if (direction.lengthSq() > 0.001) extractionGuideArrow.setDirection(direction.normalize());
     extractionGuideArrow.position.set(
@@ -1085,7 +1137,7 @@ function setSeed(seed: string): void {
   observedDash = false;
   autoAttackTargetId = undefined;
   wasAlive = true;
-  player.setWorld(campWorld, () => 0);
+  player.setWorld(campWorld, campHeightAt);
   player.setEnabled(elements.baseOverlay!.hasAttribute('hidden'));
   player.setPosition(campWorld.spawn.x, campWorld.spawn.z);
   campGroup.visible = true;
@@ -1117,7 +1169,7 @@ function setCampContext(position = campWorld.spawn, resetCamera = true): void {
   setCampAtmosphere();
   if (zombieGroup) zombieGroup.visible = false;
   navigator = campNavigator;
-  player.setWorld(campWorld, () => 0);
+  player.setWorld(campWorld, campHeightAt);
   player.setPosition(position.x, position.z);
   player.setEnabled(elements.baseOverlay!.hasAttribute('hidden'));
   cameraRig.setWorld(campWorld);
@@ -1690,6 +1742,15 @@ function findObjectWithInteractiveId(root: Object3D, id: string): Object3D | und
 
 function createCampInteractiveViews(): void {
   campInteractiveViews.clear();
+  const gate = campGroup.getObjectByName('camp-gate--1');
+  if (gate)
+    campInteractiveViews.set('camp-gate', {
+      id: 'camp-gate',
+      kind: 'camp-gate',
+      x: 0,
+      z: 29,
+      object: gate,
+    });
   for (const service of campServices) {
     const object = findObjectWithInteractiveId(campGroup, service.id);
     if (!object) continue;
@@ -1721,7 +1782,11 @@ function createRunLoot(): void {
   lootGroup = new Group();
   lootGroup.name = 'Run loot';
   interactiveViews.clear();
-  cacheSites = placeLootCaches(world, navigator);
+  cacheSites = placeLootCaches(
+    world,
+    navigator,
+    world.lootZones.reduce((n, zone) => n + zone.cacheCount, 0) * sortieRules[sortie].crates,
+  );
   openedCacheIds = new Set();
   lootDrops = [];
   for (const site of cacheSites) {
@@ -1867,9 +1932,15 @@ function enterBuilding(entrance: BuildingEntrance): void {
     });
   }
 
-  const savedRoomHostiles = interiorHostiles.get(entrance.id) ?? [
-    createInteriorHostile(layout.encounter.id, layout.encounter.x, layout.encounter.z),
-  ];
+  const savedRoomHostiles =
+    interiorHostiles.get(entrance.id) ??
+    Array.from({ length: sortieRules[sortie].encounters }, (_, i) =>
+      createInteriorHostile(
+        `${layout.encounter.id}-${i}`,
+        layout.encounter.x + i * 1.5,
+        layout.encounter.z,
+      ),
+    );
   interiorHostiles.set(entrance.id, savedRoomHostiles);
   const savedZombieGroup = zombieGroup;
   const savedZombieViews = new Map(zombieViews);
@@ -1914,6 +1985,7 @@ function enterBuilding(entrance: BuildingEntrance): void {
   player.setEnabled(true);
   cameraRig.setWorld(roomWorld);
   cameraRig.snapTo(player.position);
+  regroupFollowers(interiorSession.returnPosition, interiorSession.entrance.id);
   gamePhase = 'active';
   elements.extractionGuide!.setAttribute('hidden', '');
   elements.zoneStatus!.textContent = 'INSIDE';
@@ -1945,7 +2017,7 @@ function leaveBuilding(resumePlayer = true): void {
   lootGroup.visible = true;
   if (chopper) chopper.visible = true;
   if (extractionMarker) extractionMarker.visible = true;
-  if (extractionGuideArrow) extractionGuideArrow.visible = true;
+  if (extractionGuideArrow) extractionGuideArrow.visible = runElapsed >= 60;
   navigator = session.outdoorNavigator;
   combatNavigator = session.outdoorCombatNavigator;
   navigator.setDynamicObstacles([]);
@@ -1960,6 +2032,7 @@ function leaveBuilding(resumePlayer = true): void {
   player.setEnabled(resumePlayer && gamePhase === 'active' && combat.alive);
   cameraRig.setWorld(world);
   cameraRig.snapTo(player.position);
+  regroupFollowers(session.layout.exit, undefined);
   interiorSession = undefined;
   for (const id of discarded)
     spawnGroundItem(id, session.returnPosition.x + 1.7, session.returnPosition.z + 0.7);
@@ -2020,7 +2093,7 @@ function spawnGroundItem(id: ItemId, x: number, z: number): void {
 function dropInventoryItem(id: ItemId): void {
   spawnGroundItem(id, player.position.x + 1.7, player.position.z + 0.7);
   if (id === 'grenade') syncGrenades();
-  if (id === equippedWeapon) equippedWeapon = 'rifle';
+  if (id === equippedWeapon) equippedWeapon = saveData.progression.activeWeapon;
 }
 
 function openLoot(view: InteractiveView): void {
@@ -2030,7 +2103,7 @@ function openLoot(view: InteractiveView): void {
   lootGroup.remove(view.object);
   disposeTree(view.object);
   interactiveViews.delete(view.id);
-  for (const drop of openCache(view.cache, world.seed)) addPickup(drop);
+  for (const drop of openCache(view.cache, world.seed, sortieRules[sortie].value)) addPickup(drop);
   combat.lastMessage = 'Cache opened. Collect what you can carry.';
   updateCombatUi();
 }
@@ -2203,7 +2276,7 @@ function leaveCampBuilding(): void {
   campGroup.visible = true;
   setCampAtmosphere();
   navigator = campNavigator;
-  player.setWorld(campWorld, () => 0);
+  player.setWorld(campWorld, campHeightAt);
   player.setPosition(session.returnPosition.x, session.returnPosition.z);
   player.setEnabled(elements.baseOverlay!.hasAttribute('hidden'));
   cameraRig.setWorld(campWorld);
@@ -2241,8 +2314,12 @@ function interactWithCamp(view: InteractiveView, allowApproach: boolean): void {
     else elements.seedHint!.textContent = 'Walk closer to the marked camp service.';
     return;
   }
+  if (view.kind === 'camp-gate') {
+    toggleGate();
+    return;
+  }
   if (view.kind === 'camp-departure') {
-    startRun();
+    showSortieChoice();
   } else if (view.kind === 'drop') {
     collectLoot(view);
   } else if (view.kind === 'camp-scrap') {
@@ -2252,7 +2329,8 @@ function interactWithCamp(view: InteractiveView, allowApproach: boolean): void {
     inventoryPanel.show('food');
     player.setEnabled(false);
   } else if (view.kind === 'camp-shop') {
-    openBaseTerminal('quartermaster');
+    inventoryPanel.show('tree');
+    player.setEnabled(false);
   } else if (view.kind === 'camp-storage') {
     openBaseTerminal('storage');
   } else if (view.kind === 'camp-operations') {
@@ -2313,7 +2391,8 @@ function interactWith(view: InteractiveView, allowApproach = true): void {
     updateCombatUi();
     return;
   }
-  if (view.kind === 'cache') openLoot(view);
+  if (view.kind === 'objective' || view.kind === 'survivor') completeOptionalEvent(view);
+  else if (view.kind === 'cache') openLoot(view);
   else collectLoot(view);
 }
 
@@ -2403,7 +2482,9 @@ function updateNearbyAction(): void {
                     ? 'F  CAMP STORAGE'
                     : nearby.kind === 'camp-operations'
                       ? 'F  OPERATIONS BOARD'
-                      : 'F  DEPART FOR GREYWOOD'
+                      : nearby.kind === 'camp-gate'
+                        ? 'F  OPEN / CLOSE GATE'
+                        : 'F  SORTIE CHOICE'
           : cameraRig.mode === 'top-down'
             ? 'CLICK TO APPROACH SERVICE'
             : 'WALK TO CAMP SERVICE';
@@ -2433,13 +2514,17 @@ function updateNearbyAction(): void {
               ? 'F  BOARD THE CHOPPER'
               : 'SCAVENGE BEFORE EXTRACTION'
             : 'EXTRACTION ZONE'
-          : nearby.kind === 'cache'
-            ? distance <= 3.6
-              ? 'F  SEARCH CACHE'
-              : 'CLICK TO APPROACH CACHE'
-            : distance <= 3.6
-              ? 'F  COLLECT PICKUP'
-              : 'CLICK TO APPROACH PICKUP';
+          : nearby.kind === 'objective'
+            ? 'F  DISABLE ALARM · 25 CR + FIRST-CLEAR POINT ON EXTRACTION · INFECTED NEARBY'
+            : nearby.kind === 'survivor'
+              ? `F  FREE ${residentRoles[nearby.id.replace('survivor-', '')]?.name.toUpperCase() ?? 'SURVIVOR'} · ESCORT TO CHOPPER · CAMP CONTRIBUTION ON EXTRACTION`
+              : nearby.kind === 'cache'
+                ? distance <= 3.6
+                  ? 'F  SEARCH CACHE'
+                  : 'CLICK TO APPROACH CACHE'
+                : distance <= 3.6
+                  ? 'F  COLLECT PICKUP'
+                  : 'CLICK TO APPROACH PICKUP';
     elements.nearbyAction!.textContent = text;
     elements.nearbyAction!.removeAttribute('hidden');
     return;
@@ -2470,6 +2555,7 @@ function beginExtraction(): void {
     return;
   }
   gamePhase = 'extracting';
+  fireHeld = false;
   extractingRemaining = 4;
   player.setEnabled(false);
   autoAttackTargetId = undefined;
@@ -2708,6 +2794,16 @@ function updateNavigationProgress(): void {
 }
 
 function clearRunScene(): void {
+  for (const f of followers) {
+    scene.remove(f.visual);
+    disposeTree(f.visual);
+  }
+  followers.length = 0;
+  for (const visual of firePatches.clear()) {
+    scene.remove(visual);
+    disposeTree(visual);
+  }
+  lastAttackTargetId = undefined;
   cancelTurretPlacement();
   for (const id of zombieHitFlashes.keys()) {
     const visual = zombieViews.get(id);
@@ -2748,7 +2844,7 @@ function clearRunScene(): void {
   noiseRadiusVisual = undefined;
   fieldHorde = undefined;
   fieldHordeRenderTier = new Uint8Array();
-  fieldHordeSpawnRemaining = 2;
+  fieldHordeSpawnRemaining = sortieRules[sortie].spawnSeconds;
   removeRappelRope();
   if (chopper) {
     scene.remove(chopper);
@@ -2780,8 +2876,282 @@ function clearRunScene(): void {
   interiorLootRemaining.clear();
 }
 
+function refreshResidentVisuals(): void {
+  const prior = campGroup.getObjectByName('rescued-residents');
+  if (prior) {
+    campGroup.remove(prior);
+    disposeTree(prior);
+  }
+  const group = new Group();
+  group.name = 'rescued-residents';
+  for (const [index, id] of saveData.progression.residents.slice(0, 8).entries()) {
+    const resident = createPlayerVisual();
+    resident.name = id;
+    (resident.userData.rig as PlayerVisualRig).rifle.visible = false;
+    resident.position.set(-3 + index * 0.7, 0, -5);
+    group.add(resident);
+  }
+  campGroup.add(group);
+}
+
+function showSortieChoice(): void {
+  if (gamePhase !== 'base' || stressActive) return;
+  closeBaseTerminal();
+  releaseMouseCapture();
+  cameraRig.setAiming(false);
+  player.clearKeyboardMovement();
+  player.setEnabled(false);
+  document.querySelector('.sortie-panel')?.remove();
+  const panel = document.createElement('section');
+  panel.className = 'sortie-panel';
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  const count = world.lootZones.reduce((n, z) => n + z.cacheCount, 0);
+  panel.innerHTML = `<h2>CHOPPER DEPLOYMENT</h2><p>Destination seed: ${world.seed.replace(/[<>&"']/g, '')} · Banked fuel: ${saveData.base.fuel}</p><p>Standard: free · ${count} reachable crates · 20 starting hostiles · one reinforcement every 2 seconds.</p><p>High-yield: 2 fuel · about ${count * 2} reachable crates · 1.5× loot value · 40 starting hostiles · one reinforcement each second · double indoor encounters. Enemy health and damage stay the same. Fuel is spent at liftoff and is lost on failure.</p><p id="hire-status">Companion: ${companionHired ? 'HIRED for this run' : '40 credits per run'} · ${saveData.base.money} credits</p>`;
+  const button = (text: string, fn: () => void, disabled = false) => {
+    const b = document.createElement('button');
+    b.textContent = text;
+    b.disabled = disabled;
+    b.onclick = fn;
+    panel.append(b);
+    return b;
+  };
+  const launch = (choice: Sortie) => {
+    sortie = choice;
+    panel.remove();
+    startRun();
+  };
+  button('Standard sortie · FREE', () => launch('standard'));
+  button('High-yield sortie · 2 FUEL', () => launch('high'), saveData.base.fuel < 2);
+  button(
+    companionHired ? 'Companion hired' : 'Hire companion · 40 CR',
+    () => {
+      if (companionHired || saveData.base.money < 40) return;
+      saveData.base.money -= 40;
+      companionHired = true;
+      storeSave(saveData);
+      showSortieChoice();
+    },
+    companionHired || saveData.base.money < 40,
+  );
+  button('Armory / Skill Tree', () => {
+    panel.remove();
+    inventoryPanel.show('tree');
+  });
+  button('Cancel', () => {
+    panel.remove();
+    player.setEnabled(true);
+    canvas?.focus();
+  });
+  document.querySelector('#game')!.append(panel);
+  panel.querySelector<HTMLButtonElement>('button')?.focus();
+}
+
+function toggleGate(): void {
+  if (gatePending !== undefined) return;
+  const next = !gateOpen;
+  if (!next && Math.abs(player.position.x) < 7 && Math.abs(player.position.z - 29) < 3) {
+    elements.seedHint!.textContent = 'Step clear of the gate before closing it.';
+    return;
+  }
+  gatePending = next;
+  // Keep the entrance blocked throughout animation; release only when fully open.
+  if (!next) setGateNavigation(false);
+  elements.seedHint!.textContent = next ? 'Opening camp gate…' : 'Closing camp gate…';
+}
+function setGateNavigation(open: boolean): void {
+  campWorld = createCampWorld(open);
+  campNavigator = new GridNavigator(campWorld);
+  navigator = campNavigator;
+  clearNavigation('IDLE');
+  player.setWorld(campWorld, campHeightAt);
+  cameraRig.setWorld(campWorld);
+}
+function updateGate(delta: number): void {
+  if (gatePending === undefined) return;
+  if (animateCampGate(campGroup, gatePending, delta) > 0.001) return;
+  gateOpen = gatePending;
+  gatePending = undefined;
+  setGateNavigation(gateOpen);
+  elements.seedHint!.textContent = gateOpen
+    ? 'Gate open · follow the path into the hills. F at the gate to close.'
+    : 'Camp perimeter secured.';
+}
+function addFollower(id: string, armed: boolean, position: Vector3): void {
+  if (followers.some((f) => f.actor.id === id)) return;
+  const actor = new Follower(id, armed, armed && owns(saveData, 'durability') ? 120 : 80);
+  actor.regroup(position);
+  const visual = createPlayerVisual();
+  visual.name = id;
+  (visual.userData.rig as PlayerVisualRig).rifle.visible = armed;
+  visual.scale.setScalar(0.92);
+  visual.traverse((object) => {
+    if (object instanceof Mesh && object.material instanceof MeshStandardMaterial) {
+      object.material = object.material.clone();
+      object.material.color.lerp(new Color(armed ? '#7c9bb5' : '#bb9d70'), 0.45);
+    }
+  });
+  visual.position.copy(position);
+  scene.add(visual);
+  followers.push({ actor, visual, context: interiorSession?.entrance.id });
+}
+function regroupFollowers(
+  previous: { x: number; z: number },
+  nextContext: string | undefined,
+): void {
+  for (const follower of followers) {
+    if (follower.context === nextContext) continue;
+    if (
+      follower.actor.armed ||
+      Math.hypot(follower.actor.position.x - previous.x, follower.actor.position.z - previous.z) < 8
+    ) {
+      follower.context = nextContext;
+      follower.actor.regroup(player.position);
+      follower.visual.position.copy(player.position);
+    }
+    follower.visual.visible = follower.actor.alive && follower.context === nextContext;
+  }
+}
+function tickFollowers(delta: number): void {
+  attackIntentRemaining = Math.max(0, attackIntentRemaining - delta);
+  for (const { actor, visual, context } of followers) {
+    if (context !== interiorSession?.entrance.id) {
+      visual.visible = false;
+      continue;
+    }
+    const before = actor.position.clone();
+    actor.tick(
+      delta,
+      player.position,
+      navigator,
+      interiorSession ? () => 0 : (x, z) => terrainHeightAt(world.seed, x, z),
+      owns(saveData, 'regroup'),
+    );
+    visual.visible = actor.alive;
+    visual.position.copy(actor.position);
+    const moved = actor.position.distanceToSquared(before) > 0.00001;
+    if (moved)
+      visual.rotation.y = Math.atan2(before.x - actor.position.x, before.z - actor.position.z);
+    const rig = visual.userData.rig as PlayerVisualRig;
+    const swing = moved ? Math.sin(runElapsed * 10) * 0.45 : 0;
+    rig.leftLeg.rotation.x = swing;
+    rig.rightLeg.rotation.x = -swing;
+    if (!actor.alive) continue;
+    const close = nearestHostile(
+      actor.position.x,
+      actor.position.z,
+      owns(saveData, 'defense') ? 9 : 6,
+    );
+    if (close && close.position.distanceTo(actor.position) < 1.8)
+      actor.health = Math.max(0, actor.health - delta * 6);
+    if (!actor.armed || actor.cooldown > 0) continue;
+    const target = actor.defensiveTarget(
+      getHostileTarget(
+        autoAttackTargetId ?? (attackIntentRemaining > 0 ? lastAttackTargetId : undefined),
+      ),
+      close,
+      owns(saveData, 'defense') ? 9 : 6,
+    );
+    if (!target) continue;
+    const origin = actor.position.clone().add(new Vector3(0, 1.2, 0)),
+      end = target.position.clone().add(new Vector3(0, 1, 0));
+    const ray = new Raycaster(
+      origin,
+      end.clone().sub(origin).normalize(),
+      0,
+      origin.distanceTo(end),
+    );
+    const hit = ray
+      .intersectObject(activeWorldVisual(), true)
+      .find((h) => !h.object.userData.walkableFloor);
+    if (hit && hit.distance < origin.distanceTo(end) - 0.3) continue;
+    damageHostile(target.id, 20);
+    actor.cooldown = 0.6;
+    visual.rotation.y = Math.atan2(
+      actor.position.x - target.position.x,
+      actor.position.z - target.position.z,
+    );
+    addShotEffect(origin, end);
+    audioFeedback.playWeapon('handgun');
+    // Defensive fire alerts only its local patch; it never emits scout-wide noise.
+  }
+}
+function tickFirePatches(delta: number): void {
+  const context = interiorSession?.entrance.id;
+  for (const patch of firePatches.patches) patch.payload.visible = patch.context === context;
+  const { damage, expired } = firePatches.tick(delta, context);
+  for (const point of damage) damageHostilesInRadius(point, 3, 8);
+  for (const visual of expired) {
+    scene.remove(visual);
+    disposeTree(visual);
+  }
+}
+function createOptionalEvents(): void {
+  // Cache sites already pass shared walkability and escape-route validation.
+  const selected = seededMissionEvents(world.seed, cacheSites, saveData.progression.residents);
+  for (const event of selected) {
+    const { id, site } = event;
+    const index = event.kind === 'alarm' ? 0 : 1;
+    const object = index === 0 ? new Group() : createPlayerVisual();
+    if (index === 0) {
+      const pole = new Mesh(
+        new BoxGeometry(0.7, 1.7, 0.6),
+        new MeshStandardMaterial({ color: '#b46643' }),
+      );
+      pole.position.y = 0.85;
+      object.add(pole);
+    }
+    const offsets = [
+      [2, 0],
+      [-2, 0],
+      [0, 2],
+      [0, -2],
+    ];
+    const offset = offsets.find(
+      ([dx, dz]) =>
+        navigator.isWalkable(site.x + dx!, site.z + dz!) &&
+        navigator.findPath(world.spawn.x, world.spawn.z, site.x + dx!, site.z + dz!).length > 0,
+    ) ?? [0, 0];
+    const eventX = site.x + offset[0]!,
+      eventZ = site.z + offset[1]!;
+    object.position.set(eventX, terrainHeightAt(world.seed, eventX, eventZ), eventZ);
+    object.userData.interactiveId = id;
+    // Events share the accessible cache approach, with no new collision volume.
+    lootGroup.add(object);
+    interactiveViews.set(id, {
+      id,
+      kind: index === 0 ? 'objective' : 'survivor',
+      x: eventX,
+      z: eventZ,
+      object,
+    });
+    if (index === 0) emitFieldNoise(0.5, site.x, site.z);
+  }
+}
+function completeOptionalEvent(view: InteractiveView): void {
+  if (view.kind === 'survivor') {
+    runLootCollected++;
+    const id = view.id.replace('survivor-', '');
+    const role = residentRoles[id]!;
+    addFollower(id, false, view.object.position);
+    combat.lastMessage = `${role.name} · ${role.role} freed. Escort within 9 m of the chopper. ${role.contribution}; death or leaving them behind grants nothing.`;
+  } else {
+    runObjectives.push('alarm-station');
+    runLootCollected++;
+    cargo.money += 25;
+    fieldHorde?.calmArea(view.x, view.z, 30);
+    combat.lastMessage =
+      'Alarm disabled · area calming. Extract for 25 credits and a first-clear skill point.';
+  }
+  view.object.removeFromParent();
+  disposeTree(view.object);
+  interactiveViews.delete(view.id);
+  updateCombatUi();
+}
+
 function startRun(): void {
   if (gamePhase !== 'base' || stressActive) return;
+  if (!payForSortie(saveData, sortie)) return;
   scanExplosiveBarrels();
   requestPointerLockForPlay();
   inventoryPanel.close();
@@ -2794,6 +3164,9 @@ function startRun(): void {
   navigator.setDynamicObstacles([]);
   dynamicNavigationRefresh = 0;
   cargo = emptyInventory();
+  equippedWeapon = saveData.progression.activeWeapon;
+  // Charges are an ability resource and refill without taking loot capacity.
+  refillGrenades(saveData, runItems);
   syncGrenades();
   grenadeCooldownRemaining = 0;
   if (saveData.base.gear > 0) {
@@ -2812,6 +3185,8 @@ function startRun(): void {
   extractingRemaining = 0;
   takeoffElapsed = 0;
   runLootCollected = 0;
+  combat.maxHealth = owns(saveData, 'health') ? 115 : 100;
+  combat.dashRecovery = owns(saveData, 'dash') ? 1.6 : 2;
   combat.reset(0);
   createZombieViews();
   zombieGroup.visible = false;
@@ -2821,7 +3196,7 @@ function startRun(): void {
     'ring',
     world,
     new GridNavigator(world),
-    fieldHordeInitialCount,
+    sortieRules[sortie].initial,
     { dormantActivation: true },
   );
   fieldHordeVisual = new ZombieCrowdVisual(fieldHordeCapacity, 'Field horde');
@@ -2838,6 +3213,10 @@ function startRun(): void {
   player.cancelNavigation();
   cameraRig.setWorld(world);
   createRunLoot();
+  runObjectives = [];
+  createOptionalEvents();
+  if (companionHired) addFollower('hired-companion', true, player.position);
+  companionHired = false;
   chopper = createChopper();
   cameraRig.reset(chopper.position);
   cameraRig.yaw = Math.PI / 4;
@@ -2928,6 +3307,26 @@ function beginTakeoff(): void {
   firstPersonWeapon.visual.visible = cameraRig.mode === 'first-person';
   createRappelRope();
   resolveRunOutcome(saveData, cargo, true);
+  const rescued = followers
+    .filter(
+      (f) =>
+        !f.context &&
+        !f.actor.armed &&
+        f.actor.alive &&
+        f.actor.position.distanceTo(player.position) < 9,
+    )
+    .map((f) => f.actor.id);
+  const bonus = awardObjectives(
+    saveData,
+    [...runObjectives, ...rescued.map((id) => `rescue:${id}`)],
+    rescued,
+  );
+  lastEarnedPoints = 1 + bonus;
+  for (const item of runItems.items)
+    if (isFirearm(item.id) && !saveData.progression.unlockedWeapons.includes(item.id))
+      saveData.progression.unlockedWeapons.push(item.id);
+  for (const follower of followers) follower.visual.visible = false;
+  saveData.storedItems = runItems;
   const saved = storeSave(saveData);
   elements.baseMessage!.textContent = saved
     ? 'Recovered cargo is secured in storage.'
@@ -2953,7 +3352,7 @@ function finishDeath(): void {
   elements.resultTitle!.textContent = 'SCOUT DOWN';
   const lost = cargo.gear + cargo.supplies + cargo.fuel;
   const lostMoney = cargo.money;
-  elements.deathMessage!.textContent = `Carried cargo lost: ${lost} resource unit(s), ${lostItems} backpack item(s), and ${lostMoney} credits. Camp resources remain safe; a basic rifle and three grenades are reissued.`;
+  elements.deathMessage!.textContent = `Carried cargo lost: ${lost} resource unit(s), ${lostItems} backpack item(s), and ${lostMoney} credits. Camp resources, permanent firearms, and skill points remain safe. A handgun is reissued; grenades refill at deployment.`;
   elements.restartButton!.textContent = 'RETURN TO BASE';
   elements.deathOverlay!.removeAttribute('hidden');
   elements.zoneStatus!.textContent = 'LOST';
@@ -2973,7 +3372,13 @@ function finishSuccess(): void {
   const recoveredWeight = cargo.gear + cargo.supplies + cargo.fuel;
   elements.resultEyebrow!.textContent = 'RUN COMPLETE / CARGO BANKED';
   elements.resultTitle!.textContent = 'SAFE EXTRACTION';
-  elements.deathMessage!.textContent = `Recovered ${recoveredWeight} carried item(s) and ${cargo.money} credits. Stored resources are ready for the next deployment.`;
+  elements.deathMessage!.textContent = `Recovered ${recoveredWeight} carried item(s) and ${cargo.money} credits. Earned ${lastEarnedPoints} skill point(s). Available: ${
+    skillNodes
+      .filter((n) => canPurchase(saveData, n))
+      .slice(0, 3)
+      .map((n) => n.name)
+      .join(', ') || 'save for your next node'
+  }. Camp roster: ${saveData.progression.residents.length}.`;
   elements.restartButton!.textContent = 'RETURN TO BASE';
   elements.deathOverlay!.removeAttribute('hidden');
   elements.zoneStatus!.textContent = 'RECOVERED';
@@ -2986,6 +3391,7 @@ function returnToBase(): void {
   if (gamePhase !== 'result') return;
   clearRunScene();
   gamePhase = 'base';
+  refreshResidentVisuals();
   cargo = emptyInventory();
   inventoryPanel.close();
   runElapsed = 0;
@@ -3189,7 +3595,7 @@ function finishTurretPlacement(): void {
     updateCombatUi();
     return;
   }
-  if (!combat.startAbilityCooldown(1, 10)) {
+  if (!combat.startAbilityCooldown(1, owns(saveData, 'setup') ? 8 : 10)) {
     cancelTurretPlacement();
     combat.lastMessage = 'Turret is still recharging.';
     updateCombatUi();
@@ -3205,7 +3611,7 @@ function finishTurretPlacement(): void {
     gun,
     x: position.x,
     z: position.z,
-    activeRemaining: 5,
+    activeRemaining: owns(saveData, 'uptime') ? 7 : 5,
     fireRemaining: 0.18,
   });
   combat.lastMessage = 'Auto turret deployed · active for 5 seconds.';
@@ -3503,17 +3909,36 @@ function throwGrenadeAtPointer(): void {
   const duration = Math.max(0.35, Math.min(1.1, offset.length() / 25));
   grenadeProjectiles.push({ object: projectile, start, target: aim.clone(), elapsed: 0, duration });
   emitFieldNoise(0.28);
-  const grenade = runItems.items.find((item) => item.id === 'grenade');
-  if (grenade) removeItem(runItems, grenade.uid);
+  const charge = runItems.items.find((item) => item.id === 'grenade');
+  if (charge) removeItem(runItems, charge.uid);
   syncGrenades();
-  inventoryPanel.render();
   grenadeCooldownRemaining = 1;
   combat.lastMessage = `Grenade thrown · ${grenadeCount} remaining.`;
   updateCombatUi();
 }
 
 function impactGrenade(point: Vector3): void {
-  applySharedGroundExplosion(point, grenadeBlastRadius, 5, 'Grenade blast');
+  applySharedGroundExplosion(
+    point,
+    owns(saveData, 'blast') ? 5.4 : grenadeBlastRadius,
+    5,
+    'Grenade blast',
+  );
+  if (owns(saveData, 'fire') && firePatches.canAdd(point, interiorSession?.entrance.id)) {
+    const visual = new Mesh(
+      new CircleGeometry(3, 18),
+      new MeshBasicMaterial({
+        color: '#dd662a',
+        transparent: true,
+        opacity: 0.38,
+        depthWrite: false,
+      }),
+    );
+    visual.rotation.x = -Math.PI / 2;
+    visual.position.copy(point).add(new Vector3(0, 0.1, 0));
+    scene.add(visual);
+    firePatches.add(point, interiorSession?.entrance.id, visual);
+  }
 }
 
 function animateFieldAbilities(delta: number): void {
@@ -3544,7 +3969,11 @@ function animateFieldAbilities(delta: number): void {
       (gamePhase === 'active' || gamePhase === 'extracting')
     ) {
       turret.fireRemaining -= delta;
-      const target = nearestHostile(turret.x, turret.z, turretAttackRadius);
+      const target = nearestHostile(
+        turret.x,
+        turret.z,
+        owns(saveData, 'coverage') ? 12 : turretAttackRadius,
+      );
       if (target) {
         const dx = target.position.x - turret.x;
         const dz = target.position.z - turret.z;
@@ -3689,7 +4118,16 @@ inventoryPanel = new InventoryPanel(
     updateCombatUi();
   },
   (id) => {
+    if (!isFirearm(id)) return;
     equippedWeapon = id;
+    if (
+      gamePhase === 'base' &&
+      isFirearm(id) &&
+      saveData.progression.unlockedWeapons.includes(id)
+    ) {
+      saveData.progression.activeWeapon = id;
+      storeSave(saveData);
+    }
     combat.lastMessage = `${itemDefinitions[id].name} equipped.`;
     updateCombatUi();
   },
@@ -3703,7 +4141,8 @@ inventoryPanel = new InventoryPanel(
   },
 );
 createCampInteractiveViews();
-player.setWorld(campWorld, () => 0);
+refreshResidentVisuals();
+player.setWorld(campWorld, campHeightAt);
 player.setEnabled(true);
 worldGroup.visible = false;
 campGroup.visible = true;
@@ -3795,7 +4234,7 @@ elements.hordeCamera!.addEventListener('change', () => {
 });
 elements.restartButton!.addEventListener('click', returnToBase);
 elements.baseCloseButton!.addEventListener('click', closeBaseTerminal);
-elements.startRunButton!.addEventListener('click', startRun);
+elements.startRunButton!.addEventListener('click', showSortieChoice);
 elements.buySuppliesButton!.addEventListener('click', () => {
   if (gamePhase !== 'base' || !buyCampItem(saveData, 'supplies')) return;
   const saved = storeSave(saveData);
@@ -3831,12 +4270,10 @@ elements.sellSuppliesButton!.addEventListener('click', () => {
   updateCombatUi();
 });
 elements.buyCargoButton!.addEventListener('click', () => {
-  if (gamePhase !== 'base' || !buyCampItem(saveData, 'cargoUpgrade')) return;
-  const saved = storeSave(saveData);
-  elements.baseMessage!.textContent = saved
-    ? 'Backpack expanded to 8×8 and cargo capacity increased by five units.'
-    : 'Backpack and harness upgraded for this session; browser storage is unavailable.';
-  updateBaseUi();
+  if (gamePhase !== 'base') return;
+  closeBaseTerminal();
+  player.setEnabled(false);
+  inventoryPanel.show('tree');
 });
 window.addEventListener(
   'keydown',
@@ -3862,9 +4299,15 @@ window.addEventListener(
       }
       return;
     }
-    if (inventoryPanel.open) {
+    if (inventoryPanel.open || document.querySelector('.sortie-panel')) {
       if (event.code === 'Escape') {
         inventoryPanel.close();
+        const sortiePanel = document.querySelector('.sortie-panel');
+        if (sortiePanel) {
+          sortiePanel.remove();
+          player.setEnabled(true);
+          canvas?.focus();
+        }
         event.preventDefault();
       }
       event.stopImmediatePropagation();
@@ -3930,7 +4373,7 @@ function pointerNdc(clientX: number, clientY: number): Vector2 {
   );
 }
 
-function pointToNdc(event: PointerEvent | MouseEvent): Vector2 {
+function pointToNdc(event: Pick<MouseEvent, 'clientX' | 'clientY'>): Vector2 {
   return cameraRig.mode === 'first-person' || document.pointerLockElement === canvas
     ? new Vector2(0, 0)
     : pointerNdc(event.clientX, event.clientY);
@@ -4308,55 +4751,31 @@ function findAssistedZombie(
   directHit: Object3D | undefined,
   instanceId?: number,
 ): HostileTarget | undefined {
-  const directId = findZombieId(directHit, instanceId);
-  const directTarget = getHostileTarget(directId);
+  const directTarget = getHostileTarget(findZombieId(directHit, instanceId));
   if (directTarget) return directTarget;
-
   camera.updateMatrixWorld(true);
-  let nearest: HostileTarget | undefined;
-  let nearestDistanceSquared = enemyAimAssistRadius * enemyAimAssistRadius;
-  if (isFieldHordeGameplay() && fieldHorde) {
-    const candidates: Array<{ target: HostileTarget; distanceSquared: number }> = [];
-    for (let index = 0; index < fieldHorde.activeCount; index += 1) {
-      if (fieldHorde.alive[index] !== 1) continue;
-      const zombie = getHostileTarget(`field-horde-${fieldHorde.ids[index]}`);
-      if (!zombie) continue;
-      const screen = zombie.position
-        .clone()
-        .add(new Vector3(0, 1.05, 0))
-        .project(camera);
-      if (screen.z < -1 || screen.z > 1) continue;
-      const screenX = ((screen.x + 1) * window.innerWidth) / 2;
-      const screenY = ((1 - screen.y) * window.innerHeight) / 2;
-      const dx = screenX - clientX;
-      const dy = screenY - clientY;
-      const distanceSquared = dx * dx + dy * dy;
-      if (distanceSquared >= enemyAimAssistRadius * enemyAimAssistRadius) continue;
-      candidates.push({ target: zombie, distanceSquared });
-    }
-    candidates.sort((a, b) => a.distanceSquared - b.distanceSquared);
-    for (const candidate of candidates) {
-      if (canSeeZombie(candidate.target)) return candidate.target;
-    }
-    return undefined;
-  }
-  for (const zombie of combat.zombies) {
-    if (!zombie.alive || !canSeeZombie(zombie)) continue;
-    const screen = zombie.position
+  const rect = canvas!.getBoundingClientRect();
+  const candidates: { target: HostileTarget; distanceSquared: number }[] = [];
+  const consider = (target: HostileTarget) => {
+    if (target.position.distanceTo(player.position) > 90) return;
+    const screen = target.position
       .clone()
       .add(new Vector3(0, 1.05, 0))
       .project(camera);
-    if (screen.z < -1 || screen.z > 1) continue;
-    const screenX = ((screen.x + 1) * window.innerWidth) / 2;
-    const screenY = ((1 - screen.y) * window.innerHeight) / 2;
-    const dx = screenX - clientX;
-    const dy = screenY - clientY;
-    const distanceSquared = dx * dx + dy * dy;
-    if (distanceSquared >= nearestDistanceSquared) continue;
-    nearest = zombie;
-    nearestDistanceSquared = distanceSquared;
-  }
-  return nearest;
+    if (screen.z < -1 || screen.z > 1) return;
+    const dx = rect.left + ((screen.x + 1) * rect.width) / 2 - clientX;
+    const dy = rect.top + ((1 - screen.y) * rect.height) / 2 - clientY;
+    if (dx * dx + dy * dy <= enemyAimAssistRadius * enemyAimAssistRadius)
+      candidates.push({ target, distanceSquared: dx * dx + dy * dy });
+  };
+  if (isFieldHordeGameplay() && fieldHorde) {
+    for (let i = 0; i < fieldHorde.activeCount; i++) {
+      if (fieldHorde.alive[i] !== 1) continue;
+      const target = getHostileTarget(`field-horde-${fieldHorde.ids[i]}`);
+      if (target) consider(target);
+    }
+  } else for (const zombie of combat.zombies) if (zombie.alive) consider(zombie);
+  return chooseAssistedTarget(undefined, candidates, enemyAimAssistRadius, canSeeZombie);
 }
 
 function updateEnemyHover(clientX: number, clientY: number, overScene: boolean): void {
@@ -4380,20 +4799,10 @@ function updateEnemyHover(clientX: number, clientY: number, overScene: boolean):
 
 function fireAlongRay(aimPoint: Vector3, preferredHordeIndex?: number): boolean {
   if (!combat.alive) return false;
-  if (
-    gamePhase === 'active' &&
-    !runItems.items.some((item) => ['rifle', 'handgun', 'shotgun'].includes(item.id))
-  ) {
-    combat.lastMessage = 'No firearm in the backpack.';
-    updateCombatUi();
-    return false;
-  }
-  const weapon = runItems.items.some((item) => item.id === equippedWeapon)
-    ? equippedWeapon
-    : (runItems.items.find((item) => ['rifle', 'handgun', 'shotgun'].includes(item.id))?.id ??
-      'rifle');
-  const damage = weapon === 'shotgun' ? 100 : weapon === 'handgun' ? 35 : 50;
-  const cooldown = weapon === 'shotgun' ? 0.7 : weapon === 'handgun' ? 0.33 : 0.24;
+  const weapon = isFirearm(equippedWeapon) ? equippedWeapon : saveData.progression.activeWeapon;
+  const stats = weaponStats(saveData, weapon);
+  const damage = stats.damage;
+  const cooldown = stats.cooldown;
   if (cameraRig.mode === 'top-down') player.faceToward(aimPoint.x, aimPoint.z);
   let muzzle: Vector3;
   if (cameraRig.mode === 'first-person') {
@@ -4403,7 +4812,7 @@ function fireAlongRay(aimPoint: Vector3, preferredHordeIndex?: number): boolean 
     muzzle = player.muzzlePosition();
   }
   const shotDirection = aimPoint.clone().sub(muzzle);
-  const shotLength = Math.min(weapon === 'shotgun' ? 16 : 90, shotDirection.length());
+  const shotLength = Math.min(stats.range, shotDirection.length());
   if (shotLength < 0.001) return false;
   shotDirection.normalize();
   const weaponRay = new Raycaster(muzzle, shotDirection, 0, shotLength + 0.05);
@@ -4414,7 +4823,7 @@ function fireAlongRay(aimPoint: Vector3, preferredHordeIndex?: number): boolean 
     weaponHit?.instanceId !== undefined && fieldHordeVisual
       ? fieldHordeVisual.agentIndexForInstance(weaponHit.object, weaponHit.instanceId)
       : undefined;
-  const maximumRange = weapon === 'shotgun' ? 16 : 90;
+  const maximumRange = stats.range;
   const preferredTargetInRange =
     preferredHordeIndex !== undefined && fieldHorde
       ? Math.hypot(
@@ -4446,7 +4855,9 @@ function fireAlongRay(aimPoint: Vector3, preferredHordeIndex?: number): boolean 
     combat.applyShotKnockback(targetId, player.position.x, player.position.z);
   }
   if (barrelId) triggerExplosiveBarrel(weaponHit?.object);
-  audioFeedback.play('shot');
+  audioFeedback.playWeapon(weapon);
+  lastAttackTargetId = targetId;
+  attackIntentRemaining = 1;
   if (targetId) {
     const targetAfterHit = getHostileTarget(targetId);
     const aliveAfterHit = targetAfterHit !== undefined;
@@ -4489,7 +4900,7 @@ function fireAtZombie(zombie: HostileTarget): boolean {
   return fireAlongRay(zombie.position.clone().add(new Vector3(0, 1.05, 0)), zombie.hordeIndex);
 }
 
-function fireAt(event: PointerEvent): void {
+function fireAt(event: Pick<MouseEvent, 'clientX' | 'clientY'>): void {
   if (stressActive && hordeSimulation) {
     camera.updateMatrixWorld(true);
     const stressRay = new Raycaster();
@@ -4593,10 +5004,19 @@ function updateAutoAttack(): void {
     autoAttackTargetId = undefined;
     return;
   }
-  if (combat.fireCooldownRemaining <= 0) fireAtZombie(target);
+  if (
+    combat.fireCooldownRemaining <= 0 &&
+    target.position.distanceTo(player.position) <=
+      weaponStats(
+        saveData,
+        isFirearm(equippedWeapon) ? equippedWeapon : saveData.progression.activeWeapon,
+      ).range &&
+    canSeeZombie(target)
+  )
+    fireAtZombie(target);
 }
 
-function moveToPointer(event: MouseEvent): void {
+function moveToPointer(event: Pick<MouseEvent, 'clientX' | 'clientY'>): void {
   if (
     cameraRig.mode !== 'top-down' ||
     (gamePhase !== 'base' && !combat.alive) ||
@@ -4698,9 +5118,21 @@ canvas.addEventListener('pointerdown', (event) => {
     suppressPlacementContextMenu = event.button === 2;
     return;
   }
+  if (event.button === 2 && cameraRig.mode !== 'top-down') {
+    cameraRig.setAiming(true);
+    event.preventDefault();
+    return;
+  }
   if (event.button !== 0) return;
   pointerStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
-  if (cameraRig.mode === 'top-down' || document.pointerLockElement === canvas) return;
+  if (cameraRig.mode === 'top-down') return;
+  if (document.pointerLockElement === canvas) {
+    if (gamePhase === 'active') {
+      fireHeld = true;
+      fireAt(event);
+    }
+    return;
+  }
   if (canRequestPointerLock(cameraRig.mode, event.target === canvas, false)) {
     requestPointerLockForPlay();
     return;
@@ -4724,6 +5156,10 @@ canvas.addEventListener('pointermove', (event) => {
     elements.reticle!.style.top = `${event.clientY}px`;
   }
 });
+window.addEventListener('pointerup', (event) => {
+  if (event.button === 2) cameraRig.setAiming(false);
+  if (event.button === 0) fireHeld = false;
+});
 canvas.addEventListener('pointerup', (event) => {
   if (pointerStart?.id === event.pointerId) {
     const distance = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
@@ -4733,20 +5169,25 @@ canvas.addEventListener('pointerup', (event) => {
   if (dragPointerId === event.pointerId) releaseLookDrag();
 });
 canvas.addEventListener('pointercancel', () => {
+  cameraRig.setAiming(false);
   pointerStart = undefined;
+  fireHeld = false;
   releaseLookDrag();
 });
 canvas.addEventListener('lostpointercapture', () => {
   pointerStart = undefined;
+  fireHeld = false;
   releaseLookDrag();
 });
 window.addEventListener('blur', () => {
+  cameraRig.setAiming(false);
   releaseMouseCapture();
   releaseLookDrag();
   pointerStart = undefined;
 });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') {
+    cameraRig.setAiming(false);
     releaseMouseCapture();
     releaseLookDrag();
     pointerStart = undefined;
@@ -4778,6 +5219,10 @@ function animate(now: number): void {
   frameIntervals.add(frameIntervalMs);
   previousTime = now;
   frameCount += 1;
+  if (gamePhase === 'base' && !campInteriorSession) {
+    updateGate(delta);
+    updateWorldLods(campGroup, player.position, 0);
+  }
   if (gamePhase === 'base' && !campInteriorSession)
     updateCampWalkers(campGroup, delta, player.position);
   if (chopperRotor) chopperRotor.rotation.y += delta * 19;
@@ -4832,7 +5277,7 @@ function animate(now: number): void {
       removeRappelRope();
       zombieGroup.visible = true;
       if (fieldHordeVisual) fieldHordeVisual.group.visible = true;
-      if (extractionGuideArrow) extractionGuideArrow.visible = true;
+      if (extractionGuideArrow) extractionGuideArrow.visible = runElapsed >= 60;
       elements.extractionGuide!.removeAttribute('hidden');
       elements.zoneStatus!.textContent = 'ACTIVE';
       elements.seedHint!.textContent = 'Find a cache, then return to the landing ring.';
@@ -4905,7 +5350,7 @@ function animate(now: number): void {
         fieldHordeSpawnRemaining -= fixedStep;
         if (fieldHordeSpawnRemaining <= 0) {
           const spawned = fieldHorde.spawnOne(player.position.x, player.position.z);
-          fieldHordeSpawnRemaining += 2;
+          fieldHordeSpawnRemaining += sortieRules[sortie].spawnSeconds;
           if (spawned !== undefined && spawned % 15 === 0) {
             combat.lastMessage = 'Distant movement · more infected are closing in.';
           }
@@ -4942,14 +5387,23 @@ function animate(now: number): void {
           fixedStep,
           cameraRig.mode,
           cameraRig.yaw,
-          playerSpeedMultiplier(combat.adrenalineRemaining > 0, player.sprintHeld),
+          playerSpeedMultiplier(combat.adrenalineRemaining > 0, player.sprintHeld) *
+            (owns(saveData, 'speed') ? 1.08 : 1),
         );
         const movedX = player.position.x - previousPlayerX;
         const movedZ = player.position.z - previousPlayerZ;
         if (movedX * movedX + movedZ * movedZ > 0.0001 && (fieldHorde?.awarenessRadius ?? 0) < 10) {
           emitFieldNoise((player.sprintHeld ? 20 : 10) / 140);
         }
+        if (fireHeld && cameraRig.mode !== 'top-down' && combat.fireCooldownRemaining <= 0)
+          fireAt({ clientX: pointerX, clientY: pointerY });
         updateAutoAttack();
+        tickFollowers(fixedStep);
+        tickFirePatches(fixedStep);
+        if (!interiorSession) {
+          const alarm = interactiveViews.get('alarm-station');
+          if (alarm) fieldHorde?.emitNoise(alarm.x, alarm.z, 0.35);
+        }
         if (wasDashing && !player.isDashing) replanNavigationTask();
         updateNavigationProgress();
         observedDash = player.isDashing;
@@ -4983,9 +5437,11 @@ function animate(now: number): void {
   cameraFollowTarget.copy(player.position);
   if (chopper && (gamePhase === 'arrival' || gamePhase === 'takeoff'))
     cameraFollowTarget.copy(chopper.position);
+  updatePlayerFog(player.position, worldGroup.visible);
   cameraRig.update(delta, cameraFollowTarget);
   syncPlayerPresentation();
-  if (worldGroup.visible) updateWorldLods(worldGroup, player.position);
+  if (worldGroup.visible) updateWorldLods(worldGroup, player.position, delta);
+  if (worldGroup.visible) animateCoastalWater(worldGroup, now / 1000);
   const rainCanRender =
     stressActive || (gamePhase !== 'base' && !interiorSession && !campInteriorSession);
   atmosphereRuntime.update(

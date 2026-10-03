@@ -1,3 +1,4 @@
+import { terrainHeightAt, type WorldData } from '../world/generateWorld';
 import {
   BufferGeometry,
   BoxGeometry,
@@ -13,6 +14,7 @@ import {
   InstancedMesh,
   LineBasicMaterial,
   LineSegments,
+  LOD,
   Mesh,
   MeshStandardMaterial,
   Object3D,
@@ -25,6 +27,8 @@ import {
 } from 'three';
 import { createRandom } from '../core/seededRandom';
 import { packedDirtTexture, tileGroundUv } from '../world/groundTexture';
+import { getAsset } from '../assets/catalog';
+import { campHeightAt, campExteriorTrees } from './campWorld';
 import { createHelicopter } from '../assets/helicopter';
 import { campEntrances, campServices, type CampService } from './campWorld';
 
@@ -107,8 +111,12 @@ function box(
 }
 
 function addGround(parent: Group): void {
-  const ground = mesh(new PlaneGeometry(64, 64), materials.ground, 0, -0.035, 0, parent);
-  ground.rotation.x = -Math.PI / 2;
+  const ground = mesh(new PlaneGeometry(128, 128, 40, 40), materials.ground, 0, -0.035, 0, parent);
+  ground.geometry.rotateX(-Math.PI / 2);
+  const positions = ground.geometry.getAttribute('position');
+  for (let i = 0; i < positions.count; i++)
+    positions.setY(i, campHeightAt(positions.getX(i), positions.getZ(i)));
+  ground.geometry.computeVertexNormals();
   ground.receiveShadow = true;
   ground.name = 'Seeded terrain';
   ground.userData.walkableFloor = true;
@@ -161,6 +169,7 @@ function addGround(parent: Group): void {
 interface DecorationSpot {
   x: number;
   z: number;
+  y?: number;
   size: number;
   rotation: number;
 }
@@ -175,10 +184,10 @@ interface CampDecorationLods {
   elapsed: number;
 }
 
-function addCampDecorations(camp: Group): void {
+export function addCampDecorations(camp: Group, world?: WorldData): void {
   const grass: DecorationSpot[] = [];
   const stones: DecorationSpot[] = [];
-  const random = createRandom('WAYFARER-CAMP:ground-dressing');
+  const random = createRandom(`${world?.seed ?? 'WAYFARER-CAMP'}:ground-dressing`);
   const protectedAreas = [
     { x: -15, z: -13, rx: 7, rz: 7.5 },
     { x: 15, z: -13, rx: 7, rz: 7.5 },
@@ -193,23 +202,43 @@ function addCampDecorations(camp: Group): void {
     { x: 7.5, z: 8.8, rx: 2.8, rz: 2.9 },
     { x: 6.3, z: -3, rx: 4.8, rz: 4.4 },
   ];
-  for (let z = -26; z <= 26; z += 2.65) {
-    for (let x = -26; x <= 26; x += 2.65) {
+  const extent = world ? world.size / 2 - 5 : 26;
+  const spacing = world ? 6 : 2.65;
+  for (let z = -extent; z <= extent; z += spacing) {
+    for (let x = -extent; x <= extent; x += spacing) {
       const spotX = x + (random() - 0.5) * 1.15;
       const spotZ = z + (random() - 0.5) * 1.15;
-      if (Math.abs(spotX) < 4.7 || Math.abs(spotZ + 22.5) < 3.1) continue;
-      if (spotX > -21 && spotX < 5 && Math.abs(spotZ - 4) < 2.55) continue;
-      if (spotX > -24 && spotX < -10 && Math.abs(spotZ - 7) < 2.1) continue;
+      if (!world && (Math.abs(spotX) < 4.7 || Math.abs(spotZ + 22.5) < 3.1)) continue;
+      if (!world && spotX > -21 && spotX < 5 && Math.abs(spotZ - 4) < 2.55) continue;
+      if (!world && spotX > -24 && spotX < -10 && Math.abs(spotZ - 7) < 2.1) continue;
       if (
+        !world &&
         protectedAreas.some(
           (area) => ((spotX - area.x) / area.rx) ** 2 + ((spotZ - area.z) / area.rz) ** 2 < 1,
         )
+      )
+        continue;
+      if (
+        world &&
+        (world.colliders.some(
+          (c) =>
+            spotX > c.minX - 0.5 &&
+            spotX < c.maxX + 0.5 &&
+            spotZ > c.minZ - 0.5 &&
+            spotZ < c.maxZ + 0.5,
+        ) ||
+          world.roads.some(
+            (r) =>
+              Math.abs(spotX - r.centerX) < r.sizeX / 2 + 1 &&
+              Math.abs(spotZ - r.centerZ) < r.sizeZ / 2 + 1,
+          ))
       )
         continue;
       if (random() > 0.68) continue;
       const spot = {
         x: spotX,
         z: spotZ,
+        y: world ? terrainHeightAt(world.seed, spotX, spotZ) : 0,
         size: 0.68 + random() * 0.68,
         rotation: random() * Math.PI * 2,
       };
@@ -283,7 +312,7 @@ export function updateCampDecorations(camp: Group, deltaSeconds: number, player:
         const angle = spot.rotation + blade * ((Math.PI * 2) / 3);
         dummy.position.set(
           spot.x + Math.cos(angle) * 0.045,
-          0.012,
+          (spot.y ?? 0) + 0.012,
           spot.z + Math.sin(angle) * 0.045,
         );
         dummy.rotation.set(0, angle, 0);
@@ -292,7 +321,7 @@ export function updateCampDecorations(camp: Group, deltaSeconds: number, player:
         lods.nearGrass.setMatrixAt(nearGrassIndex++, dummy.matrix);
       }
     } else if (distanceSquared < 3_600) {
-      dummy.position.set(spot.x, 0.085, spot.z);
+      dummy.position.set(spot.x, (spot.y ?? 0) + 0.085, spot.z);
       dummy.rotation.set(0, spot.rotation, 0);
       dummy.scale.set(0.78 * spot.size, 0.48 * spot.size, 0.78 * spot.size);
       dummy.updateMatrix();
@@ -302,13 +331,13 @@ export function updateCampDecorations(camp: Group, deltaSeconds: number, player:
   for (const spot of lods.stones) {
     const distanceSquared = (player.x - spot.x) ** 2 + (player.z - spot.z) ** 2;
     if (distanceSquared < 400) {
-      dummy.position.set(spot.x, 0.08, spot.z);
+      dummy.position.set(spot.x, (spot.y ?? 0) + 0.08, spot.z);
       dummy.rotation.set(spot.rotation * 0.3, spot.rotation, spot.rotation * 0.15);
       dummy.scale.set(spot.size, spot.size * 0.63, spot.size * 0.82);
       dummy.updateMatrix();
       lods.nearStones.setMatrixAt(nearStoneIndex++, dummy.matrix);
     } else if (distanceSquared < 3_600) {
-      dummy.position.set(spot.x, 0.06, spot.z);
+      dummy.position.set(spot.x, (spot.y ?? 0) + 0.06, spot.z);
       dummy.rotation.set(0, spot.rotation, 0);
       dummy.scale.set(spot.size * 0.72, spot.size * 0.38, spot.size * 0.72);
       dummy.updateMatrix();
@@ -370,8 +399,10 @@ function addBarbedWire(parent: Group): void {
 function addReinforcedGate(parent: Group, side: -1 | 1): void {
   const leaf = new Group();
   // Leave two navigable grid columns through the entrance, including actor clearance.
-  leaf.position.set(side * 3.8, 0, 28.68);
-  leaf.scale.x = 0.8;
+  leaf.name = `camp-gate-${side}`;
+  leaf.userData.interactiveId = 'camp-gate';
+  leaf.position.set(side * 2.75, 0, 28.68);
+  leaf.scale.x = 1.35;
   box(leaf, 4.08, 2.5, 0.3, materials.fence, 0, 1.25, 0);
   box(leaf, 4.16, 0.18, 0.38, materials.darkMetal, 0, 0.2, 0);
   box(leaf, 4.16, 0.18, 0.38, materials.darkMetal, 0, 2.42, 0);
@@ -1417,4 +1448,39 @@ export function buildCamp(): Group {
   camp.userData.staticColliderCount = 21;
   camp.userData.assetCount = 4;
   return camp;
+}
+
+export function addCampExterior(camp: Group): void {
+  const tree = getAsset('pine-tree');
+  const high = tree.createVisual(0);
+  const prototype = new LOD();
+  prototype.addLevel(high, 0);
+  prototype.addLevel(tree.createLowDetailVisual!(0, high), 20);
+  prototype.levels[1]!.hysteresis = 0.12;
+  prototype.addLevel(tree.createVeryLowDetailVisual!(0, high), 45);
+  prototype.levels[2]!.hysteresis = 0.12;
+  const lods: LOD[] = [];
+  for (const { x, z, scale } of campExteriorTrees) {
+    const visual = prototype.clone(true);
+    visual.position.set(x, campHeightAt(x, z), z);
+    visual.scale.setScalar(scale);
+    camp.add(visual);
+    lods.push(visual);
+  }
+  camp.userData.lodObjects = lods;
+  const path = mesh(new PlaneGeometry(7, 35), materials.path, 0, 0.012, 46.5, camp);
+  path.rotation.x = -Math.PI / 2;
+}
+export function animateCampGate(camp: Group, open: boolean, delta: number): number {
+  let error = 0;
+  for (const side of [-1, 1]) {
+    const leaf = camp.getObjectByName(`camp-gate-${side}`);
+    if (!leaf) continue;
+    const target = side * (open ? 8.4 : 2.75);
+    leaf.position.x +=
+      Math.sign(target - leaf.position.x) *
+      Math.min(Math.abs(target - leaf.position.x), delta * 5.65);
+    error = Math.max(error, Math.abs(target - leaf.position.x));
+  }
+  return error;
 }

@@ -1,6 +1,7 @@
 export type ItemCategory = 'weapon' | 'scrap' | 'food';
 export type ItemId =
   | 'handgun'
+  | 'smg'
   | 'rifle'
   | 'shotgun'
   | 'grenade'
@@ -43,9 +44,18 @@ export const itemDefinitions: Record<ItemId, ItemDefinition> = {
     symbol: '⌐',
     color: '#c0c7b8',
   },
+  smg: {
+    id: 'smg',
+    name: 'SMG',
+    category: 'weapon',
+    width: 3,
+    height: 2,
+    symbol: '╾─',
+    color: '#bac6a5',
+  },
   rifle: {
     id: 'rifle',
-    name: 'Rifle',
+    name: 'M4A',
     category: 'weapon',
     width: 4,
     height: 2,
@@ -239,6 +249,7 @@ export interface PlacedItem {
   y: number;
 }
 export interface ItemGrid {
+  layout?: 'list';
   items: PlacedItem[];
   nextUid: number;
 }
@@ -252,8 +263,9 @@ export function emptyItemGrid(): ItemGrid {
 
 export function createStarterBackpack(rows = 6): ItemGrid {
   const grid = emptyItemGrid();
-  addItem(grid, 'rifle', rows);
-  for (let index = 0; index < 3; index += 1) addItem(grid, 'grenade', rows);
+  grid.layout = 'list';
+  addItem(grid, 'handgun', rows);
+  for (let index = 0; index < 1; index += 1) addItem(grid, 'grenade', rows);
   return grid;
 }
 
@@ -288,6 +300,18 @@ export function canPlace(
 }
 
 export function addItem(grid: ItemGrid, id: ItemId, rows: number): PlacedItem | undefined {
+  if (grid.layout === 'list') {
+    const area = (itemId: ItemId) =>
+      itemId === 'grenade' ? 0 : itemDefinitions[itemId].width * itemDefinitions[itemId].height;
+    if (
+      grid.items.length >= 256 ||
+      grid.items.reduce((sum, item) => sum + area(item.id), 0) + area(id) > gridColumns * rows
+    )
+      return undefined;
+    const item = { uid: `item-${grid.nextUid++}`, id, x: 0, y: 0 };
+    grid.items.push(item);
+    return item;
+  }
   for (let y = 0; y < rows; y += 1)
     for (let x = 0; x < gridColumns; x += 1) {
       if (!canPlace(grid, id, x, y, rows)) continue;
@@ -314,12 +338,17 @@ export function removeItem(grid: ItemGrid, uid: string): PlacedItem | undefined 
 export function parseItemGrid(value: unknown, rows: number): ItemGrid {
   const result = emptyItemGrid();
   if (!value || typeof value !== 'object') return result;
-  const record = value as { items?: unknown };
+  const record = value as { items?: unknown; layout?: unknown };
+  if (record.layout === 'list') result.layout = 'list';
   if (!Array.isArray(record.items)) return result;
-  for (const raw of record.items.slice(0, 64)) {
+  for (const raw of record.items.slice(0, 256)) {
     if (!raw || typeof raw !== 'object') continue;
     const item = raw as Record<string, unknown>;
     if (typeof item.id !== 'string' || !Object.hasOwn(itemDefinitions, item.id)) continue;
+    if (result.layout === 'list') {
+      addItem(result, item.id as ItemId, rows);
+      continue;
+    }
     if (!canPlace(result, item.id as ItemId, item.x as number, item.y as number, rows)) continue;
     result.items.push({
       uid: `item-${result.nextUid++}`,
@@ -328,6 +357,7 @@ export function parseItemGrid(value: unknown, rows: number): ItemGrid {
       y: item.y as number,
     });
   }
+  result.layout = 'list';
   return result;
 }
 

@@ -26,7 +26,8 @@ const dashCooldown = 2;
 
 export class CombatSimulation {
   readonly zombies: ZombieState[] = [];
-  readonly maxHealth = maxPlayerHealth;
+  maxHealth = maxPlayerHealth;
+  dashRecovery = dashCooldown;
   health = maxPlayerHealth;
   alive = true;
   fireCooldownRemaining = 0;
@@ -58,7 +59,7 @@ export class CombatSimulation {
   }
 
   reset(initialHostiles = 3): void {
-    this.health = maxPlayerHealth;
+    this.health = this.maxHealth;
     this.alive = true;
     this.fireCooldownRemaining = 0;
     this.dashCooldownRemaining = 0;
@@ -172,7 +173,7 @@ export class CombatSimulation {
 
   tryDash(): boolean {
     if (!this.alive || this.dashCooldownRemaining > 0) return false;
-    this.dashCooldownRemaining = dashCooldown;
+    this.dashCooldownRemaining = this.dashRecovery;
     this.lastMessage = 'Dash ready in a moment.';
     return true;
   }
@@ -180,11 +181,11 @@ export class CombatSimulation {
   activateAbility(slot: AbilitySlot, playerPosition?: Vector3): boolean {
     if (!this.canUseAbility(slot)) return false;
     if (slot === 1) {
-      if (this.health >= maxPlayerHealth) {
+      if (this.health >= this.maxHealth) {
         this.lastMessage = 'Field dressing works when injured.';
         return false;
       }
-      this.health = Math.min(maxPlayerHealth, this.health + 35);
+      this.health = Math.min(this.maxHealth, this.health + 35);
       this.abilityCooldowns[1] = 12;
       this.lastMessage = 'Field dressing · +35 health';
       return true;

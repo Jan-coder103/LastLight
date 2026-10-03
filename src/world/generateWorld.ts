@@ -903,10 +903,11 @@ function addForestProps(
   landmarks: WorldLandmark[],
 ): void {
   const random = createRandom(`${seed}:forest-props`);
+  const existingFootprints = placements.map((placement) => footprintFor(placement));
   const spawn = { x: 0, y: 0, z: -5 };
   const targetByDistrict = new Map([
-    ['north-pines', 43],
-    ['south-pines', 38],
+    ['north-pines', 52],
+    ['south-pines', 46],
   ]);
   for (const district of districts.filter((entry) => entry.kind === 'forest')) {
     const target = targetByDistrict.get(district.id) ?? 0;
@@ -945,13 +946,10 @@ function addForestProps(
         scale,
         variant: selectThemeVariant(random, district.kind, assetId),
       };
-      if (
-        placements.some((placement) =>
-          footprintsOverlap(footprintFor(candidate, 0.9), footprintFor(placement)),
-        )
-      )
-        continue;
+      const footprint = footprintFor(candidate, 0.9);
+      if (existingFootprints.some((existing) => footprintsOverlap(footprint, existing))) continue;
       placements.push(candidate);
+      existingFootprints.push(footprintFor(candidate));
       placed += 1;
     }
   }

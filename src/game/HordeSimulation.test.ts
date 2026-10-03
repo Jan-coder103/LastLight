@@ -118,3 +118,20 @@ describe('HordeSimulation', () => {
     expect(nearHorde.snapshot(0).health).toBe(51);
   });
 });
+
+it('alarm shutdown clears local awareness without damaging or removing horde agents', () => {
+  const world = generateWorld('ALARM-CALM'),
+    nav = new GridNavigator(world);
+  const horde = new HordeSimulation(100, 'ALARM', 'ring', world, nav, 40, {
+    dormantActivation: true,
+  });
+  horde.emitNoise(world.spawn.x, world.spawn.z, 0.5);
+  expect(horde.awarenessRadius).toBeGreaterThan(0);
+  const health = Array.from(horde.health),
+    ids = Array.from(horde.ids);
+  horde.calmArea(world.spawn.x, world.spawn.z, 30);
+  expect(horde.awarenessRadius).toBe(0);
+  expect(Array.from(horde.health)).toEqual(health);
+  expect(Array.from(horde.ids)).toEqual(ids);
+  expect(horde.livingCount).toBe(40);
+});

@@ -1,3 +1,5 @@
+import { installPlayerFog } from './playerFog';
+import { addCampDecorations, updateCampDecorations } from '../camp/buildCamp';
 import {
   Color,
   CylinderGeometry,
@@ -56,7 +58,8 @@ const terrainColors = new Map(
 export const worldLodDistances = { near: 58, veryFar: 120 } as const;
 const lodViewer = new PerspectiveCamera();
 
-export function updateWorldLods(world: Group, viewerPosition: Vector3): void {
+export function updateWorldLods(world: Group, viewerPosition: Vector3, deltaSeconds = 0.25): void {
+  updateCampDecorations(world, deltaSeconds, viewerPosition);
   const lods = world.userData.lodObjects as LOD[] | undefined;
   if (!lods) return;
   lodViewer.position.copy(viewerPosition);
@@ -109,6 +112,7 @@ function makeWaterArea(world: WorldData, area: WorldWaterArea): Mesh {
   water.receiveShadow = true;
   water.name = `Water ${area.id}`;
   water.userData.staticCollider = true;
+  water.userData.waveBase = Array.from({ length: positions.count }, (_, i) => positions.getY(i));
   return water;
 }
 
@@ -153,6 +157,7 @@ function makeWorldEdgeMarkers(world: WorldData): Group {
 export function buildWorld(world: WorldData): Group {
   const root = new Group();
   root.name = `World ${world.seed}`;
+  addCampDecorations(root, world);
   root.add(makeTerrain(world));
   for (const area of world.waterAreas) root.add(makeWaterArea(world, area));
 
@@ -225,5 +230,45 @@ export function buildWorld(world: WorldData): Group {
   root.userData.staticColliderCount = world.colliders.length;
   root.userData.assetCount = world.placements.length;
   root.userData.terrainSample = new Vector3(0, terrainHeightAt(world.seed, 0, 0), 0);
+  installPlayerFog(root);
   return root;
+}
+
+export function animateCoastalWater(world: Group, elapsed: number): void {
+  for (const child of world.children) {
+    if (!(child instanceof Mesh) || !child.userData.waveBase) continue;
+    const positions = child.geometry.getAttribute('position');
+    const base = child.userData.waveBase as number[];
+    for (let i = 0; i < positions.count; i++) {
+      // Vertical-only waves keep every shoreline X/Z and collision boundary fixed.
+      const edge =
+        Math.max(
+          0,
+          Math.min(
+            1,
+            1 -
+              Math.abs(positions.getX(i)) /
+                ((child.geometry as PlaneGeometry).parameters.width / 2),
+          ),
+        ) *
+        Math.max(
+          0,
+          Math.min(
+            1,
+            1 -
+              Math.abs(positions.getZ(i)) /
+                ((child.geometry as PlaneGeometry).parameters.height / 2),
+          ),
+        );
+      positions.setY(
+        i,
+        base[i]! +
+          Math.sin(positions.getX(i) * 0.17 + positions.getZ(i) * 0.12 + elapsed * 1.8) *
+            0.12 *
+            edge,
+      );
+    }
+    positions.needsUpdate = true;
+    child.geometry.computeVertexNormals();
+  }
 }

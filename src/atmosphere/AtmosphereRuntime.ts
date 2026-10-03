@@ -123,7 +123,7 @@ export class AtmosphereRuntime {
 
   setCampBackground(background: Texture): void {
     this.campBackground = background;
-    if (this.campActive) this.scene.background = background;
+    this.scene.background = background;
   }
 
   setCamp(): void {
@@ -151,10 +151,9 @@ export class AtmosphereRuntime {
     this.active = preset;
     this.flashRemaining = 0;
     const palette = this.palette(preset.time, preset.weather);
-    this.scene.background = new Color(palette.sky);
-    const distanceFogDensity =
-      preset.weather === 'clear' ? 0.0016 : preset.weather === 'mist' ? 0.007 : 0.003;
-    this.scene.fog = new FogExp2(palette.fog, distanceFogDensity);
+    this.scene.background =
+      this.campBackground instanceof Texture ? this.campBackground : new Color(palette.sky);
+    this.scene.fog = new Fog(palette.fog, 150, 200);
     this.volumetricFog?.setWeather(preset.weather, new Color(palette.fog), seed);
     this.puddleGroup.visible = preset.weather === 'rain';
     this.buildPuddles(preset.weather === 'rain' ? world : undefined, seed);
