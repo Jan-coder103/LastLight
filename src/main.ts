@@ -10,6 +10,7 @@ import {
   CylinderGeometry,
   DepthTexture,
   DirectionalLight,
+  EquirectangularReflectionMapping,
   Fog,
   Group,
   Line,
@@ -26,6 +27,8 @@ import {
   Shape,
   ShapeGeometry,
   SphereGeometry,
+  SRGBColorSpace,
+  TextureLoader,
   Vector2,
   Vector3,
   WebGLRenderer,
@@ -94,6 +97,7 @@ import { GridNavigator, type NavPoint } from './navigation/GridNavigator';
 import { buildInterior } from './interiors/buildInterior';
 import { generateInterior, interiorWorld, type InteriorLayout } from './interiors/interiorLayout';
 import { playerSpeedMultiplier, PlayerController } from './player/PlayerController';
+import { createFirstPersonWeapon } from './player/playerVisual';
 import { canRequestPointerLock } from './input/pointerLock';
 import { buildWorld, updateWorldLods } from './world/buildWorld';
 import {
@@ -159,11 +163,11 @@ renderer.toneMapping = ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.04;
 renderer.info.autoReset = false;
 
-const skyLight = new AmbientLight('#ded9bd', 1.15);
+const skyLight = new AmbientLight('#c4cfe0', 0.98);
 scene.add(skyLight);
-const fillLight = new AmbientLight('#75856a', 0.52);
+const fillLight = new AmbientLight('#7085a3', 0.43);
 scene.add(fillLight);
-const sun = new DirectionalLight('#fff0cc', 2.15);
+const sun = new DirectionalLight('#ffc48a', 2.28);
 sun.position.set(-82, 112, 48);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -199,6 +203,11 @@ const atmosphereRuntime = new AtmosphereRuntime(
   },
   volumetricFogPass,
 );
+new TextureLoader().load(new URL('../skybox_hub.png', import.meta.url).href, (texture) => {
+  texture.colorSpace = SRGBColorSpace;
+  texture.mapping = EquirectangularReflectionMapping;
+  atmosphereRuntime.setCampBackground(texture);
+});
 const particleBursts = new ParticleBursts(scene);
 const bloodTrailVisual = new BloodTrailVisual(scene);
 const bloodTrailGate = new BloodTrailGate();
@@ -330,6 +339,10 @@ zombieGroup.name = 'Hostiles';
 scene.add(zombieGroup);
 const zombieViews = new Map<string, Group>();
 let cameraRig = new CameraRig(camera, canvas, world);
+const firstPersonWeapon = createFirstPersonWeapon();
+firstPersonWeapon.visual.visible = false;
+camera.add(firstPersonWeapon.visual);
+const firstPersonMuzzleWorld = new Vector3();
 let player!: PlayerController;
 
 type GamePhase =
@@ -559,10 +572,33 @@ let autoAttackTargetId: string | undefined;
 const enemyAimAssistRadius = 44;
 
 function updateModeUi(): void {
-  const label = cameraRig.mode === 'third-person' ? 'THIRD PERSON' : 'TOP-DOWN';
+  const label =
+    cameraRig.mode === 'top-down'
+      ? 'TOP-DOWN'
+      : cameraRig.mode === 'first-person'
+        ? 'FIRST PERSON'
+        : 'THIRD PERSON';
   elements.modeName!.textContent = label;
-  document.querySelector('#game')?.classList.toggle('is-top-down', cameraRig.mode === 'top-down');
+  const game = document.querySelector('#game');
+  game?.classList.toggle('is-top-down', cameraRig.mode === 'top-down');
+  game?.classList.toggle('is-first-person', cameraRig.mode === 'first-person');
+  syncPlayerPresentation();
+  if (cameraRig.mode === 'first-person') {
+    elements.reticle!.style.left = '50%';
+    elements.reticle!.style.top = '50%';
+  }
   renderControls();
+}
+
+function syncPlayerPresentation(): void {
+  const cameraTransition = cameraRig.isTransitioning;
+  const firstPerson = cameraRig.mode === 'first-person';
+  const characterPhase = ['base', 'active', 'extracting', 'disembarking', 'takeoff'].includes(
+    gamePhase,
+  );
+  const weaponPhase = ['base', 'active', 'extracting'].includes(gamePhase);
+  player.visual.visible = characterPhase && (!firstPerson || cameraTransition);
+  firstPersonWeapon.visual.visible = firstPerson && weaponPhase && !cameraTransition;
 }
 
 function updateAtmosphereStatus(): void {
@@ -663,7 +699,7 @@ function showPointerLockFallback(): void {
 }
 
 function requestPointerLockForPlay(): boolean {
-  if (cameraRig.mode !== 'third-person' || document.pointerLockElement === canvas) return true;
+  if (cameraRig.mode === 'top-down' || document.pointerLockElement === canvas) return true;
   try {
     const request = canvas!.requestPointerLock();
     if (request && typeof request.then === 'function') request.catch(showPointerLockFallback);
@@ -681,7 +717,7 @@ document.addEventListener('pointerlockchange', () => {
     elements.seedHint!.textContent = 'Mouse captured · press Escape or Ctrl to release.';
     elements.reticle!.style.left = '50%';
     elements.reticle!.style.top = '50%';
-  } else if (cameraRig.mode === 'third-person' && gamePhase !== 'base') {
+  } else if (cameraRig.mode !== 'top-down' && gamePhase !== 'base') {
     elements.seedHint!.textContent =
       'Mouse released · click the open scene to capture again, or drag to look.';
   }
@@ -690,10 +726,10 @@ document.addEventListener('pointerlockchange', () => {
 function switchView(): void {
   if (gamePhase !== 'active' && gamePhase !== 'base' && !stressActive) return;
   cameraRig.switchMode(player.position);
-  elements.hordeCamera!.value = cameraRig.mode;
+  if (cameraRig.mode !== 'first-person') elements.hordeCamera!.value = cameraRig.mode;
   autoAttackTargetId = undefined;
   player.clearKeyboardMovement();
-  if (cameraRig.mode !== 'third-person') releaseLookDrag();
+  if (cameraRig.mode === 'top-down') releaseLookDrag();
   else requestPointerLockForPlay();
   canvas?.focus({ preventScroll: true });
   updateModeUi();
@@ -723,19 +759,12 @@ function row(keys: string, action: string): string {
 }
 
 function renderControls(): void {
+  const topDown = cameraRig.mode === 'top-down';
+  const firstPerson = cameraRig.mode === 'first-person';
   const rows =
     gamePhase === 'base'
-      ? cameraRig.mode === 'third-person'
+      ? topDown
         ? [
-            row('W A S D', 'Walk around camp'),
-            row('SHIFT', 'Hold to sprint'),
-            row('DRAG', 'Look around'),
-            row('F', 'Use nearby service / door'),
-            row('M', 'Open camp terminal'),
-            row('I', 'Open backpack'),
-            row('TAB', 'Switch camera'),
-          ]
-        : [
             row('RMB', 'Click to move'),
             row('SHIFT', 'Hold to sprint along route'),
             row('ESC', 'Cancel route'),
@@ -744,27 +773,18 @@ function renderControls(): void {
             row('I', 'Open backpack'),
             row('TAB', 'Switch camera'),
           ]
-      : cameraRig.mode === 'third-person'
-        ? [
-            row('W A S D', 'Move · camera-relative'),
-            row('DRAG', 'Look / aim when mouse capture is unavailable'),
+        : [
+            row('W A S D', 'Walk around camp'),
             row('SHIFT', 'Hold to sprint'),
-            row('CTRL|ESC', 'Release mouse capture'),
-            row('LMB', 'Fire equipped weapon'),
-            row(
-              'Q',
-              `Dash${combat.dashCooldownRemaining > 0 ? ` · ${combat.dashCooldownRemaining.toFixed(1)}s` : ''}`,
-            ),
-            row('1', 'Hold to preview · release to place · mouse click cancels'),
-            row('2', 'Call artillery at cursor'),
-            row('3', 'Adrenaline · 2.5× speed for 5 s'),
-            row('G', `Throw grenade · ${grenadeCount} carried`),
-            row('I', 'Open backpack / equip weapon'),
-            row('X', 'Use carried supply'),
-            row('F', 'Interact / enter / exit'),
+            row('DRAG', firstPerson ? 'Look if mouse capture is unavailable' : 'Look around'),
+            ...(firstPerson ? [row('CTRL|ESC', 'Release mouse capture')] : []),
+            row('F', 'Use nearby service / door'),
+            row('M', 'Open camp terminal'),
+            row('I', 'Open backpack'),
             row('TAB', 'Switch camera'),
           ]
-        : [
+      : topDown
+        ? [
             row('RMB', 'Click to move'),
             row('SHIFT', 'Hold to sprint along route'),
             row('ESC', 'Cancel route'),
@@ -776,6 +796,30 @@ function renderControls(): void {
             row('W', 'Hold to preview · release to place · mouse click cancels'),
             row('E', 'Call artillery at cursor'),
             row('R', 'Adrenaline · 2.5× speed for 5 s'),
+            row('G', `Throw grenade · ${grenadeCount} carried`),
+            row('I', 'Open backpack / equip weapon'),
+            row('X', 'Use carried supply'),
+            row('F', 'Interact / enter / exit'),
+            row('TAB', 'Switch camera'),
+          ]
+        : [
+            row('W A S D', 'Move · camera-relative'),
+            row(
+              'DRAG',
+              firstPerson
+                ? 'Look if mouse capture is unavailable'
+                : 'Look / aim when mouse capture is unavailable',
+            ),
+            row('SHIFT', 'Hold to sprint'),
+            row('CTRL|ESC', 'Release mouse capture'),
+            row('LMB', firstPerson ? 'Fire from the center reticle' : 'Fire equipped weapon'),
+            row(
+              'Q',
+              `Dash${combat.dashCooldownRemaining > 0 ? ` · ${combat.dashCooldownRemaining.toFixed(1)}s` : ''}`,
+            ),
+            row('1', 'Hold to preview · release to place · mouse click cancels'),
+            row('2', 'Call artillery at cursor'),
+            row('3', 'Adrenaline · 2.5× speed for 5 s'),
             row('G', `Throw grenade · ${grenadeCount} carried`),
             row('I', 'Open backpack / equip weapon'),
             row('X', 'Use carried supply'),
@@ -2815,6 +2859,7 @@ function startRun(): void {
   extractionGuideArrow.visible = false;
   scene.add(extractionGuideArrow);
   gamePhase = 'arrival';
+  updateModeUi();
   updateAtmosphereStatus();
   document.querySelector('#game')?.classList.remove('is-base');
   elements.nearbyAction!.setAttribute('hidden', '');
@@ -2882,7 +2927,8 @@ function beginTakeoff(): void {
       extractionGroundPosition.z - 0.25,
     );
   }
-  player.visual.visible = true;
+  player.visual.visible = cameraRig.mode !== 'first-person';
+  firstPersonWeapon.visual.visible = cameraRig.mode === 'first-person';
   createRappelRope();
   resolveRunOutcome(saveData, cargo, true);
   const saved = storeSave(saveData);
@@ -2904,6 +2950,7 @@ function finishDeath(): void {
   syncGrenades();
   storeSave(saveData);
   player.setEnabled(false);
+  firstPersonWeapon.visual.visible = false;
   elements.extractionGuide!.setAttribute('hidden', '');
   elements.resultEyebrow!.textContent = 'RUN LOST';
   elements.resultTitle!.textContent = 'SCOUT DOWN';
@@ -2921,6 +2968,7 @@ function finishSuccess(): void {
   gamePhase = 'result';
   removeRappelRope();
   player.visual.visible = false;
+  firstPersonWeapon.visual.visible = false;
   player.setPosition(extractionGroundPosition.x, extractionGroundPosition.z);
   if (chopper) chopper.visible = false;
   if (extractionMarker) extractionMarker.visible = false;
@@ -3886,13 +3934,13 @@ function pointerNdc(clientX: number, clientY: number): Vector2 {
 }
 
 function pointToNdc(event: PointerEvent | MouseEvent): Vector2 {
-  return document.pointerLockElement === canvas
+  return cameraRig.mode === 'first-person' || document.pointerLockElement === canvas
     ? new Vector2(0, 0)
     : pointerNdc(event.clientX, event.clientY);
 }
 
 function currentAimPosition(): { x: number; y: number } {
-  return document.pointerLockElement === canvas
+  return cameraRig.mode === 'first-person' || document.pointerLockElement === canvas
     ? { x: window.innerWidth / 2, y: window.innerHeight / 2 }
     : { x: pointerX, y: pointerY };
 }
@@ -4321,7 +4369,10 @@ function updateEnemyHover(clientX: number, clientY: number, overScene: boolean):
     elements.reticle!.classList.remove('enemy-hover');
     return;
   }
-  const ndc = pointerLocked ? new Vector2(0, 0) : pointerNdc(clientX, clientY);
+  const ndc =
+    cameraRig.mode === 'first-person' || pointerLocked
+      ? new Vector2(0, 0)
+      : pointerNdc(clientX, clientY);
   const raycaster = new Raycaster();
   raycaster.setFromCamera(ndc, camera);
   const hit = firstWorldOrLivingHit(raycaster);
@@ -4347,7 +4398,13 @@ function fireAlongRay(aimPoint: Vector3, preferredHordeIndex?: number): boolean 
   const damage = weapon === 'shotgun' ? 100 : weapon === 'handgun' ? 35 : 50;
   const cooldown = weapon === 'shotgun' ? 0.7 : weapon === 'handgun' ? 0.33 : 0.24;
   if (cameraRig.mode === 'top-down') player.faceToward(aimPoint.x, aimPoint.z);
-  const muzzle = player.muzzlePosition();
+  let muzzle: Vector3;
+  if (cameraRig.mode === 'first-person') {
+    camera.updateMatrixWorld(true);
+    muzzle = firstPersonWeapon.muzzle.getWorldPosition(firstPersonMuzzleWorld);
+  } else {
+    muzzle = player.muzzlePosition();
+  }
   const shotDirection = aimPoint.clone().sub(muzzle);
   const shotLength = Math.min(weapon === 'shotgun' ? 16 : 90, shotDirection.length());
   if (shotLength < 0.001) return false;
@@ -4626,7 +4683,7 @@ document.addEventListener('mousemove', (event) => {
   if (cameraRig.mode === 'third-person') {
     elements.reticle!.style.left = `${event.clientX}px`;
     elements.reticle!.style.top = `${event.clientY}px`;
-  } else {
+  } else if (cameraRig.mode === 'top-down') {
     updateTopDownDashAim(event.clientX, event.clientY);
   }
   updateEnemyHover(
@@ -4646,7 +4703,7 @@ canvas.addEventListener('pointerdown', (event) => {
   }
   if (event.button !== 0) return;
   pointerStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
-  if (cameraRig.mode !== 'third-person' || document.pointerLockElement === canvas) return;
+  if (cameraRig.mode === 'top-down' || document.pointerLockElement === canvas) return;
   if (canRequestPointerLock(cameraRig.mode, event.target === canvas, false)) {
     requestPointerLockForPlay();
     return;
@@ -4724,7 +4781,8 @@ function animate(now: number): void {
   frameIntervals.add(frameIntervalMs);
   previousTime = now;
   frameCount += 1;
-  if (gamePhase === 'base' && !campInteriorSession) updateCampWalkers(campGroup, delta);
+  if (gamePhase === 'base' && !campInteriorSession)
+    updateCampWalkers(campGroup, delta, player.position);
   if (chopperRotor) chopperRotor.rotation.y += delta * 19;
   if (chopperTailRotor) chopperTailRotor.rotation.z += delta * 24;
   if (campChopperRotor) campChopperRotor.rotation.y += delta * 2.2;
@@ -4773,6 +4831,7 @@ function animate(now: number): void {
       runElapsed = 0;
       player.setEnabled(true);
       cameraRig.switchMode(player.position);
+      updateModeUi();
       removeRappelRope();
       zombieGroup.visible = true;
       if (fieldHordeVisual) fieldHordeVisual.group.visible = true;
@@ -4928,6 +4987,7 @@ function animate(now: number): void {
   if (chopper && (gamePhase === 'arrival' || gamePhase === 'takeoff'))
     cameraFollowTarget.copy(chopper.position);
   cameraRig.update(delta, cameraFollowTarget);
+  syncPlayerPresentation();
   if (worldGroup.visible) updateWorldLods(worldGroup, player.position);
   const rainCanRender =
     stressActive || (gamePhase !== 'base' && !interiorSession && !campInteriorSession);
@@ -4943,7 +5003,7 @@ function animate(now: number): void {
   bloodTrailVisual.update(delta);
   pickupPressState.update(delta);
   updateExplosiveBarrelBlinkMaterials();
-  if (cameraRig.mode === 'third-person') {
+  if (cameraRig.mode !== 'top-down') {
     player.setFacingDirection(
       cameraRig.currentTarget.x - camera.position.x,
       cameraRig.currentTarget.z - camera.position.z,
@@ -5020,7 +5080,7 @@ function animate(now: number): void {
   if (now - lastUiTime > 120) {
     updateCombatUi();
     updateRenderDiagnosticsUi();
-    if (cameraRig.mode === 'third-person') renderControls();
+    if (cameraRig.mode !== 'top-down') renderControls();
     elements.entityValue!.textContent = String(
       (gamePhase === 'base' ? campGroup.children.length : world.objectCount) +
         (stressActive

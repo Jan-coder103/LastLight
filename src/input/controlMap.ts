@@ -20,7 +20,7 @@ export function abilityFromKey(code: string, mode: CameraMode): AbilitySlot | un
 }
 
 export function isMovementKey(code: string, mode: CameraMode): boolean {
-  if (mode !== 'third-person') return false;
+  if (mode === 'top-down') return false;
   return [
     'KeyW',
     'KeyA',

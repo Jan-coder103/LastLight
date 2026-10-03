@@ -2,9 +2,9 @@ import { Vector3 } from 'three';
 import { abilityFromKey, isDashKey, isMovementKey, type AbilitySlot } from '../input/controlMap';
 import type { NavPoint } from '../navigation/GridNavigator';
 import { terrainHeightAt, type WorldCollider, type WorldData } from '../world/generateWorld';
-import { createPlayerVisual } from './playerVisual';
+import { createPlayerVisual, type PlayerVisualRig } from './playerVisual';
 
-export type CameraMode = 'third-person' | 'top-down';
+export type CameraMode = 'third-person' | 'top-down' | 'first-person';
 
 const walkSpeed = 7.4;
 const bodyRadius = 0.58;
@@ -43,6 +43,8 @@ export class PlayerController {
   private readonly lastMoveDirection = new Vector3();
   private aimFacingRemaining = 0;
   private hasMoved = false;
+  private gaitPhase = 0;
+  private gaitStrength = 0;
   private enabled = true;
   private blockedRouteTime = 0;
   private navigationStuck = false;
@@ -176,7 +178,7 @@ export class PlayerController {
       this.moveBy(this.velocity.x * delta, this.velocity.z * delta);
     } else if (this.enabled) {
       const direction =
-        mode === 'third-person' ? this.keyboardDirection(cameraYaw) : this.pathDirection();
+        mode === 'top-down' ? this.pathDirection() : this.keyboardDirection(cameraYaw);
       if (direction.lengthSq() > 0) {
         if (mode === 'top-down' && this.path.length > 0) {
           routeWaypoint = this.path[0];
@@ -218,8 +220,18 @@ export class PlayerController {
 
     this.visual.position.set(this.position.x, this.position.y, this.position.z);
     this.visual.rotation.y = this.facing;
-    this.visual.scale.y =
-      this.velocity.lengthSq() > 0 ? 1 + Math.sin(performance.now() * 0.012) * 0.012 : 1;
+    const moving = this.velocity.lengthSq() > 0.01;
+    this.gaitPhase += delta * (moving ? Math.max(6, this.velocity.length() * 1.45) : 8);
+    const gaitTarget = moving ? 1 : 0;
+    this.gaitStrength += (gaitTarget - this.gaitStrength) * (1 - Math.exp(-delta * 10));
+    const swing = Math.sin(this.gaitPhase) * 0.55 * this.gaitStrength;
+    const rig = this.visual.userData.rig as PlayerVisualRig;
+    rig.leftLeg.rotation.x = swing;
+    rig.rightLeg.rotation.x = -swing;
+    rig.leftArm.rotation.x = -0.24 - swing * 0.35;
+    rig.rightArm.rotation.x = -0.43 + swing * 0.35;
+    this.visual.position.y =
+      this.position.y + Math.abs(Math.sin(this.gaitPhase * 2)) * 0.022 * this.gaitStrength;
   }
 
   startDash(): void {
@@ -234,7 +246,7 @@ export class PlayerController {
       this.dashDirection.copy(this.lastMoveDirection);
     }
     if (this.dashDirection.lengthSq() < 0.01) {
-      if (this.currentMode === 'third-person') {
+      if (this.currentMode !== 'top-down') {
         this.dashDirection.set(
           -Math.sin(this.currentCameraYaw),
           0,
@@ -254,7 +266,7 @@ export class PlayerController {
 
   muzzlePosition(): Vector3 {
     this.visual.updateMatrixWorld(true);
-    return this.visual.localToWorld(new Vector3(0.43, 1.23, -0.77));
+    return this.visual.localToWorld(new Vector3(0.35, 1.31, -1.23));
   }
 
   setPosition(x: number, z: number): void {

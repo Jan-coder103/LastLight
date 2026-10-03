@@ -62,6 +62,10 @@ export class CameraRig {
     this.camera.lookAt(this.currentTarget);
   }
 
+  get isTransitioning(): boolean {
+    return this.transition !== undefined;
+  }
+
   kickShake(strength: number, duration = 0.2): void {
     if (!Number.isFinite(strength) || strength <= 0 || duration <= 0) return;
     this.shakeStrength = Math.max(this.shakeStrength, Math.min(strength, 0.16));
@@ -76,7 +80,12 @@ export class CameraRig {
   }
 
   switchMode(playerPosition: Vector3): CameraMode {
-    this.mode = this.mode === 'third-person' ? 'top-down' : 'third-person';
+    const modes: CameraMode[] = ['third-person', 'top-down', 'first-person'];
+    this.mode = modes[(modes.indexOf(this.mode) + 1) % modes.length]!;
+    if (this.mode !== 'first-person' && this.camera.fov !== 53) {
+      this.camera.fov = 53;
+      this.camera.updateProjectionMatrix();
+    }
     if (this.mode === 'top-down' && document.pointerLockElement === this.canvas)
       document.exitPointerLock();
     this.transition = {
@@ -89,13 +98,18 @@ export class CameraRig {
   }
 
   lookBy(deltaX: number, deltaY: number): void {
-    if (this.mode !== 'third-person') return;
+    if (this.mode === 'top-down') return;
     this.yaw += deltaX * 0.0028;
     this.pitch = Math.max(-0.62, Math.min(0.95, this.pitch + deltaY * 0.0022));
   }
 
   zoomBy(deltaY: number): void {
     if (!Number.isFinite(deltaY) || deltaY === 0) return;
+    if (this.mode === 'first-person') {
+      this.camera.fov = Math.max(42, Math.min(68, this.camera.fov * Math.exp(deltaY * 0.001)));
+      this.camera.updateProjectionMatrix();
+      return;
+    }
     this.zoomScale = Math.max(0.62, Math.min(1.8, this.zoomScale * Math.exp(deltaY * 0.001)));
   }
 
@@ -109,7 +123,7 @@ export class CameraRig {
       this.camera.position.lerpVectors(this.transition.startPosition, this.idealPosition, eased);
       this.currentTarget.lerpVectors(this.transition.startTarget, this.idealTarget, eased);
       if (amount >= 1) this.transition = undefined;
-    } else if (this.mode === 'third-person') {
+    } else if (this.mode !== 'top-down') {
       this.camera.position.copy(this.idealPosition);
       this.currentTarget.copy(this.idealTarget);
     } else {
@@ -134,6 +148,8 @@ export class CameraRig {
     this.shakeRemaining = 0;
     this.shakeStrength = 0;
     this.mode = 'third-person';
+    this.camera.fov = 53;
+    this.camera.updateProjectionMatrix();
     this.yaw = 0;
     this.pitch = 0.2;
     this.zoomScale = 1;
@@ -162,6 +178,19 @@ export class CameraRig {
 
   private setDestination(playerPosition: Vector3): void {
     const terrainY = playerPosition.y;
+    if (this.mode === 'first-person') {
+      const eyeY = terrainY + 1.64;
+      const forwardX = Math.sin(this.yaw) * Math.cos(this.pitch);
+      const forwardY = -Math.sin(this.pitch);
+      const forwardZ = -Math.cos(this.yaw) * Math.cos(this.pitch);
+      this.idealPosition.set(playerPosition.x, eyeY, playerPosition.z);
+      this.idealTarget.set(
+        playerPosition.x + forwardX * 12,
+        eyeY + forwardY * 12,
+        playerPosition.z + forwardZ * 12,
+      );
+      return;
+    }
     if (this.mode === 'top-down') {
       this.idealTarget.set(playerPosition.x, terrainY + 1.35, playerPosition.z);
       this.idealPosition.set(

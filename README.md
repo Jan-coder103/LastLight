@@ -11,31 +11,33 @@ npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite, usually `http://localhost:5173`. The target is a desktop Chromium browser (Chrome or Edge) or Firefox with WebGL2. Third-person asks for pointer lock when play starts; Escape or Ctrl releases it, clicking the scene captures it again, and drag-to-look remains available if browser policy blocks capture. HUD clicks never request capture.
+Open the local URL printed by Vite, usually `http://localhost:5173`. The target is a desktop Chromium browser (Chrome or Edge) or Firefox with WebGL2. Third-person and first-person ask for pointer lock when play starts or the view is selected; Escape or Ctrl releases it, clicking the scene captures it again, and drag-to-look remains available if browser policy blocks capture. HUD clicks never request capture.
 
 ## Controls
 
-| Input                          | Third person                                         | Top-down                                             |
-| ------------------------------ | ---------------------------------------------------- | ---------------------------------------------------- |
-| W / A / S / D or arrow keys    | Move relative to the camera                          | —                                                    |
-| Shift                          | Hold to sprint                                       | Hold to sprint along the route                       |
-| Right-click                    | —                                                    | Move around static obstacles                         |
-| Left-click                     | Fire at the cursor                                   | Attack with cursor assist                            |
-| Drag on the scene              | Look and aim if pointer lock is unavailable          | —                                                    |
-| Mouse wheel                    | Zoom camera in or out                                | Zoom camera in or out                                |
-| Q                              | Dash; 2-second cooldown, no cost                     | Dash; 2-second cooldown, no cost                     |
-| 1 / 2 / 3                      | Turret / artillery / adrenaline (2.5× speed for 5 s) | —                                                    |
-| W / E / R                      | —                                                    | Turret / artillery / adrenaline (2.5× speed for 5 s) |
-| G                              | Throw grenade                                        | Throw grenade                                        |
-| I                              | Open shaped backpack                                 | Open shaped backpack                                 |
-| X                              | Use one carried supply to heal                       | Use one carried supply to heal                       |
-| F                              | Interact, enter/exit, or board nearby                | Interact, enter/exit, or board nearby                |
-| Tab                            | Switch camera without moving player                  | Switch camera without moving player                  |
-| World Seed field + reload icon | Rebuild the map and encounter                        | Rebuild the map and encounter                        |
+| Input                          | Third person                                         | Top-down                                             | First person                                             |
+| ------------------------------ | ---------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------- |
+| W / A / S / D or arrow keys    | Move relative to the camera                          | —                                                    | Move relative to the camera                              |
+| Shift                          | Hold to sprint                                       | Hold to sprint along the route                       | Hold to sprint                                           |
+| Right-click                    | —                                                    | Move around static obstacles                         | —                                                        |
+| Left-click                     | Fire at the cursor                                   | Attack with cursor assist                            | Fire through the center reticle                          |
+| Drag on the scene              | Look and aim if pointer lock is unavailable          | —                                                    | Look if pointer lock is unavailable                      |
+| Mouse wheel                    | Zoom camera in or out                                | Zoom camera in or out                                | Zoom camera in or out                                    |
+| Q                              | Dash; 2-second cooldown, no cost                     | Dash; 2-second cooldown, no cost                     | Dash; 2-second cooldown, no cost                         |
+| 1 / 2 / 3                      | Turret / artillery / adrenaline (2.5× speed for 5 s) | —                                                    | Turret / artillery / adrenaline (2.5× speed for 5 s)    |
+| W / E / R                      | —                                                    | Turret / artillery / adrenaline (2.5× speed for 5 s) | —                                                        |
+| G                              | Throw grenade                                        | Throw grenade                                        | Throw grenade                                            |
+| I                              | Open shaped backpack                                 | Open shaped backpack                                 | Open shaped backpack                                     |
+| X                              | Use one carried supply to heal                       | Use one carried supply to heal                       | Use one carried supply to heal                           |
+| F                              | Interact, enter/exit, or board nearby                | Interact, enter/exit, or board nearby                | Interact, enter/exit, or board nearby                    |
+| Tab                            | Cycle camera mode                                    | Cycle camera mode                                    | Cycle camera mode                                        |
+| World Seed field + reload icon | Rebuild the map and encounter                        | Rebuild the map and encounter                        | Rebuild the map and encounter                            |
+
+Tab cycles through third-person, top-down, then first-person and back to third-person. First-person hides the scout body and shows a camera-mounted firearm. The player still uses direct camera-relative movement and third-person ability keys.
 
 Press **O** or choose **Atmosphere** to open lighting, weather, and accessibility options. Lighting is seeded per run by default, with low sun and high moon alternatives. Weather is also seeded by default, with clear, mist, and rain options. Mist adds slowly drifting, irregular volumetric fog banks, light scattering, and denser distance haze; rain adds a lighter haze and reflective puddles of varied sizes along roads. Changing these presets affects your next deployment; the current run's sky stays fixed. Reduce motion/camera shake, reduce flashes, hide rain particles, disable audio cues, or adjust impact-shake intensity at any time. Accessibility options apply immediately and persist separately from camp inventory.
 
-At camp, use **W/A/S/D** to walk, right-click in top-down view to route, **F** at a marked service or building, **M** for the camp terminal, **I** for the backpack, and **Tab** to change camera. The quartermaster opens its trade menu, camp storage opens the resource ledger, and the operations board opens destination selection. **M** keeps the combined terminal available from anywhere in camp.
+At camp, use **W/A/S/D** to walk in either perspective view, right-click in top-down view to route, **F** at a marked service or building, **M** for the camp terminal, **I** for the backpack, and **Tab** to cycle camera modes. Wayfarer Camp now has packed-earth paths, nearby grass and stone detail, civilian tent areas, and a reinforced perimeter with barbed wire and scrap-plated gates. The quartermaster opens its trade menu, camp storage opens the resource ledger, and the operations board opens destination selection. **M** keeps the combined terminal available from anywhere in camp.
 
 The backpack has an 8×6 grid, with the scout shown on the left. Drag shaped items between cells; drop one on the bottom arrow to put it on the ground for later pickup. Click a firearm in the backpack to equip it. A rifle occupies 4×2 cells, a tire 5×5, and smaller items as little as 1×1. The 90-credit backpack and cargo-harness upgrade expands the grid to 8×8 and the existing cargo limit from 10 to 15. Opening the backpack pauses an active encounter. **The same backpack, including item positions, travels from camp into a mission and back.** New and migrated saves start with a rifle and three grenades; deployment does not add items. Field caches reveal one shaped item alongside their existing resource pickups. Extraction saves the updated backpack. Death loses its contents and reissues the starter rifle and grenades at camp. Banked camp resources and items in the safe reserve list remain protected.
 
@@ -43,7 +45,7 @@ The scrap hut and two large, overlapping scrap piles are along the east edge of 
 
 ## Current project status
 
-Phases 1–13 are accepted. Phase 14 remains open for revisions after owner feedback about dead-zombie despawning and far-tier visuals; the revision removes defeated agents from rendering and uses cylinder instances for the far horde tier. Phase 15, dormant horde and noise awareness, is in progress at the owner's direction while Phase 14's review gate remains unresolved. Phase 16 combat feedback and field interaction polish is implemented and awaiting owner playtest; it covers hit effects, pickup UI/feed, sprint/adrenaline, pointer lock, explosive barrels, blood trails, and the lowest world-asset LOD transition at 120 m. Phase 7 closed on 2026-10-01 after the approved-catalog LOD rollout and desktop performance review; phone testing is deferred until later. Implementation details and acceptance history are in `tracker.md`.
+Phases 1–13 are accepted. Phase 14 remains open for revisions after owner feedback about dead-zombie despawning and far-tier visuals; the revision removes defeated agents from rendering and uses cylinder instances for the far horde tier. Phase 15, dormant horde and noise awareness, is in progress at the owner's direction while Phase 14's review gate remains unresolved. Phase 16 combat feedback and field interaction polish is implemented and awaiting owner playtest; it covers hit effects, pickup UI/feed, sprint/adrenaline, pointer lock, explosive barrels, blood trails, and the lowest world-asset LOD transition at 120 m. Phase 17, camp atmosphere and first-person view, is in progress at the owner's request; its build passes and owner visual review remains open. Phase 7 closed on 2026-10-01 after the approved-catalog LOD rollout and desktop performance review; phone testing is deferred until later. Implementation details and acceptance history are in `tracker.md`.
 
 The compact HUD at the bottom center shows health as a red ring and Q/W/E/R/G abilities with cooldown timers. Recent pickups appear FIFO directly left of the on-screen character, with no panel background. In-range ground items show an animated **F** keycap above them. Third-person slot keys display as 1/2/3 to match the field controls. The current camera view is listed in the right-side dev telemetry panel; the left controls panel lists **Tab** for switching views.
 
@@ -78,7 +80,7 @@ The package manifest and `package-lock.json` pin exact versions of Three.js, Vit
 - `src/assets/` contains authored asset modules and shared versioned metadata; `docs/asset-reviews/` keeps owner-approved model review sheets; `helicopter.ts` builds the shared detailed camp/deployment helicopter.
 - `asset-editor.html` and `src/assetEditor/` provide the separate Asset Bench for reviewing and adjusting the same authored definitions.
 - `unapproved-assets/` is an isolated staging area for candidate models and includes a lightweight Three.js viewer. Its `AGENTS.md` contains the asset authoring guide, and `examples/` has copies of the current building and water tower modules. Nothing in this folder is loaded by the game.
-- `src/player/PlayerController.ts` owns direct third-person movement, top-down route following, and dash movement; `src/player/playerVisual.ts` builds the shared gameplay scout model used by the staging viewer too.
+- `src/player/PlayerController.ts` owns direct perspective movement, top-down route following, and dash movement; `src/player/playerVisual.ts` builds the articulated gameplay scout and camera-mounted first-person firearm.
 - `src/navigation/GridNavigator.ts` routes the player around static colliders and refreshed hostile positions; combat pursuers use a separate static navigation map.
 - `src/game/CombatSimulation.ts` owns health, firing and ability cooldowns, damage, and zombie pursuit/attacks.
 - `src/game/CombatFeedback.ts`, `PickupFeed.ts`, and `ExplosiveBarrel.ts` own pooled blood trails, pickup-feed/prompt timing, and deterministic barrel fuses.

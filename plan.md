@@ -259,9 +259,27 @@ Phone testing remains deferred and is not part of the completed desktop phase. I
 
 **Tuning note:** “three times the current adrenaline boost” is interpreted as tripling the current +50% bonus to +150%, for 2.5× base movement speed. Confirm the feel during the owner playtest before acceptance.
 
-## Backlog after phase 16
+## Phase 17 — Camp atmosphere, settlement density, and first-person view
 
-Prioritize by playtest value and measured cost: military-base and large-city destination generation, props, loot, and fuel pricing; fences and interactive gates; companion bot; additional enemy families and survivor/bandit behavior; optimized rain puddles/wet reflections; plane variant. Promote an item to a scoped phase or subphase before implementing it, with acceptance criteria and tests recorded in `tracker.md`.
+**Goal:** make Wayfarer Camp feel like a crowded, defensible civilian survival camp, improve ground and lighting readability, and add a usable first-person camera without adding ongoing rendering cost.
+
+1. Warm the direct sunlight and tint ambient fill toward cool blue so lit surfaces and shadows read apart. Keep the change in the existing lights and materials; do not add a post-processing pass.
+2. Separate dirt from grass with a beige/gray packed-earth palette and a small repeating grain texture. Reuse one low-resolution texture on dirt surfaces.
+3. Dress the hub with low-poly grass tufts and pebbles/stones. Batch repeated props; show detailed clumps within 20 m, a single simple shape per prop farther away, and cull them beyond the camp view range.
+4. Fill open camp areas with more civilian survivors, people sitting at a communal fire, tents, crates, and small supplies. Reinforce the perimeter with bolted scrap plates and barbed wire. Replace the low barricades with heavy, scrap-plated gate leaves while preserving a navigable entrance.
+5. Use `skybox_hub.png` as a basic camp panorama if it maps cleanly. If its projection or framing makes it unsuitable, record the exact image format and coverage needed for a proper skybox.
+6. Replace the capsule scout with a readable low-poly human model with articulated arms and legs. Add a third camera mode: hide the body and show only a camera-mounted firearm, positioned for a clear first-person view. Tab cycles third-person, top-down, and first-person modes; first-person shares direct movement and 1/2/3 abilities with third-person.
+7. Add regression coverage for first-person camera/input/visibility, camp decoration distance tiers and batching, texture reuse, and path reachability around the denser camp. Build and check both perspective modes plus top-down in the owner playtest.
+
+**Acceptance:** warm sunlight and cool fill visibly separate highlights and shadowed areas without a new render pass; grass, dirt, and paths remain distinct; camp ground dressing changes to a one-shape LOD around 20 m; the expanded camp reads as busy, civilian, and defensible while keeping services reachable; the supplied image works as a camp panorama or the needed panorama specifications are documented; the scout has visible arms and legs in third-person; first-person hides the scout and shows a well-positioned gun; all three camera modes preserve movement, aiming, and controls; performance remains within the existing desktop target; and the owner playtests the hub and all camera modes.
+
+**Implementation decision (2026-10-03):** the supplied 1800×1024 image is a wide sunset landscape rather than a six-face cubemap. Use it as a basic equirectangular-style camp background for a first pass; it may stretch horizontally slightly. Ground grit uses one reusable 64×64 data texture. Camp grass and pebbles use four instanced batches, swap detailed/simple geometry at 20 m, and cull beyond 60 m. First-person is the third Tab mode and reuses third-person direct movement and ability keys.
+
+**Phase start:** the owner explicitly requested Phase 17 while Phases 14–16 still have separate open review gates.
+
+## Backlog after phase 17
+
+Prioritize by playtest value and measured cost: military-base and large-city destination generation, props, loot, and fuel pricing; interactive gate controls; companion bot; additional enemy families and survivor/bandit behavior; optimized rain puddles/wet reflections; plane variant. Promote an item to a scoped phase or subphase before implementing it, with acceptance criteria and tests recorded in `tracker.md`.
 
 ## Open choices to settle during implementation
 

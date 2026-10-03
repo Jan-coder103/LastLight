@@ -633,6 +633,15 @@ kbd {
 #game.is-top-down .aim-reticle {
   display: none;
 }
+#game.is-first-person .aim-reticle {
+  width: 19px;
+  height: 19px;
+  border-color: rgba(247, 239, 211, 0.94);
+  box-shadow: 0 0 7px rgba(0, 0, 0, 0.72);
+}
+#game.is-first-person .aim-reticle i {
+  inset: 8px;
+}
 
 .death-overlay {
   position: absolute;

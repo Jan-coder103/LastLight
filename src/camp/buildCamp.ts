@@ -1,26 +1,49 @@
 import {
+  BufferGeometry,
   BoxGeometry,
   CanvasTexture,
   CircleGeometry,
+  ConeGeometry,
   CylinderGeometry,
   DoubleSide,
+  DynamicDrawUsage,
+  Float32BufferAttribute,
   Group,
+  IcosahedronGeometry,
+  InstancedMesh,
+  LineBasicMaterial,
+  LineSegments,
   Mesh,
   MeshStandardMaterial,
+  Object3D,
+  OctahedronGeometry,
   PlaneGeometry,
   RingGeometry,
   SRGBColorSpace,
   SphereGeometry,
-  type BufferGeometry,
+  Vector3,
 } from 'three';
+import { createRandom } from '../core/seededRandom';
+import { packedDirtTexture, tileGroundUv } from '../world/groundTexture';
 import { createHelicopter } from '../assets/helicopter';
 import { campEntrances, campServices, type CampService } from './campWorld';
 
 const materials = {
   ground: new MeshStandardMaterial({ color: '#687454', roughness: 1, flatShading: true }),
-  path: new MeshStandardMaterial({ color: '#81795f', roughness: 1, flatShading: true }),
+  path: new MeshStandardMaterial({
+    color: '#c5b99f',
+    map: packedDirtTexture,
+    roughness: 1,
+    flatShading: true,
+  }),
   fence: new MeshStandardMaterial({ color: '#54594d', roughness: 0.92, flatShading: true }),
   darkMetal: new MeshStandardMaterial({ color: '#303833', roughness: 0.75, metalness: 0.2 }),
+  rustMetal: new MeshStandardMaterial({
+    color: '#705d4c',
+    roughness: 0.91,
+    metalness: 0.16,
+    flatShading: true,
+  }),
   timber: new MeshStandardMaterial({ color: '#655744', roughness: 0.98, flatShading: true }),
   wall: new MeshStandardMaterial({ color: '#797762', roughness: 1, flatShading: true }),
   roof: new MeshStandardMaterial({ color: '#626753', roughness: 0.94, flatShading: true }),
@@ -38,6 +61,12 @@ const materials = {
   skin: new MeshStandardMaterial({ color: '#c49b76', roughness: 1 }),
   marker: new MeshStandardMaterial({ color: '#d9bc73', roughness: 0.5, emissive: '#463813' }),
   red: new MeshStandardMaterial({ color: '#8e5142', roughness: 0.9, flatShading: true }),
+  campFire: new MeshStandardMaterial({
+    color: '#d46b38',
+    emissive: '#79340f',
+    roughness: 0.9,
+    flatShading: true,
+  }),
   boardFrame: new MeshStandardMaterial({ color: '#554837', roughness: 0.95, flatShading: true }),
   boardInk: new MeshStandardMaterial({ color: '#303832', roughness: 0.95, flatShading: true }),
   pinBlue: new MeshStandardMaterial({ color: '#607f91', roughness: 0.55, metalness: 0.12 }),
@@ -79,13 +108,21 @@ function addGround(parent: Group): void {
   ground.name = 'Seeded terrain';
   ground.userData.walkableFloor = true;
 
-  const mainWalk = mesh(new PlaneGeometry(7, 55), materials.path, 0, 0.005, 0.5, parent);
+  const mainGeometry = new PlaneGeometry(7, 55);
+  tileGroundUv(mainGeometry, 7, 55);
+  const mainWalk = mesh(mainGeometry, materials.path, 0, 0.005, 0.5, parent);
   mainWalk.rotation.x = -Math.PI / 2;
-  const northWalk = mesh(new PlaneGeometry(45, 4.8), materials.path, 0, 0.01, -22.5, parent);
+  const northGeometry = new PlaneGeometry(45, 4.8);
+  tileGroundUv(northGeometry, 45, 4.8);
+  const northWalk = mesh(northGeometry, materials.path, 0, 0.01, -22.5, parent);
   northWalk.rotation.x = -Math.PI / 2;
-  const vendorWalk = mesh(new PlaneGeometry(25, 4), materials.path, -8, 0.012, 4, parent);
+  const vendorGeometry = new PlaneGeometry(25, 4);
+  tileGroundUv(vendorGeometry, 25, 4);
+  const vendorWalk = mesh(vendorGeometry, materials.path, -8, 0.012, 4, parent);
   vendorWalk.rotation.x = -Math.PI / 2;
-  const storageWalk = mesh(new PlaneGeometry(14, 3.6), materials.path, -17, 0.013, 7, parent);
+  const storageGeometry = new PlaneGeometry(14, 3.6);
+  tileGroundUv(storageGeometry, 14, 3.6);
+  const storageWalk = mesh(storageGeometry, materials.path, -17, 0.013, 7, parent);
   storageWalk.rotation.x = -Math.PI / 2;
 
   for (const [x, z] of [
@@ -116,49 +153,339 @@ function addGround(parent: Group): void {
   }
 }
 
+interface DecorationSpot {
+  x: number;
+  z: number;
+  size: number;
+  rotation: number;
+}
+
+interface CampDecorationLods {
+  grass: DecorationSpot[];
+  stones: DecorationSpot[];
+  nearGrass: InstancedMesh;
+  farGrass: InstancedMesh;
+  nearStones: InstancedMesh;
+  farStones: InstancedMesh;
+  elapsed: number;
+}
+
+function addCampDecorations(camp: Group): void {
+  const grass: DecorationSpot[] = [];
+  const stones: DecorationSpot[] = [];
+  const random = createRandom('WAYFARER-CAMP:ground-dressing');
+  const protectedAreas = [
+    { x: -15, z: -13, rx: 7, rz: 7.5 },
+    { x: 15, z: -13, rx: 7, rz: 7.5 },
+    { x: -18, z: 15, rx: 8, rz: 6.5 },
+    { x: -7, z: -0.3, rx: 4.8, rz: 3.5 },
+    { x: 18, z: -4.5, rx: 5.5, rz: 7 },
+    { x: -8, z: 10.5, rx: 3.8, rz: 3.7 },
+    { x: 0, z: -23, rx: 4.5, rz: 3.3 },
+    { x: 17, z: 17, rx: 8.5, rz: 8 },
+    { x: -25, z: 6.5, rx: 3.1, rz: 3.1 },
+    { x: 22, z: 10, rx: 3.4, rz: 2.9 },
+    { x: 7.5, z: 8.8, rx: 2.8, rz: 2.9 },
+    { x: 6.3, z: -3, rx: 4.8, rz: 4.4 },
+  ];
+  for (let z = -26; z <= 26; z += 2.65) {
+    for (let x = -26; x <= 26; x += 2.65) {
+      const spotX = x + (random() - 0.5) * 1.15;
+      const spotZ = z + (random() - 0.5) * 1.15;
+      if (Math.abs(spotX) < 4.7 || Math.abs(spotZ + 22.5) < 3.1) continue;
+      if (spotX > -21 && spotX < 5 && Math.abs(spotZ - 4) < 2.55) continue;
+      if (spotX > -24 && spotX < -10 && Math.abs(spotZ - 7) < 2.1) continue;
+      if (
+        protectedAreas.some(
+          (area) => ((spotX - area.x) / area.rx) ** 2 + ((spotZ - area.z) / area.rz) ** 2 < 1,
+        )
+      )
+        continue;
+      if (random() > 0.68) continue;
+      const spot = {
+        x: spotX,
+        z: spotZ,
+        size: 0.68 + random() * 0.68,
+        rotation: random() * Math.PI * 2,
+      };
+      if (random() < 0.54) grass.push(spot);
+      else stones.push(spot);
+    }
+  }
+
+  const nearGrassGeometry = new ConeGeometry(0.064, 0.38, 3);
+  nearGrassGeometry.translate(0, 0.19, 0);
+  const nearGrass = new InstancedMesh(
+    nearGrassGeometry,
+    new MeshStandardMaterial({ color: '#667a4b', roughness: 1, flatShading: true }),
+    grass.length * 3,
+  );
+  const farGrass = new InstancedMesh(
+    new IcosahedronGeometry(0.12, 0),
+    new MeshStandardMaterial({ color: '#72814d', roughness: 1, flatShading: true }),
+    grass.length,
+  );
+  const nearStones = new InstancedMesh(
+    new IcosahedronGeometry(0.18, 0),
+    new MeshStandardMaterial({ color: '#aaa394', roughness: 1, flatShading: true }),
+    stones.length,
+  );
+  const farStones = new InstancedMesh(
+    new OctahedronGeometry(0.13, 0),
+    new MeshStandardMaterial({ color: '#918d81', roughness: 1, flatShading: true }),
+    stones.length,
+  );
+  nearGrass.name = 'Nearby camp grass clumps';
+  farGrass.name = 'Distant camp grass LOD';
+  nearStones.name = 'Nearby camp stones';
+  farStones.name = 'Distant camp stones LOD';
+  for (const instance of [nearGrass, farGrass, nearStones, farStones]) {
+    instance.count = 0;
+    instance.instanceMatrix.setUsage(DynamicDrawUsage);
+    instance.castShadow = false;
+    instance.receiveShadow = false;
+    instance.frustumCulled = false;
+    camp.add(instance);
+  }
+  camp.userData.decorationLods = {
+    grass,
+    stones,
+    nearGrass,
+    farGrass,
+    nearStones,
+    farStones,
+    elapsed: 1,
+  } satisfies CampDecorationLods;
+}
+
+/** Refreshes batched ground decoration every quarter second and swaps at 20 m. */
+export function updateCampDecorations(camp: Group, deltaSeconds: number, player: Vector3): void {
+  const lods = camp.userData.decorationLods as CampDecorationLods | undefined;
+  if (!lods) return;
+  lods.elapsed += deltaSeconds;
+  if (lods.elapsed < 0.25) return;
+  lods.elapsed = 0;
+  const dummy = new Object3D();
+  let nearGrassIndex = 0;
+  let farGrassIndex = 0;
+  let nearStoneIndex = 0;
+  let farStoneIndex = 0;
+
+  for (const spot of lods.grass) {
+    const distanceSquared = (player.x - spot.x) ** 2 + (player.z - spot.z) ** 2;
+    if (distanceSquared < 400) {
+      for (let blade = 0; blade < 3; blade += 1) {
+        const angle = spot.rotation + blade * ((Math.PI * 2) / 3);
+        dummy.position.set(
+          spot.x + Math.cos(angle) * 0.045,
+          0.012,
+          spot.z + Math.sin(angle) * 0.045,
+        );
+        dummy.rotation.set(0, angle, 0);
+        dummy.scale.set(spot.size, spot.size * (0.78 + blade * 0.12), spot.size);
+        dummy.updateMatrix();
+        lods.nearGrass.setMatrixAt(nearGrassIndex++, dummy.matrix);
+      }
+    } else if (distanceSquared < 3_600) {
+      dummy.position.set(spot.x, 0.085, spot.z);
+      dummy.rotation.set(0, spot.rotation, 0);
+      dummy.scale.set(0.78 * spot.size, 0.48 * spot.size, 0.78 * spot.size);
+      dummy.updateMatrix();
+      lods.farGrass.setMatrixAt(farGrassIndex++, dummy.matrix);
+    }
+  }
+  for (const spot of lods.stones) {
+    const distanceSquared = (player.x - spot.x) ** 2 + (player.z - spot.z) ** 2;
+    if (distanceSquared < 400) {
+      dummy.position.set(spot.x, 0.08, spot.z);
+      dummy.rotation.set(spot.rotation * 0.3, spot.rotation, spot.rotation * 0.15);
+      dummy.scale.set(spot.size, spot.size * 0.63, spot.size * 0.82);
+      dummy.updateMatrix();
+      lods.nearStones.setMatrixAt(nearStoneIndex++, dummy.matrix);
+    } else if (distanceSquared < 3_600) {
+      dummy.position.set(spot.x, 0.06, spot.z);
+      dummy.rotation.set(0, spot.rotation, 0);
+      dummy.scale.set(spot.size * 0.72, spot.size * 0.38, spot.size * 0.72);
+      dummy.updateMatrix();
+      lods.farStones.setMatrixAt(farStoneIndex++, dummy.matrix);
+    }
+  }
+  lods.nearGrass.count = nearGrassIndex;
+  lods.farGrass.count = farGrassIndex;
+  lods.nearStones.count = nearStoneIndex;
+  lods.farStones.count = farStoneIndex;
+  for (const instance of [lods.nearGrass, lods.farGrass, lods.nearStones, lods.farStones])
+    instance.instanceMatrix.needsUpdate = true;
+}
+
+function addBarbedWire(parent: Group): void {
+  const positions: number[] = [];
+  const addSegment = (a: Vector3, b: Vector3) => {
+    positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+  };
+  const runs: Array<{ axis: 'x' | 'z'; fixed: number; start: number; end: number }> = [
+    { axis: 'x', fixed: -29, start: -28.5, end: 28.5 },
+    { axis: 'z', fixed: -29, start: -28.5, end: 28.5 },
+    { axis: 'z', fixed: 29, start: -28.5, end: 28.5 },
+  ];
+  for (const run of runs) {
+    const length = run.end - run.start;
+    const steps = Math.ceil(length / 0.42);
+    for (const strand of [-0.19, 0.19]) {
+      let previous: Vector3 | undefined;
+      for (let index = 0; index <= steps; index += 1) {
+        const along = run.start + (length * index) / steps;
+        const phase = (index / steps) * length * 5.2;
+        const height = 2.91 + Math.sin(phase) * 0.1;
+        const lateral = strand + Math.cos(phase) * 0.12;
+        const point =
+          run.axis === 'x'
+            ? new Vector3(along, height, run.fixed + lateral)
+            : new Vector3(run.fixed + lateral, height, along);
+        if (previous) addSegment(previous, point);
+        previous = point;
+        if (index > 0 && index % 4 === 0) {
+          const reach = run.axis === 'x' ? new Vector3(0, 0, 0.34) : new Vector3(0.34, 0, 0);
+          const low = point.clone().add(new Vector3(0, -0.16, 0));
+          const upper = point.clone().add(new Vector3(0, 0.28, 0));
+          addSegment(low, upper.clone().add(reach));
+          addSegment(low, upper.clone().sub(reach));
+        }
+      }
+    }
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  const wire = new LineSegments(geometry, new LineBasicMaterial({ color: '#252c29' }));
+  wire.name = 'Barbed wire perimeter';
+  wire.frustumCulled = false;
+  parent.add(wire);
+}
+
+function addReinforcedGate(parent: Group, side: -1 | 1): void {
+  const leaf = new Group();
+  leaf.position.set(side * 3.42, 0, 28.68);
+  box(leaf, 4.08, 2.5, 0.3, materials.fence, 0, 1.25, 0);
+  box(leaf, 4.16, 0.18, 0.38, materials.darkMetal, 0, 0.2, 0);
+  box(leaf, 4.16, 0.18, 0.38, materials.darkMetal, 0, 2.42, 0);
+  for (const x of [-1.25, 0, 1.25]) {
+    box(leaf, 1.05, 0.82, 0.14, materials.rustMetal, x, 1.25, 0.18);
+  }
+  const brace = box(leaf, 4.2, 0.15, 0.13, materials.trim, 0, 1.28, 0.24);
+  brace.rotation.z = side * 0.35;
+  for (const x of [-1.66, -0.56, 0.56, 1.66]) {
+    for (const y of [0.67, 1.83]) {
+      const bolt = mesh(new SphereGeometry(0.075, 6, 4), materials.trim, x, y, 0.27, leaf);
+      bolt.scale.set(1, 1, 0.75);
+    }
+  }
+  box(leaf, 0.34, 0.65, 0.4, materials.darkMetal, side * -0.72, 1.2, 0.27);
+  for (const x of [-1.9, 1.9]) box(leaf, 0.2, 2.7, 0.4, materials.timber, x, 1.35, 0);
+  parent.add(leaf);
+}
+
 function addPerimeter(parent: Group): void {
-  const z = 29;
-  const x = 29;
-  const beamY = [0.74, 1.72];
+  const frontZ = 29;
+  const backZ = -29;
+  const sideX = 29;
+  const metalPanels: Array<{ position: Vector3; rotationY: number }> = [];
   for (const [start, end] of [
-    [-28.5, -5.5],
-    [5.5, 28.5],
+    [-28.5, -5.55],
+    [5.55, 28.5],
   ]) {
     const length = end! - start!;
     const center = (start! + end!) / 2;
-    for (const height of beamY) {
-      box(parent, length, 0.18, 0.2, materials.fence, center, height, z);
+    box(parent, length, 2.45, 0.18, materials.fence, center, 1.28, frontZ - 0.12);
+    box(parent, length, 0.16, 0.22, materials.darkMetal, center, 2.54, frontZ - 0.12);
+    for (let x = start! + 1.5; x < end!; x += 3) {
+      box(parent, 0.24, 2.72, 0.3, materials.timber, x, 1.36, frontZ - 0.11);
+      metalPanels.push({ position: new Vector3(x + 0.6, 1.2, frontZ - 0.005), rotationY: 0 });
     }
   }
-  box(parent, 0.2, 1.95, 0.2, materials.trim, -5.5, 0.98, z);
-  box(parent, 0.2, 1.95, 0.2, materials.trim, 5.5, 0.98, z);
+  box(parent, 57, 2.45, 0.18, materials.fence, 0, 1.28, backZ + 0.12);
+  box(parent, 57, 0.16, 0.22, materials.darkMetal, 0, 2.54, backZ + 0.12);
+  box(parent, 0.18, 2.45, 58, materials.fence, -sideX + 0.12, 1.28, 0);
+  box(parent, 0.18, 2.45, 58, materials.fence, sideX - 0.12, 1.28, 0);
+  for (const x of [-sideX + 0.11, sideX - 0.11])
+    box(parent, 0.24, 0.16, 58, materials.darkMetal, x, 2.54, 0);
+  for (const z of [-27, -21, -15, -9, -3, 3, 9, 15, 21, 27]) {
+    for (const x of [-sideX + 0.11, sideX - 0.11]) {
+      box(parent, 0.3, 2.72, 0.24, materials.timber, x, 1.36, z);
+      metalPanels.push({
+        position: new Vector3(x + (x < 0 ? 0.08 : -0.08), 1.2, z + 0.6),
+        rotationY: Math.PI / 2,
+      });
+    }
+  }
+  for (const x of [-27, -21, -15, -9, -3, 3, 9, 15, 21, 27]) {
+    box(parent, 0.24, 2.72, 0.3, materials.timber, x, 1.36, backZ + 0.11);
+    metalPanels.push({ position: new Vector3(x - 0.6, 1.2, backZ - 0.08), rotationY: 0 });
+  }
 
-  for (const sideX of [-x, x]) {
-    for (const height of beamY) box(parent, 0.2, 0.18, 58, materials.fence, sideX, height, 0);
-  }
-  for (const height of beamY) box(parent, 58, 0.18, 0.2, materials.fence, 0, height, -z);
-  for (const side of ['west', 'east'] as const) {
-    const sideX = side === 'west' ? -28.5 : 28.5;
-    for (const sideZ of [-28.5, -14, 0, 14, 28.5]) {
-      box(parent, 0.36, 2.05, 0.36, materials.timber, sideX, 1, sideZ);
+  const patch = new InstancedMesh(
+    new BoxGeometry(1.1, 0.74, 0.08),
+    materials.rustMetal,
+    metalPanels.length,
+  );
+  const bolt = new InstancedMesh(
+    new SphereGeometry(0.055, 5, 4),
+    materials.trim,
+    metalPanels.length * 4,
+  );
+  patch.name = 'Bolted perimeter scrap plates';
+  bolt.name = 'Perimeter plate bolts';
+  patch.castShadow = false;
+  bolt.castShadow = false;
+  const dummy = new Object3D();
+  let boltIndex = 0;
+  for (const [index, panel] of metalPanels.entries()) {
+    dummy.position.copy(panel.position);
+    dummy.rotation.set(0, panel.rotationY, 0);
+    dummy.scale.set(index % 3 === 0 ? 1.2 : 1, index % 4 === 0 ? 1.28 : 1, 1);
+    dummy.updateMatrix();
+    patch.setMatrixAt(index, dummy.matrix);
+    for (const [dx, dy] of [
+      [-0.41, -0.25],
+      [0.41, -0.25],
+      [-0.41, 0.25],
+      [0.41, 0.25],
+    ]) {
+      const onVerticalSide = Math.abs(panel.rotationY) > 0.5;
+      dummy.position.set(
+        panel.position.x + (onVerticalSide ? Math.sign(panel.position.x) * 0.06 : dx),
+        panel.position.y + dy,
+        panel.position.z + (onVerticalSide ? dx : Math.sign(panel.position.z) * 0.06),
+      );
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      bolt.setMatrixAt(boltIndex++, dummy.matrix);
     }
   }
-  for (const sideZ of [-28.5, 28.5]) {
-    const postXs = sideZ === 28.5 ? [-28.5, -14, -5.5, 5.5, 14, 28.5] : [-28.5, -14, 0, 14, 28.5];
-    for (const postX of postXs) box(parent, 0.36, 2.05, 0.36, materials.timber, postX!, 1, sideZ);
-  }
+  patch.instanceMatrix.needsUpdate = true;
+  bolt.instanceMatrix.needsUpdate = true;
+  parent.add(patch, bolt);
 
-  // Gate arch and closed, waist-high swing barriers keep the only road entrance readable.
-  box(parent, 0.38, 3.6, 0.38, materials.darkMetal, -5.8, 1.8, 28.1);
-  box(parent, 0.38, 3.6, 0.38, materials.darkMetal, 5.8, 1.8, 28.1);
-  box(parent, 12, 0.28, 0.38, materials.darkMetal, 0, 3.45, 28.1);
-  for (const sign of [-1, 1]) {
-    const barrier = box(parent, 4.4, 0.22, 0.22, materials.red, sign * 3.45, 0.78, 27.8);
-    barrier.rotation.y = sign * -0.15;
-    for (let index = 0; index < 4; index += 1) {
-      box(parent, 0.16, 0.27, 0.25, materials.trim, sign * (1.8 + index * 0.9), 0.78, 27.8);
+  for (const z of [-28.5, 28.5]) {
+    for (const x of [-28.5, -14, -5.5, 5.5, 14, 28.5]) {
+      if (z === -28.5 || Math.abs(x) > 5.5)
+        box(parent, 0.4, 2.92, 0.4, materials.timber, x, 1.46, z);
     }
   }
+  for (const x of [-28.5, 28.5])
+    for (const z of [-28.5, -14, 0, 14, 28.5])
+      box(parent, 0.4, 2.92, 0.4, materials.timber, x, 1.46, z);
+
+  // Heavy uprights and an overhead steel lintel frame the only vehicle entrance.
+  box(parent, 0.52, 3.8, 0.52, materials.darkMetal, -5.8, 1.9, 28.2);
+  box(parent, 0.52, 3.8, 0.52, materials.darkMetal, 5.8, 1.9, 28.2);
+  box(parent, 12.1, 0.34, 0.56, materials.darkMetal, 0, 3.72, 28.2);
+  for (const side of [-1, 1] as const) {
+    addReinforcedGate(parent, side);
+    for (const y of [0.55, 1.2, 1.9])
+      box(parent, 0.16, 0.14, 0.44, materials.trim, side * 5.8, y, 28.49);
+  }
+  addBarbedWire(parent);
 }
 
 function addTower(parent: Group, x: number, z: number, guard = true): void {
@@ -303,6 +630,140 @@ function addPerson(
   return person;
 }
 
+function addSeatedSurvivor(
+  parent: Group,
+  x: number,
+  z: number,
+  variant: number,
+  facing: number,
+): void {
+  const person = new Group();
+  person.position.set(x, 0, z);
+  person.rotation.y = facing;
+  const civilianJackets = [materials.jacketAlt, materials.jacketBlue, materials.jacketRust];
+  const jacket = civilianJackets[Math.abs(variant) % civilianJackets.length]!;
+  box(person, 0.62, 0.56, 0.38, jacket, 0, 0.72, 0.01).rotation.x = 0.18;
+  box(person, 0.42, 0.15, 0.38, materials.timber, 0, 0.43, 0.04);
+  for (const side of [-1, 1]) {
+    const thigh = box(person, 0.25, 0.31, 0.34, materials.pants, side * 0.16, 0.34, -0.2);
+    thigh.rotation.x = -0.42;
+    box(person, 0.22, 0.24, 0.43, materials.pants, side * 0.16, 0.2, -0.52);
+    box(person, 0.26, 0.14, 0.32, materials.boots, side * 0.16, 0.13, -0.79);
+    const arm = box(person, 0.17, 0.46, 0.22, jacket, side * 0.34, 0.65, -0.14);
+    arm.rotation.x = -0.5;
+    box(person, 0.17, 0.12, 0.19, materials.skin, side * 0.34, 0.43, -0.43);
+  }
+  const head = mesh(new SphereGeometry(0.22, 8, 6), materials.skin, 0, 1.19, -0.02, person);
+  head.scale.set(0.92, 1.04, 0.92);
+  mesh(new SphereGeometry(0.24, 8, 5), jacket, 0, 1.33, -0.01, person).scale.set(1.08, 0.43, 1.02);
+  box(person, 0.52, 0.09, 0.5, materials.timber, 0, 0.09, 0.04);
+  parent.add(person);
+}
+
+function addFieldTent(parent: Group, x: number, z: number, rotation: number, variant = 0): void {
+  const tent = new Group();
+  tent.position.set(x, 0, z);
+  tent.rotation.y = rotation;
+  const cloth = variant % 2 === 0 ? materials.canvas : materials.jacketAlt;
+  box(tent, 3.6, 0.12, 2.8, materials.darkMetal, 0, 0.1, 0);
+  const roofLeft = box(tent, 1.93, 0.13, 3.0, cloth, -0.65, 0.82, 0);
+  roofLeft.rotation.z = 0.84;
+  const roofRight = box(tent, 1.93, 0.13, 3.0, cloth, 0.65, 0.82, 0);
+  roofRight.rotation.z = -0.84;
+  const endGeometry = new BufferGeometry();
+  endGeometry.setAttribute(
+    'position',
+    new Float32BufferAttribute([-1.35, 0.12, 0, 1.35, 0.12, 0, 0, 1.55, 0], 3),
+  );
+  endGeometry.setIndex([0, 1, 2]);
+  endGeometry.computeVertexNormals();
+  const endA = new Mesh(endGeometry, cloth);
+  endA.position.z = 1.38;
+  endA.castShadow = true;
+  const endB = new Mesh(endGeometry, cloth);
+  endB.position.z = -1.38;
+  endB.rotation.y = Math.PI;
+  endB.castShadow = true;
+  tent.add(endA, endB);
+  const flap = box(tent, 0.72, 1.08, 0.07, materials.jacket, 0, 0.68, -1.4);
+  flap.rotation.x = 0.1;
+  box(tent, 0.85, 0.14, 1.65, materials.jacketBlue, 0, 0.2, -0.1);
+  const bag = mesh(
+    new CylinderGeometry(0.15, 0.16, 0.46, 6),
+    materials.rustMetal,
+    1.82,
+    0.25,
+    0.5,
+    tent,
+  );
+  bag.rotation.z = Math.PI / 2;
+  parent.add(tent);
+}
+
+function addCommunalFire(parent: Group): void {
+  const fire = new Group();
+  fire.position.set(6.3, 0, -3.6);
+  for (let index = 0; index < 8; index += 1) {
+    const angle = (index / 8) * Math.PI * 2;
+    const stone = mesh(
+      new IcosahedronGeometry(0.25, 0),
+      materials.rustMetal,
+      Math.cos(angle) * 0.82,
+      0.12,
+      Math.sin(angle) * 0.82,
+      fire,
+    );
+    stone.scale.set(1.2, 0.68, 0.86);
+    stone.rotation.y = angle;
+  }
+  for (const [x, z, rotation] of [
+    [-0.42, 0, 0.2],
+    [0.42, 0, -0.3],
+    [0, -0.43, 1.1],
+  ]) {
+    const log = mesh(
+      new CylinderGeometry(0.12, 0.15, 1.35, 6),
+      materials.timber,
+      x!,
+      0.22,
+      z!,
+      fire,
+    );
+    log.rotation.z = Math.PI / 2;
+    log.rotation.y = rotation!;
+  }
+  mesh(new ConeGeometry(0.33, 0.86, 5), materials.campFire, 0, 0.66, 0, fire);
+  mesh(new ConeGeometry(0.19, 0.56, 5), materials.trim, 0, 0.54, 0, fire);
+  box(fire, 0.28, 0.72, 0.28, materials.darkMetal, 1.35, 0.36, 0.1);
+  parent.add(fire);
+}
+
+function addCampLife(parent: Group): void {
+  addFieldTent(parent, -25, 6.4, 0.12, 0);
+  addFieldTent(parent, 23.5, 10.2, -0.18, 1);
+  addFieldTent(parent, 24, -12, 0.16, 0);
+  addFieldTent(parent, -24.2, -6.5, -0.12, 1);
+  addFieldTent(parent, 8.4, 12.2, 0.1, 0);
+  addFieldTent(parent, -5.8, -12.5, Math.PI / 2, 1);
+  addCommunalFire(parent);
+  addSeatedSurvivor(parent, 4.25, -3.9, 0, Math.PI / 2);
+  addSeatedSurvivor(parent, 7.3, -4.4, 1, -Math.PI / 2);
+  addSeatedSurvivor(parent, 6.7, -0.5, 2, Math.PI);
+  addSeatedSurvivor(parent, 2.7, -0.9, 1, Math.PI / 2);
+
+  for (const [x, z, width, height, material] of [
+    [-12.3, 1.7, 0.85, 0.76, materials.darkMetal],
+    [-10.9, 2.05, 0.68, 0.52, materials.rustMetal],
+    [11.1, -2.6, 0.92, 0.9, materials.timber],
+    [12.1, -1.8, 0.58, 0.7, materials.darkMetal],
+    [11, 11.8, 0.88, 0.78, materials.rustMetal],
+    [-1.9, 11.5, 0.84, 0.72, materials.timber],
+  ] as const) {
+    box(parent, width, height, 0.75, material, x, height / 2, z);
+    box(parent, width + 0.08, 0.09, 0.82, materials.trim, x, height + 0.03, z);
+  }
+}
+
 function addWalkingPerson(
   parent: Group,
   x: number,
@@ -318,8 +779,9 @@ function addWalkingPerson(
 }
 
 /** Advances the camp's patrol and civilian foot traffic while the player is at camp. */
-export function updateCampWalkers(camp: Group, deltaSeconds: number): void {
+export function updateCampWalkers(camp: Group, deltaSeconds: number, player: Vector3): void {
   if (!camp.visible) return;
+  updateCampDecorations(camp, deltaSeconds, player);
   const walkers = camp.userData.walkers as CampWalker[] | undefined;
   if (!walkers?.length) return;
   const delta = Math.min(deltaSeconds, 0.08);
@@ -870,6 +1332,7 @@ export function buildCamp(): Group {
   addFoodStand(camp);
   addOperationsBoard(camp);
   addDeparturePad(camp);
+  addCampLife(camp);
   addGuard(camp, -5, 24.5, 0);
   addGuard(camp, 5, 24.5, Math.PI);
   addWalkingPerson(
@@ -903,6 +1366,35 @@ export function buildCamp(): Group {
     ],
     2,
   );
+  addWalkingPerson(
+    camp,
+    12,
+    5,
+    [
+      { x: 12, z: 5 },
+      { x: 14, z: 7 },
+      { x: 13, z: 10 },
+      { x: 10, z: 12 },
+      { x: 8, z: 9 },
+      { x: 10, z: 6 },
+    ],
+    3,
+  );
+  addWalkingPerson(
+    camp,
+    15,
+    -3,
+    [
+      { x: 15, z: -3 },
+      { x: 16.5, z: -0.5 },
+      { x: 14, z: 2 },
+      { x: 11, z: 1 },
+      { x: 11.5, z: -2.5 },
+    ],
+    4,
+  );
+  addPerson(camp, -12.2, 0, 4.1, false, 0);
+  addPerson(camp, 9.7, 0, 11.6, false, 1);
   for (const service of campServices) addServiceMarker(camp, service);
   for (const entrance of campEntrances) {
     const door = new Group();
@@ -914,7 +1406,8 @@ export function buildCamp(): Group {
     light.userData.interactiveId = entrance.id;
     camp.add(door);
   }
-  camp.userData.staticColliderCount = 9;
-  camp.userData.assetCount = 0;
+  addCampDecorations(camp);
+  camp.userData.staticColliderCount = 21;
+  camp.userData.assetCount = 4;
   return camp;
 }

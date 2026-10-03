@@ -14,6 +14,7 @@ import {
   Mesh,
   MeshPhysicalMaterial,
   Scene,
+  Texture,
   Vector3,
 } from 'three';
 import type { RunAtmosphere, Weather } from './settings';
@@ -31,7 +32,7 @@ const rainDropCount = 150;
 
 /** Applies one seeded lighting/weather preset and keeps rain to a single draw call. */
 export class AtmosphereRuntime {
-  private readonly campBackground: Color;
+  private campBackground: Color | Texture;
   private readonly campFog: Fog | FogExp2;
   private readonly campSkyColor: Color;
   private readonly campSkyIntensity: number;
@@ -120,6 +121,11 @@ export class AtmosphereRuntime {
     return this.rainLines.visible;
   }
 
+  setCampBackground(background: Texture): void {
+    this.campBackground = background;
+    if (this.campActive) this.scene.background = background;
+  }
+
   setCamp(): void {
     this.campActive = true;
     this.active = { time: 'low-sun', weather: 'clear' };
@@ -153,12 +159,12 @@ export class AtmosphereRuntime {
     this.buildPuddles(preset.weather === 'rain' ? world : undefined, seed);
 
     if (preset.time === 'low-sun') {
-      this.skyLight.color.set('#ded9bd');
-      this.skyLight.intensity = preset.weather === 'rain' ? 0.98 : 1.15;
-      this.fillLight.color.set('#75856a');
-      this.fillLight.intensity = 0.52;
-      this.sun.color.set(preset.weather === 'rain' ? '#ddd2b9' : '#fff0cc');
-      this.sun.intensity = preset.weather === 'rain' ? 1.25 : 2.05;
+      this.skyLight.color.set('#c4cfe0');
+      this.skyLight.intensity = preset.weather === 'rain' ? 0.91 : 0.98;
+      this.fillLight.color.set('#7085a3');
+      this.fillLight.intensity = 0.43;
+      this.sun.color.set(preset.weather === 'rain' ? '#c7bba9' : '#ffc48a');
+      this.sun.intensity = preset.weather === 'rain' ? 1.25 : 2.28;
       this.sun.position.set(-82, 52, 48);
       this.setExposure(1.0);
     } else {
@@ -204,7 +210,7 @@ export class AtmosphereRuntime {
     const flash =
       this.flashRemaining > 0 ? Math.sin((this.flashRemaining / 0.24) * Math.PI) * 0.72 : 0;
     if (this.active.time === 'low-sun') {
-      this.sun.intensity = (this.active.weather === 'rain' ? 1.25 : 2.05) + flash;
+      this.sun.intensity = (this.active.weather === 'rain' ? 1.25 : 2.28) + flash;
     } else {
       this.sun.intensity = (this.active.weather === 'rain' ? 0.56 : 0.82) + flash;
     }

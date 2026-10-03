@@ -12,6 +12,7 @@ import {
   PerspectiveCamera,
   Vector3,
 } from 'three';
+import { packedDirtTexture, tileGroundUv } from './groundTexture';
 import { getAsset } from '../assets/catalog';
 import type { WorldRoad } from './generateWorld';
 import {
@@ -29,7 +30,8 @@ const grassMaterial = new MeshStandardMaterial({
 });
 const roadMaterial = new MeshStandardMaterial({ color: '#454841', roughness: 1, side: DoubleSide });
 const trailMaterial = new MeshStandardMaterial({
-  color: '#82795f',
+  color: '#c3b9a3',
+  map: packedDirtTexture,
   roughness: 1,
   side: DoubleSide,
 });
@@ -155,10 +157,9 @@ export function buildWorld(world: WorldData): Group {
   for (const area of world.waterAreas) root.add(makeWaterArea(world, area));
 
   for (const road of world.roads) {
-    const roadMesh = new Mesh(
-      new PlaneGeometry(road.sizeX, road.sizeZ),
-      road.kind === 'road' ? roadMaterial : trailMaterial,
-    );
+    const geometry = new PlaneGeometry(road.sizeX, road.sizeZ);
+    if (road.kind !== 'road') tileGroundUv(geometry, road.sizeX, road.sizeZ);
+    const roadMesh = new Mesh(geometry, road.kind === 'road' ? roadMaterial : trailMaterial);
     roadMesh.rotation.x = -Math.PI / 2;
     roadMesh.position.set(road.centerX, 0.055, road.centerZ);
     roadMesh.receiveShadow = true;

@@ -1,9 +1,9 @@
-export type PointerLockMode = 'third-person' | 'top-down';
+export type PointerLockMode = 'third-person' | 'top-down' | 'first-person';
 
 export function canRequestPointerLock(
   mode: PointerLockMode,
   isSceneTarget: boolean,
   isHudTarget: boolean,
 ): boolean {
-  return mode === 'third-person' && isSceneTarget && !isHudTarget;
+  return mode !== 'top-down' && isSceneTarget && !isHudTarget;
 }
