@@ -35,6 +35,8 @@ Next: playtest Phase 18 using the checklist in `README.md`. Optional phone testi
 
 ## Phase 18 checklist — 2026-10-03
 
+Implementation commit: `3117b5f`.
+
 - [x] Perspective-only held aim, enlarged top-down target assistance, persistent engagement, and distinct bounded procedural firearm sounds.
 - [x] Connected, pannable/zoomable progression web; permanent credit-funded SMG/M4A; point-funded character, grenade, turret and companion branches; free skill-point respec.
 - [x] Handgun starter, free capacity-based grenade refill, capped non-stacking incendiary patches, readable item list, and separate Armory/Skill Tree tabs.
