@@ -97,7 +97,7 @@ describe('world asset LOD', () => {
     barrels[0]!.traverse((object) => {
       if (object instanceof Mesh && object.userData.explosiveBarrelBlink) indicators.push(object);
     });
-    expect(indicators.length).toBe(3);
-    expect(new Set(indicators.map((object) => object.material)).size).toBe(3);
+    expect(indicators.length).toBe(6);
+    expect(new Set(indicators.map((object) => object.material)).size).toBe(6);
   });
 });

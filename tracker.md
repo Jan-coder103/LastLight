@@ -384,6 +384,13 @@ Update a checkbox only when the work and its verification are complete. Add the 
 - [x] Brief browser smoke touched both camera views, top-down movement/fire, and the denied Pointer Lock fallback; a fresh reload after the console fix added no new Three.js errors. Full visual pickup/combat-flow review is deferred to the owner.
 - [ ] Owner visual gameplay review of pickup/combat flow, effects, sprint/adrenaline, barrels, pointer-lock controls, and performance. The owner asked to defer further visual gameplay testing until this review.
 
+### Phase 16 owner revisions — 2026-10-03
+
+- Implemented requested background-free pickup list directly left of the character, dark-red barrel shell/cap blinks with a red halo, and removal of the exploded barrel placement.
+- Raised the third-person follow pivot by 0.9 m for a clearer view and aim.
+- Verification: `npm test` passed (24 files, 76 tests); production build passed with the existing shared-chunk size advisory. Targeted formatting checks and `git diff --check` passed.
+- Repeat owner playtest is pending; existing owner instruction defers further browser gameplay testing to their review.
+
 ### Phase 16 planning notes
 
 - Artillery ground impact already called the camera-shake effect. It now uses the existing reduced-motion gate and configured intensity; the helper returns zero for reduced motion and caps shake at 0.16.

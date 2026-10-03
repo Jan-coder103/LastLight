@@ -1,6 +1,6 @@
 # Coding handoff
 
-Updated: 2026-10-01
+Updated: 2026-10-03
 
 ## Inventory and scrap-yard follow-up
 
@@ -38,6 +38,14 @@ Phases 1–13 are **Accepted**. Phase 14, extraction horde pressure, is **Revisi
 - Fixed a console error in `src/assets/lowDetailVisual.ts`: Three.js 0.186 logs an error for `Object3D.add()` with zero arguments, reached when a generated low-detail group has no unmerged meshes. The empty-list guard is covered by a regression test. A fresh embedded-browser reload after the fix added no new Three.js console errors; earlier historical console entries remain in the browser log.
 - Focused feature regressions pass. The existing 24-seed world-generation timing check now warms the generator before collecting samples. `npm test` passes (23 files, 75 tests); both `test` and `test:watch` use one Vitest worker to keep unrelated test files from distorting the p95 timing sample. `npm run build` passes. Vite retains its advisory for the shared ~736 kB asset-document chunk. Targeted Prettier checks pass for changed source, README, and handoff files; `tracker.md` retains the project's existing table layout. `git diff --check` passes.
 - The user requested that visual gameplay testing wait until their review. A brief prior smoke verified both camera modes, top-down route/fire, and the pointer-lock denial fallback; do not perform additional gameplay checks before the owner playtest. Phase 16 remains open until the owner reviews pickup/combat feedback, sprint/adrenaline, barrels, pointer controls, and performance. Phases 14/15 remain separate open gates.
+
+## Phase 16 owner revisions — 2026-10-03
+
+- Pickup feed moved out of the bottom HUD and follows the projected character position, 34 px to its left, with no background or border. FIFO timing is unchanged.
+- Barrel shells and fuse caps blink dark red at every LOD with a lightweight additive red halo. Detonation detaches and hides the entire placement, preventing the LOD updater from making it visible again or raycasts from hitting it.
+- Raised the third-person orbit pivot/follow position by 0.9 m (1.75 m to 2.65 m), retaining mouse pitch, shoulder offset, and aiming direction.
+- Verification: production build passed with the existing shared-chunk size advisory. Updated material-isolation regression for whole-barrel blinking and added coverage for color restoration, LOD updates after detonation, and absence from scene raycasts. `npm test` passed: 24 files, 76 tests. Targeted Prettier checks and `git diff --check` passed.
+- Repeat owner playtest remains open; no additional browser gameplay checks, following the existing owner instruction.
 
 ## Phase 7 performance result — accepted 2026-10-01
 

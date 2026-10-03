@@ -149,24 +149,25 @@ input:focus-visible {
 }
 
 .pickup-feed {
-  width: 162px;
-  min-height: 52px;
+  position: absolute;
+  z-index: 4;
+  width: 180px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  gap: 3px;
-  overflow: hidden;
-  padding-left: 8px;
-  border-left: 1px solid rgba(235, 228, 200, 0.14);
+  gap: 4px;
+  transform: translate(-100%, -50%);
+  pointer-events: none;
+  background: none;
 }
 
 .pickup-feed-entry {
-  overflow: hidden;
-  color: #ddd6bd;
-  font: 8px/1.25 var(--mono);
+  color: #eee5cd;
+  font: 11px/1.35 var(--mono);
   letter-spacing: 0.035em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-align: right;
+  text-shadow:
+    0 1px 3px #000,
+    0 0 5px #000;
   transition: opacity 120ms linear;
 }
 

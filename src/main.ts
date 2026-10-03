@@ -57,6 +57,7 @@ import { CameraRig } from './camera/CameraRig';
 import { BloodTrailGate, BloodTrailVisual, impactShakeStrength } from './game/CombatFeedback';
 import { CombatSimulation, type ZombieState } from './game/CombatSimulation';
 import { ExplosiveBarrelFuses } from './game/ExplosiveBarrel';
+import { ExplosiveBarrelVisual } from './game/ExplosiveBarrelVisual';
 import { benchmarkCountsForHorde, benchmarkHorde } from './game/HordeBenchmark';
 import { HordeSimulation, type HordeSpawnPattern } from './game/HordeSimulation';
 import { PerformanceWindow } from './game/PerformanceWindow';
@@ -401,7 +402,7 @@ interface WoundedTrailTarget {
 
 interface ExplosiveBarrelRecord {
   object: Object3D;
-  blinkMaterials: MeshStandardMaterial[];
+  visual: ExplosiveBarrelVisual;
 }
 
 let gamePhase: GamePhase = 'base';
@@ -3319,14 +3320,7 @@ function scanExplosiveBarrels(): void {
   worldGroup.traverse((object) => {
     const id = object.userData.explosiveBarrelId as string | undefined;
     if (!id) return;
-    const blinkMaterials: MeshStandardMaterial[] = [];
-    object.traverse((part) => {
-      if (!(part instanceof Mesh) || part.userData.explosiveBarrelBlink !== true) return;
-      const assigned = Array.isArray(part.material) ? part.material : [part.material];
-      for (const material of assigned)
-        if (material instanceof MeshStandardMaterial) blinkMaterials.push(material);
-    });
-    explosiveBarrels.set(id, { object, blinkMaterials });
+    explosiveBarrels.set(id, { object, visual: new ExplosiveBarrelVisual(object) });
   });
 }
 
@@ -3351,8 +3345,7 @@ function triggerExplosiveBarrel(object: Object3D | undefined): boolean {
 
 function updateExplosiveBarrelBlinkMaterials(): void {
   for (const [id, barrel] of explosiveBarrels) {
-    const intensity = barrelFuses.isBlinking(id) ? 1.8 : 0;
-    for (const material of barrel.blinkMaterials) material.emissiveIntensity = intensity;
+    barrel.visual.setBlinking(barrelFuses.isBlinking(id));
   }
 }
 
@@ -3360,16 +3353,14 @@ function tickExplosiveBarrels(delta: number): void {
   for (const id of barrelFuses.update(delta)) {
     const barrel = explosiveBarrels.get(id);
     if (!barrel) continue;
-    barrel.blinkMaterials.forEach((material) => {
-      material.emissiveIntensity = 0;
-      material.color.set('#211b18');
-    });
     barrel.object.getWorldPosition(cameraFollowTarget);
     const center = new Vector3(
       cameraFollowTarget.x,
       terrainHeightAt(world.seed, cameraFollowTarget.x, cameraFollowTarget.z),
       cameraFollowTarget.z,
     );
+    barrel.visual.detonate();
+    explosiveBarrels.delete(id);
     applySharedGroundExplosion(center, artilleryRadius, 10, 'Barrel explosion');
   }
 }
@@ -4086,6 +4077,13 @@ function addPickupFeedEntry(text: string): void {
 
 function renderPickupFeed(): void {
   const root = elements.pickupFeed!;
+  const anchor = player.position
+    .clone()
+    .add(new Vector3(0, 1.1, 0))
+    .project(camera);
+  root.hidden = anchor.z < -1 || anchor.z > 1;
+  root.style.left = `${(anchor.x * 0.5 + 0.5) * window.innerWidth - 34}px`;
+  root.style.top = `${(-anchor.y * 0.5 + 0.5) * window.innerHeight}px`;
   const entries = pickupFeedModel.visibleEntries;
   const alive = new Set(entries.map((entry) => String(entry.id)));
   for (const child of [...root.children]) {
@@ -4101,7 +4099,6 @@ function renderPickupFeed(): void {
       root.append(element);
     }
     element.style.opacity = String(entry.opacity);
-    root.append(element);
   }
 }
 
@@ -4983,6 +4980,7 @@ function animate(now: number): void {
   }
   updatePickupPrompts();
   pickupFeedModel.update(delta);
+  renderPickupFeed();
   pickupUiRefresh += delta;
   if (pickupUiRefresh >= 0.12) {
     pickupUiRefresh = 0;

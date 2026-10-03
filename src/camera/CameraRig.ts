@@ -172,7 +172,7 @@ export class CameraRig {
       return;
     }
     const distance = 9.3 * this.zoomScale;
-    const pivotHeight = 1.75;
+    const pivotHeight = 2.65;
     const minimumCameraHeight = 0.65;
     const shoulderAngle = Math.atan2(0.95, distance);
     const sine = Math.sin(this.yaw);

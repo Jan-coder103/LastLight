@@ -32,6 +32,7 @@ function createBarrel(
   shell.position.y = 0.48;
   shell.castShadow = true;
   shell.receiveShadow = true;
+  shell.userData.explosiveBarrelBlink = true;
   group.add(shell);
 
   if (details !== 'very-low') {
