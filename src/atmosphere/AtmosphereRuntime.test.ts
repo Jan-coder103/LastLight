@@ -1,4 +1,4 @@
-import { AmbientLight, Color, DirectionalLight, Fog, Scene, Vector3 } from 'three';
+import { AmbientLight, Color, DirectionalLight, Fog, Scene, Texture, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { AtmosphereRuntime } from './AtmosphereRuntime';
 
@@ -42,4 +42,28 @@ describe('AtmosphereRuntime', () => {
     expect(thunder).toHaveBeenCalled();
     expect(sun.intensity).toBeCloseTo(1.25);
   });
+});
+
+it('reuses the loaded panorama across camp returns and does not replace the field sky on late load', () => {
+  const scene = new Scene();
+  scene.background = new Color('#a9a488');
+  scene.fog = new Fog('#a9a488', 175, 390);
+  const runtime = new AtmosphereRuntime(
+    scene,
+    new AmbientLight(),
+    new AmbientLight(),
+    new DirectionalLight(),
+    () => {},
+    () => {},
+  );
+  runtime.setRun({ time: 'low-sun', weather: 'clear' }, 'PANORAMA');
+  const fieldSky = scene.background;
+  const panorama = new Texture();
+  runtime.setCampBackground(panorama);
+  expect(scene.background).toBe(fieldSky);
+  runtime.setCamp();
+  expect(scene.background).toBe(panorama);
+  runtime.setRun({ time: 'high-moon', weather: 'clear' }, 'PANORAMA');
+  runtime.setCamp();
+  expect(scene.background).toBe(panorama);
 });

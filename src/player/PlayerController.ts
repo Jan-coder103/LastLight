@@ -248,7 +248,7 @@ export class PlayerController {
     if (this.dashDirection.lengthSq() < 0.01) {
       if (this.currentMode !== 'top-down') {
         this.dashDirection.set(
-          -Math.sin(this.currentCameraYaw),
+          Math.sin(this.currentCameraYaw),
           0,
           -Math.cos(this.currentCameraYaw),
         );

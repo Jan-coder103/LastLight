@@ -15,23 +15,23 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. The target 
 
 ## Controls
 
-| Input                          | Third person                                         | Top-down                                             | First person                                             |
-| ------------------------------ | ---------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------- |
-| W / A / S / D or arrow keys    | Move relative to the camera                          | —                                                    | Move relative to the camera                              |
-| Shift                          | Hold to sprint                                       | Hold to sprint along the route                       | Hold to sprint                                           |
-| Right-click                    | —                                                    | Move around static obstacles                         | —                                                        |
-| Left-click                     | Fire at the cursor                                   | Attack with cursor assist                            | Fire through the center reticle                          |
-| Drag on the scene              | Look and aim if pointer lock is unavailable          | —                                                    | Look if pointer lock is unavailable                      |
-| Mouse wheel                    | Zoom camera in or out                                | Zoom camera in or out                                | Zoom camera in or out                                    |
-| Q                              | Dash; 2-second cooldown, no cost                     | Dash; 2-second cooldown, no cost                     | Dash; 2-second cooldown, no cost                         |
-| 1 / 2 / 3                      | Turret / artillery / adrenaline (2.5× speed for 5 s) | —                                                    | Turret / artillery / adrenaline (2.5× speed for 5 s)    |
-| W / E / R                      | —                                                    | Turret / artillery / adrenaline (2.5× speed for 5 s) | —                                                        |
-| G                              | Throw grenade                                        | Throw grenade                                        | Throw grenade                                            |
-| I                              | Open shaped backpack                                 | Open shaped backpack                                 | Open shaped backpack                                     |
-| X                              | Use one carried supply to heal                       | Use one carried supply to heal                       | Use one carried supply to heal                           |
-| F                              | Interact, enter/exit, or board nearby                | Interact, enter/exit, or board nearby                | Interact, enter/exit, or board nearby                    |
-| Tab                            | Cycle camera mode                                    | Cycle camera mode                                    | Cycle camera mode                                        |
-| World Seed field + reload icon | Rebuild the map and encounter                        | Rebuild the map and encounter                        | Rebuild the map and encounter                            |
+| Input                          | Third person                                         | Top-down                                             | First person                                         |
+| ------------------------------ | ---------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------- |
+| W / A / S / D or arrow keys    | Move relative to the camera                          | —                                                    | Move relative to the camera                          |
+| Shift                          | Hold to sprint                                       | Hold to sprint along the route                       | Hold to sprint                                       |
+| Right-click                    | —                                                    | Move around static obstacles                         | —                                                    |
+| Left-click                     | Fire at the cursor                                   | Attack with cursor assist                            | Fire through the center reticle                      |
+| Drag on the scene              | Look and aim if pointer lock is unavailable          | —                                                    | Look if pointer lock is unavailable                  |
+| Mouse wheel                    | Zoom camera in or out                                | Zoom camera in or out                                | Zoom camera in or out                                |
+| Q                              | Dash; 2-second cooldown, no cost                     | Dash; 2-second cooldown, no cost                     | Dash; 2-second cooldown, no cost                     |
+| 1 / 2 / 3                      | Turret / artillery / adrenaline (2.5× speed for 5 s) | —                                                    | Turret / artillery / adrenaline (2.5× speed for 5 s) |
+| W / E / R                      | —                                                    | Turret / artillery / adrenaline (2.5× speed for 5 s) | —                                                    |
+| G                              | Throw grenade                                        | Throw grenade                                        | Throw grenade                                        |
+| I                              | Open shaped backpack                                 | Open shaped backpack                                 | Open shaped backpack                                 |
+| X                              | Use one carried supply to heal                       | Use one carried supply to heal                       | Use one carried supply to heal                       |
+| F                              | Interact, enter/exit, or board nearby                | Interact, enter/exit, or board nearby                | Interact, enter/exit, or board nearby                |
+| Tab                            | Cycle camera mode                                    | Cycle camera mode                                    | Cycle camera mode                                    |
+| World Seed field + reload icon | Rebuild the map and encounter                        | Rebuild the map and encounter                        | Rebuild the map and encounter                        |
 
 Tab cycles through third-person, top-down, then first-person and back to third-person. First-person hides the scout body and shows a camera-mounted firearm. The player still uses direct camera-relative movement and third-person ability keys.
 
@@ -45,7 +45,7 @@ The scrap hut and two large, overlapping scrap piles are along the east edge of 
 
 ## Current project status
 
-Phases 1–13 are accepted. Phase 14 remains open for revisions after owner feedback about dead-zombie despawning and far-tier visuals; the revision removes defeated agents from rendering and uses cylinder instances for the far horde tier. Phase 15, dormant horde and noise awareness, is in progress at the owner's direction while Phase 14's review gate remains unresolved. Phase 16 combat feedback and field interaction polish is implemented and awaiting owner playtest; it covers hit effects, pickup UI/feed, sprint/adrenaline, pointer lock, explosive barrels, blood trails, and the lowest world-asset LOD transition at 120 m. Phase 17, camp atmosphere and first-person view, is in progress at the owner's request; its build passes and owner visual review remains open. Phase 7 closed on 2026-10-01 after the approved-catalog LOD rollout and desktop performance review; phone testing is deferred until later. Implementation details and acceptance history are in `tracker.md`.
+Phases 1–13 are accepted. Phase 14 remains open for revisions after owner feedback about dead-zombie despawning and far-tier visuals; the revision removes defeated agents from rendering and uses cylinder instances for the far horde tier. Phase 15, dormant horde and noise awareness, is in progress at the owner's direction while Phase 14's review gate remains unresolved. Phase 16 combat feedback and field interaction polish is implemented and awaiting owner playtest; it covers hit effects, pickup UI/feed, sprint/adrenaline, pointer lock, explosive barrels, blood trails, and the lowest world-asset LOD transition at 120 m. Phase 17, camp atmosphere and first-person view, is implemented and awaiting owner playtest; its build and automated regressions pass, and owner visual review remains open. Phase 7 closed on 2026-10-01 after the approved-catalog LOD rollout and desktop performance review; phone testing is deferred until later. Implementation details and acceptance history are in `tracker.md`.
 
 The compact HUD at the bottom center shows health as a red ring and Q/W/E/R/G abilities with cooldown timers. Recent pickups appear FIFO directly left of the on-screen character, with no panel background. In-range ground items show an animated **F** keycap above them. Third-person slot keys display as 1/2/3 to match the field controls. The current camera view is listed in the right-side dev telemetry panel; the left controls panel lists **Tab** for switching views.
 

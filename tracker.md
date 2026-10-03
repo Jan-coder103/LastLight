@@ -2,11 +2,11 @@
 
 Last updated: 2026-10-03
 
-Current gate: Phases 1–13 are **Accepted**. Phase 14, extraction horde pressure, is **Revisions needed** after owner feedback on dead-hostile despawning and far-tier visuals. Its revisions remove dead hostiles from render pools and use cylinders for the far tier; review, verification, and repeat owner playtest remain open. Phase 15, dormant horde and noise awareness, is **In progress** at the owner's explicit direction while Phase 14 remains unresolved. Phase 16, combat feedback and field interaction polish, is implemented and awaits the owner's gameplay review. Phase 17, camp atmosphere, hub dressing, and first-person view, is **In progress** at the owner's explicit request while the earlier review gates remain open. The owner closed Phase 7 on 2026-10-01; phone testing remains deferred.
+Current gate: Phases 1–13 are **Accepted**. Phase 14, extraction horde pressure, is **Revisions needed** after owner feedback on dead-hostile despawning and far-tier visuals. Its revisions remove dead hostiles from render pools and use cylinders for the far tier; review, verification, and repeat owner playtest remain open. Phase 15, dormant horde and noise awareness, is **In progress** at the owner's explicit direction while Phase 14 remains unresolved. Phase 16, combat feedback and field interaction polish, is implemented and awaits the owner's gameplay review. Phase 17, camp atmosphere, hub dressing, and first-person view, is implemented and **Awaiting owner playtest**; review fixes, 84 automated tests, and the production build pass. The owner closed Phase 7 on 2026-10-01; phone testing remains deferred.
 
 Latest Phase 10 work: the camp and field use the same shaped backpack without adding items on deployment. Extraction preserves contents and layout; death loses carried contents and reissues the starter rifle and three grenades while banked resources and safe-reserve items remain protected. The inventory supports item dragging, ground drops/pickups, equipped firearms, field cache items, a scrap-to-credit service, and a food buy/sell stand. The scrap hut, worker, piles, and navigation colliders were moved to the east side of camp, clear of the chopper pad. The 2026-09-27 follow-up reports a passing build, 55 tests, and browser checks of both inventory screens, a dropped grenade carried through deployment, and the relocated vendor. The owner completed the Phase 10 playtest and accepted it on 2026-09-29 after the reported fixes.
 
-Next: complete Phase 17 regression coverage and build review, then owner-playtest the hub visuals, three camera modes, controls, and performance. Phase 16's combat-feedback playtest, Phase 14's revision review/playtest, and Phase 15's verification/playtest remain open as separate gates. The earlier owner request to defer gameplay checks until review remains in effect. Optional per-scenario performance profiles or Pixel-class phone testing remain non-blocking follow-ups for Phase 7.
+Next: owner-playtest the hub visuals, three camera modes, controls, and performance. Phase 16's combat-feedback playtest, Phase 14's revision review/playtest, and Phase 15's verification/playtest remain open as separate gates. The earlier owner request to defer gameplay checks until review remains in effect. Optional per-scenario performance profiles or Pixel-class phone testing remain non-blocking follow-ups for Phase 7.
 
 ## Phase status
 
@@ -29,7 +29,7 @@ Next: complete Phase 17 regression coverage and build review, then owner-playtes
 | 14    | Extraction horde pressure                                         | Revisions needed | Revisions needed | Owner feedback: dead hostiles should despawn and far zombies can use cylinders. Code revisions are in place and the production build passes; automated checks, browser smoke, and repeat owner playtest remain.                   |
 | 15    | Dormant horde and noise awareness                                 | In progress | Not started   | Owner requested implementation while Phase 14 remains open. Dormant roster, seeded local roaming, noise sources/decay, awareness and focus are implemented; verification and owner playtest remain.                                                   |
 | 16    | Combat feedback and field interaction polish                     | Awaiting owner playtest | Not started | Features, focused regression coverage, full suite (24 files/76 tests), and production build pass. The npm test scripts run with one worker so the world-generation p95 benchmark is not distorted by concurrent test files. Fresh browser reload after the console fix added no new Three.js errors; embedded Pointer Lock is denied and its drag fallback appeared. Owner visual gameplay review remains open, per the owner's direction. |
-| 17    | Camp atmosphere, dense hub dressing, first-person view            | In progress | Not started | Warm/cool lighting, shared packed-dirt texture, batched hub ground LODs, reinforced camp settlement, supplied panorama, articulated scout, and camera-mounted first-person rifle are implemented. Production build passes; regression coverage and owner visual playtest remain open. |
+| 17    | Camp atmosphere, dense hub dressing, first-person view            | Awaiting owner playtest | Not started | Warm/cool lighting, shared packed-dirt texture, batched hub ground LODs, reinforced camp settlement, supplied panorama, articulated scout, and camera-mounted first-person rifle are implemented. Production build and 84 tests pass after code review fixes; owner visual playtest remains open. |
 
 ## Phase 1 checklist
 
@@ -400,7 +400,7 @@ Update a checkbox only when the work and its verification are complete. Add the 
 - Console review found a pre-existing empty-spread `Group.add(...[])` in generic world LOD generation. Guarded the empty case and added a regression test. A fresh browser reload emitted no new Three.js errors; the console log still contains earlier entries from before the fix.
 - Pickup feed entries remain fully visible for three seconds, then fade for 0.42 seconds before removal.
 
-## Phase 17 checklist — implementation in progress
+## Phase 17 checklist — implemented, awaiting owner playtest
 
 - [x] Warm the direct sun and cool the ambient fill using existing lights; keep the lighting change outside the post-processing pipeline.
 - [x] Distinguish packed earth from grass with a beige/gray palette and one reusable 64×64 grit texture on camp paths and field trails.
@@ -410,7 +410,7 @@ Update a checkbox only when the work and its verification are complete. Add the 
 - [x] Replace the capsule scout with separate torso, head, arms, legs, boots, equipment, and an animated walk rig.
 - [x] Add first-person as the third Tab view, hide the player body after the camera transition, and show the camera-mounted rifle with center-reticle fire and direct camera-relative movement.
 - [x] Production build passes: `npm run build`.
-- [ ] Add regression coverage for the first-person mode and controls, ground-decoration LOD and batching, dirt texture sharing, and reachability around the expanded camp.
+- [x] Regression coverage passes for first-person camera/input/presentation, perspective dash, panorama reuse, decoration tiers/batching/culling, dirt texture/UVs, and expanded camp/gate reachability: 27 files, 84 tests; production build passes.
 - [ ] Owner playtest camp density, dirt/grass readability, panorama framing, gate appearance/navigation, all three camera views, controls, and desktop frame rate.
 
 ### Phase 17 implementation decisions

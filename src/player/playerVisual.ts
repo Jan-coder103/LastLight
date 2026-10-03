@@ -132,6 +132,7 @@ export function createPlayerVisual(): Group {
   const rifle = buildRifle();
   rifle.position.set(0.35, 1.31, -0.43);
   rifle.rotation.x = -0.08;
+  player.add(rifle);
 
   const shadow = new Mesh(
     new SphereGeometry(0.66, 12, 6),

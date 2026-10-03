@@ -30,6 +30,9 @@ describe('Wayfarer Camp layout', () => {
     expect(navigator.isWalkable(0, 28)).toBe(true);
     expect(navigator.isWalkable(-12, 28)).toBe(false);
     expect(navigator.isWalkable(0, 31)).toBe(true);
+    const gatePath = navigator.findPath(0, 31, camp.spawn.x, camp.spawn.z);
+    expect(gatePath).not.toHaveLength(0);
+    expect(navigator.isPathWalkable({ x: 0, z: 31 }, gatePath)).toBe(true);
     expect(navigator.isWalkable(0, 34)).toBe(false);
   });
 

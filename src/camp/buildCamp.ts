@@ -364,7 +364,9 @@ function addBarbedWire(parent: Group): void {
 
 function addReinforcedGate(parent: Group, side: -1 | 1): void {
   const leaf = new Group();
-  leaf.position.set(side * 3.42, 0, 28.68);
+  // Leave two navigable grid columns through the entrance, including actor clearance.
+  leaf.position.set(side * 3.8, 0, 28.68);
+  leaf.scale.x = 0.8;
   box(leaf, 4.08, 2.5, 0.3, materials.fence, 0, 1.25, 0);
   box(leaf, 4.16, 0.18, 0.38, materials.darkMetal, 0, 0.2, 0);
   box(leaf, 4.16, 0.18, 0.38, materials.darkMetal, 0, 2.42, 0);

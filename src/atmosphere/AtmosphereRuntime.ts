@@ -133,7 +133,8 @@ export class AtmosphereRuntime {
     this.puddleGroup.visible = false;
     this.volumetricFog?.setWeatherVisible(false);
     this.flashRemaining = 0;
-    this.scene.background = this.campBackground.clone();
+    this.scene.background =
+      this.campBackground instanceof Texture ? this.campBackground : this.campBackground.clone();
     this.scene.fog = this.campFog.clone();
     this.skyLight.color.copy(this.campSkyColor);
     this.skyLight.intensity = this.campSkyIntensity;

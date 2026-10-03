@@ -98,6 +98,7 @@ import { buildInterior } from './interiors/buildInterior';
 import { generateInterior, interiorWorld, type InteriorLayout } from './interiors/interiorLayout';
 import { playerSpeedMultiplier, PlayerController } from './player/PlayerController';
 import { createFirstPersonWeapon } from './player/playerVisual';
+import { playerPresentation } from './player/presentation';
 import { canRequestPointerLock } from './input/pointerLock';
 import { buildWorld, updateWorldLods } from './world/buildWorld';
 import {
@@ -139,6 +140,7 @@ scene.background = new Color('#a9a488');
 scene.fog = new Fog('#a9a488', 175, 390);
 
 const camera = new PerspectiveCamera(53, window.innerWidth / window.innerHeight, 0.1, 500);
+scene.add(camera);
 const renderer = new WebGLRenderer({
   canvas,
   antialias: true,
@@ -591,14 +593,9 @@ function updateModeUi(): void {
 }
 
 function syncPlayerPresentation(): void {
-  const cameraTransition = cameraRig.isTransitioning;
-  const firstPerson = cameraRig.mode === 'first-person';
-  const characterPhase = ['base', 'active', 'extracting', 'disembarking', 'takeoff'].includes(
-    gamePhase,
-  );
-  const weaponPhase = ['base', 'active', 'extracting'].includes(gamePhase);
-  player.visual.visible = characterPhase && (!firstPerson || cameraTransition);
-  firstPersonWeapon.visual.visible = firstPerson && weaponPhase && !cameraTransition;
+  const presentation = playerPresentation(cameraRig.mode, cameraRig.isTransitioning, gamePhase);
+  player.visual.visible = presentation.body;
+  firstPersonWeapon.visual.visible = presentation.weapon;
 }
 
 function updateAtmosphereStatus(): void {
@@ -3794,7 +3791,7 @@ elements.hordeBenchmark!.addEventListener('click', () => void runHordeBenchmark(
 elements.hordeCamera!.addEventListener('change', () => {
   if (!stressActive) return;
   const selected = elements.hordeCamera!.value === 'top-down' ? 'top-down' : 'third-person';
-  if (selected !== cameraRig.mode) switchView();
+  while (selected !== cameraRig.mode) switchView();
 });
 elements.restartButton!.addEventListener('click', returnToBase);
 elements.baseCloseButton!.addEventListener('click', closeBaseTerminal);

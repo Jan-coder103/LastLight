@@ -10,10 +10,15 @@ describe('view-specific input map', () => {
     expect(abilityFromKey('Digit1', 'third-person')).toBe(1);
     expect(abilityFromKey('Digit2', 'third-person')).toBe(2);
     expect(abilityFromKey('Digit3', 'third-person')).toBe(3);
+    expect(abilityFromKey('KeyW', 'first-person')).toBeUndefined();
+    expect(abilityFromKey('Digit1', 'first-person')).toBe(1);
+    expect(abilityFromKey('Digit2', 'first-person')).toBe(2);
+    expect(abilityFromKey('Digit3', 'first-person')).toBe(3);
   });
 
   it('keeps movement in third person and makes Q a view-independent dash key', () => {
     expect(isMovementKey('KeyW', 'third-person')).toBe(true);
+    expect(isMovementKey('KeyW', 'first-person')).toBe(true);
     expect(isMovementKey('KeyW', 'top-down')).toBe(false);
     expect(isMovementKey('ArrowLeft', 'third-person')).toBe(true);
     expect(isDashKey('KeyQ')).toBe(true);
