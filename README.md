@@ -4,6 +4,20 @@ A single-player survival and extraction game about scavenging a zombie-overrun r
 
 Explore six seeded environments, fight or evade a growing horde, search enterable buildings, and decide what is worth carrying to extraction. Between runs, manage a walkable survivor camp with shops, storage, upgrade services, lookout towers, and a waiting helicopter.
 
+## Screenshots
+
+**Wayfarer Camp — third-person view**
+
+![Third-person view of Wayfarer Camp, with survivors, watchtowers, and the parked extraction helicopter](screen1.png)
+
+**In the field — first-person view**
+
+![First-person view of the city–forest perimeter, with an infected ahead and the extraction helicopter in the distance](screen2.png)
+
+**In the field — top-down view**
+
+![Top-down view of the scout facing a group of infected on a road beside a fenced tower](screen3.png)
+
 ## Highlights
 
 - Three camera views: third person, top-down, and first person.
