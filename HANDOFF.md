@@ -2,6 +2,12 @@
 
 Updated: 2026-10-03
 
+## Camp shadow correction — 2026-10-03
+
+- The shared camp mesh helper disabled shadow casting/receiving, leaving only explicitly overridden building and roof pieces casting shadows. Solid camp meshes now cast and receive shadows, including market canopies, tent roofs, tower supports, and furniture. Flat paths, ground rings, and the landing pad receive shadows without casting them.
+- The parked helicopter now opts into the shared helicopter factory’s shadow support. Batched grass, stones, wire, and tiny perimeter details retain their existing shadow settings.
+- Added a camp shadow regression. `npm test` passes (27 files, 85 tests); `npm run build` passes with the existing shared-chunk size advisory. Targeted Prettier and `git diff --check` pass. Visual gameplay testing remains deferred to the owner per the existing review instruction; no phase acceptance changes.
+
 ## Inventory and scrap-yard follow-up
 
 The hub and mission inventory now share one grid and retain the same item positions on deployment. There is no mission-only rifle/grenade injection. New saves and saves from before this fix receive a starter rifle and three grenades once; after a death, the carried backpack is lost and that starter kit is reissued in camp. A successful extraction saves the updated backpack. Banked resources and the camp reserve remain safe. The scrap service marker, worker, and hut moved to the east side of camp at approximately `(18, -4.5)` and `(23, -5)`; two irregular, enlarged piles overlap near `(21, 0)` and `(25, 1)`, well north of the chopper landing ring. Navigation colliders follow the new geometry. Build and 55 tests pass; browser checks showed the same rifle and grenades in the camp and field menus, including after dropping a grenade in camp, and a reachable scrap vendor beside the larger piles. The owner completed Phase 10's playtest and accepted it on 2026-09-29 after fixing reported issues.

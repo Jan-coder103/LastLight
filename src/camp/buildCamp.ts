@@ -82,8 +82,13 @@ function mesh(
 ): Mesh {
   const object = new Mesh(geometry, material);
   object.position.set(x, y, z);
-  object.castShadow = false;
-  object.receiveShadow = false;
+  // Flat ground overlays receive shadows without casting onto the terrain below.
+  object.castShadow = !(
+    geometry instanceof PlaneGeometry ||
+    geometry instanceof CircleGeometry ||
+    geometry instanceof RingGeometry
+  );
+  object.receiveShadow = true;
   parent.add(object);
   return object;
 }
@@ -1287,7 +1292,7 @@ function addDeparturePad(parent: Group): void {
   landingH.userData.interactiveId = 'camp-departure';
   box(pad, 0.46, 0.1, 2.3, materials.trim, 0, 0.12, -0.08);
 
-  const helicopter = createHelicopter('camp-departure');
+  const helicopter = createHelicopter('camp-departure', true);
   helicopter.group.name = 'Camp departure helicopter';
   helicopter.group.position.set(0.8, 1.4, 0.2);
   helicopter.mainRotor.name = 'Camp helicopter main rotor';

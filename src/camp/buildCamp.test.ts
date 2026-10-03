@@ -1,4 +1,12 @@
-import { InstancedMesh, Mesh, MeshStandardMaterial, Vector3 } from 'three';
+import {
+  CircleGeometry,
+  InstancedMesh,
+  Mesh,
+  MeshStandardMaterial,
+  PlaneGeometry,
+  RingGeometry,
+  Vector3,
+} from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildCamp, updateCampDecorations } from './buildCamp';
 import { packedDirtTexture } from '../world/groundTexture';
@@ -48,5 +56,37 @@ describe('camp ground dressing', () => {
         maps.push(object.material.map);
     });
     expect(maps.length).toBeGreaterThan(1);
+  });
+});
+
+describe('camp shadows', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('casts shadows from solid camp structures and the parked helicopter onto ground overlays', () => {
+    vi.stubGlobal('document', { createElement: () => ({ getContext: () => null }) });
+    const camp = buildCamp();
+    const solids: Mesh[] = [];
+    const groundOverlays: Mesh[] = [];
+    camp.traverse((object) => {
+      if (!(object instanceof Mesh) || object instanceof InstancedMesh) return;
+      if (
+        object.geometry instanceof PlaneGeometry ||
+        object.geometry instanceof CircleGeometry ||
+        object.geometry instanceof RingGeometry
+      ) {
+        groundOverlays.push(object);
+      } else {
+        solids.push(object);
+      }
+    });
+    expect(solids.length).toBeGreaterThan(100);
+    expect(solids.every((part) => part.castShadow)).toBe(true);
+    expect(groundOverlays.length).toBeGreaterThan(5);
+    expect(groundOverlays.every((part) => part.receiveShadow)).toBe(true);
+    const helicopter = camp.getObjectByName('Camp departure helicopter')!;
+    expect(helicopter).toBeDefined();
+    helicopter.traverse((part) => {
+      if (part instanceof Mesh) expect(part.castShadow).toBe(true);
+    });
   });
 });
