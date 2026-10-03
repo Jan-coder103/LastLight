@@ -1,5 +1,9 @@
 # Game development plan
 
+## Project status — 2026-10-03
+
+Phases 1–17 are complete and owner-reviewed. Phase acceptance gates are closed. The backlog below records possible future work; it does not reopen a completed phase. Detailed evidence and the final owner report are in `tracker.md` and `HANDOFF.md`.
+
 ## Vision
 
 Build a single-player browser game and technical demo in Three.js: land in a zombie apocalypse zone, scavenge under growing pressure, and reach the chopper before a horde overwhelms you. The signature features are a smooth, usable transition between top-down and third-person cameras and a measurable simulation of up to 10,000 active hostile agents. Runs feed a persistent, walkable base camp.
@@ -50,7 +54,7 @@ Military base and large city maps with fuel costs; mutated animals, giant spider
 
 The exact libraries, data structures, and numeric budgets are phase 1 or later implementation choices. Record chosen versions and benchmark hardware in the handoff when work begins.
 
-## Phase workflow
+## Phase workflow (historical process)
 
 For each subphase, the coding agent reads `plan.md`, `tracker.md`, and `HANDOFF.md`; inspects the current code; implements only the active scope; adds meaningful tests; runs them and a playable smoke check; commits the work to Git; updates the tracker; and writes a concise handoff with changed files, test results, known issues, and the next action. Phase 1 must initialize Git before the first commit because this folder is not currently a repository.
 
@@ -275,7 +279,7 @@ Phone testing remains deferred and is not part of the completed desktop phase. I
 
 **Implementation decision (2026-10-03):** the supplied 1800×1024 image is a wide sunset landscape rather than a six-face cubemap. Use it as a basic equirectangular-style camp background for a first pass; it may stretch horizontally slightly. Ground grit uses one reusable 64×64 data texture. Camp grass and pebbles use four instanced batches, swap detailed/simple geometry at 20 m, and cull beyond 60 m. First-person is the third Tab mode and reuses third-person direct movement and ability keys.
 
-**Phase start:** the owner explicitly requested Phase 17 while Phases 14–16 still have separate open review gates.
+**Historical phase-start note:** Phase 17 began while Phases 14–16 had open review gates. The owner has since completed and reviewed all Phases 1–17; see the project status at the top of this document and the acceptance record in `tracker.md`.
 
 ## Backlog after phase 17
 
@@ -289,4 +293,4 @@ Prioritize by playtest value and measured cost: military-base and large-city des
 - Final art/audio sources and licenses, before shipping public builds.
 - Exterior simulation behavior during interiors (resolved in phase 8): pause the outdoor timer and hostiles while inside; keep player health and ability/weapon cooldowns active, and run the interior encounter normally.
 
-These decisions should be recorded in `HANDOFF.md` when made and reflected here if they change the roadmap.
+These decisions should be recorded in `HANDOFF.md` when made and reflected here if they change the roadmap. Phases 1–17 are now closed; any selected backlog item should be scoped as new future work rather than treated as an open phase gate.

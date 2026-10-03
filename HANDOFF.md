@@ -2,21 +2,23 @@
 
 Updated: 2026-10-03
 
+## Current position — all phases accepted
+
+The owner confirmed on 2026-10-03 that Phases 1–17 are complete and reviewed. All acceptance gates are closed. Phase 14's regular-run horde pressure and combat integration, Phase 15's dormant/noise-aware behavior, Phase 16's combat and interaction feedback, and Phase 17's camp presentation and first-person view are accepted. The phase-specific sections below preserve the implementation history and statuses at the time; this current-position record supersedes older pending-review notes.
+
+Next: select and scope any desired future work from the post-Phase-17 backlog in `plan.md`. Optional desktop profiling and phone testing remain follow-ups, not open phase requirements.
+
 ## Camp shadow correction — 2026-10-03
 
 - The shared camp mesh helper disabled shadow casting/receiving, leaving only explicitly overridden building and roof pieces casting shadows. Solid camp meshes now cast and receive shadows, including market canopies, tent roofs, tower supports, and furniture. Flat paths, ground rings, and the landing pad receive shadows without casting them.
 - The parked helicopter now opts into the shared helicopter factory’s shadow support. Batched grass, stones, wire, and tiny perimeter details retain their existing shadow settings.
-- Added a camp shadow regression. `npm test` passes (27 files, 85 tests); `npm run build` passes with the existing shared-chunk size advisory. Targeted Prettier and `git diff --check` pass. Visual gameplay testing remains deferred to the owner per the existing review instruction; no phase acceptance changes.
+- Added a camp shadow regression. `npm test` passes (27 files, 85 tests); `npm run build` passes with the existing shared-chunk size advisory. Targeted Prettier and `git diff --check` pass. At the time of this change, visual review was still pending; the later owner report above closes all phase gates.
 
 ## Inventory and scrap-yard follow-up
 
 The hub and mission inventory now share one grid and retain the same item positions on deployment. There is no mission-only rifle/grenade injection. New saves and saves from before this fix receive a starter rifle and three grenades once; after a death, the carried backpack is lost and that starter kit is reissued in camp. A successful extraction saves the updated backpack. Banked resources and the camp reserve remain safe. The scrap service marker, worker, and hut moved to the east side of camp at approximately `(18, -4.5)` and `(23, -5)`; two irregular, enlarged piles overlap near `(21, 0)` and `(25, 1)`, well north of the chopper landing ring. Navigation colliders follow the new geometry. Build and 55 tests pass; browser checks showed the same rifle and grenades in the camp and field menus, including after dropping a grenade in camp, and a reachable scrap vendor beside the larger piles. The owner completed Phase 10's playtest and accepted it on 2026-09-29 after fixing reported issues.
 
-## Current position
-
-Phases 1–13 are **Accepted**. Phase 14, extraction horde pressure, is **Revisions needed** after owner feedback that dead zombies remain visible and that the far tier can use cylinders. The revisions remove dead enemies from render pools and add a compact cylinder LOD for far horde agents; verification and repeat owner playtest remain open. At the owner's explicit direction, Phase 15, dormant horde and noise awareness, is **In progress** while Phase 14's review gate remains unresolved; its automated checks, browser smoke, and owner playtest remain open. Phase 16 (combat feedback and field interaction polish) is implemented and **Awaiting owner playtest**. Its production build and full suite pass (24 files, 76 tests); the test scripts run Vitest with one worker so the world-generation p95 benchmark is measured without concurrent test-file load. The embedded browser denied Pointer Lock; its drag fallback appeared, and a fresh reload after the console fix added no new Three.js errors. Per the owner's direction, visual pickup/combat-flow testing is deferred to their playtest. Phase 17 (camp atmosphere, hub dressing, and first-person view) is implemented and **Awaiting owner playtest**. Its production build and regression suite pass (27 files, 84 tests). No further browser gameplay checks were run, following the existing owner review instruction. See `plan.md` and `tracker.md` for scope. On 2026-09-29, the owner completed the combined Phase 10/11 playtests and the Phase 13 four-rotation review, confirming fixes and acceptance. Phase 7 closed on 2026-10-01 after the approved-catalog LOD rollout and the reported 20-minute desktop performance session. Phone testing remains deferred.
-
-## Phase 14 implementation in progress
+## Phase 14 implementation record (historical status at the time; phase later accepted)
 
 - The field run uses the Phase 6 scalable simulation with a 10,000-agent capacity, 20 initial seeded ring placements, and one new seeded walkable placement every two seconds around the scout's current position. New agents enter from 82–128 m out; Phase 15 keeps them dormant until they enter the 92 m activation radius.
 - The existing 12-second insertion grace remains. Once active, nearby aware enemies investigate noise and focus on the scout; active but unaware enemies roam locally. Outdoor movement, awareness/noise decay, and spawn time pause inside buildings and while the backpack pauses gameplay; outdoor state resumes on exit. The extraction phase continues to be vulnerable to nearby hostiles.
@@ -24,7 +26,7 @@ Phases 1–13 are **Accepted**. Phase 14, extraction horde pressure, is **Revisi
 - The field HUD displays living/spawned counts. A restrained radio line appears at periodic reinforcements.
 - The production build now passes with these revisions and the Phase 15 implementation. Automated checks, browser smoke, and the repeat owner playtest remain open. The horde remains capped at its existing 10,000-agent capacity; regular-run desktop performance and the combined indoor/outdoor flow still need review.
 
-## Phase 15 implementation in progress
+## Phase 15 implementation record (historical status at the time; phase later accepted)
 
 - The regular field horde uses separate active and dormant spatial rosters. Agents farther than 92 m from the scout stay dormant at their saved position, health, identity, and far cylinder tier. They wake inside 92 m, roam within a seeded 16 m local patch, and return to dormancy at their current position after leaving the radius.
 - Walking maintains a 10 m field noise radius while the scout is moving. Rifle fire, dash, turret shots, artillery, and grenade throws/impacts can raise it up to 140 m. Noise decays at 0.12 per second after movement and loud actions stop. Aware agents investigate the latest noise location for up to 1.1 seconds, then focus on the scout. Focus decays over 1.6 seconds after the agent leaves the shrinking awareness radius.
@@ -33,7 +35,7 @@ Phases 1–13 are **Accepted**. Phase 14, extraction horde pressure, is **Revisi
 - Building entry and backpack pause still skip the outdoor horde tick, so movement, focus decay, and noise decay pause with the rest of the outdoor simulation.
 - `npm run build` passes. Automated checks, browser smoke, and owner playtest have not been run for Phase 15. Phase 14 verification and the repeat owner playtest also remain open.
 
-## Phase 16 implementation — awaiting owner playtest
+## Phase 16 implementation record (historical status at the time; phase later accepted)
 
 - Implementation commit: `3b63ee8`.
 - Shot hits now emit bounded pooled blood feedback, briefly tint the struck enemy, and apply modest navigation-safe knockback. Artillery uses the existing ground-impact shake through the reduced-motion and shake-intensity settings.
@@ -53,7 +55,7 @@ Phases 1–13 are **Accepted**. Phase 14, extraction horde pressure, is **Revisi
 - Verification: production build passed with the existing shared-chunk size advisory. Updated material-isolation regression for whole-barrel blinking and added coverage for color restoration, LOD updates after detonation, and absence from scene raycasts. `npm test` passed: 24 files, 76 tests. Targeted Prettier checks and `git diff --check` passed.
 - Repeat owner playtest remains open; no additional browser gameplay checks, following the existing owner instruction.
 
-## Phase 17 implementation — awaiting owner playtest — 2026-10-03
+## Phase 17 implementation record — 2026-10-03
 
 - Changed the existing direct sun to a warmer low-sun color and ambient fill to a cool blue tint. The pass adds no lights, shadow maps, or post-processing stages; low-sun field presets use the same warm/cool palette.
 - Replaced camp-path and generated-trail colors with a beige/gray packed-earth palette and one shared deterministic 64×64 `DataTexture`. UVs tile it at roughly 2.8 m per image; this adds a reusable sampler without adding geometry or a draw call.
@@ -65,7 +67,7 @@ Phases 1–13 are **Accepted**. Phase 14, extraction horde pressure, is **Revisi
 - `npm run build` passed after the implementation. The shared asset-document chunk remains above Vite's 500 kB advisory; the panorama is emitted separately. Automated tests and browser gameplay checks have not been run. Targeted Prettier checks and `git diff --check` pass. The previously recorded owner preference defers additional gameplay checks until owner review.
 - Next after the code review below: have the owner review panorama framing, density, gate and service reachability, all three camera modes, and frame rate. Phase 16's distinct review and Phases 14/15's open gates remain unchanged.
 
-## Phase 17 code review — 2026-10-03
+## Phase 17 code review — 2026-10-03 (historical review checkpoint)
 
 - Reviewed implementation commit `9a91571`. Attached the gameplay camera to the scene so its first-person weapon renders, and attached the previously orphaned rifle to the scout.
 - Fixed the Horde Lab selector to reach its requested camera mode through the three-mode cycle. Corrected idle perspective dash direction at nonzero yaw, including first-person.
@@ -315,10 +317,12 @@ Earlier Phase 13 verification on 2026-09-29, before the second approved batch: `
 - Phase 9 `npm run format:check` — passed.
 - Phase 9 color-picker correction `npm run build` — passed and emits both pages; the shared Three.js chunk advisory remains.
 
-## Known limits and next action
+## Current known limits and next action
 
-- Phases 1–13 are accepted; Phase 14 needs revisions and a repeat playtest. Phase 7 is closed and does not block the horde work.
-- Next: the owner visually reviews Phase 16 pickup/combat feedback, sprint/adrenaline, barrels, pointer controls, and performance. Phase 14's revision review/repeat playtest and Phase 15's verification/playtest remain separate open gates. Optional per-scene profiling and Pixel-class phone testing remain parked follow-ups for Phase 7.
+- Phases 1–17 are accepted. No phase gate is open.
+- The far horde visuals are intentionally simplified low-poly instances; local obstacle steering uses short deflection checks rather than full route planning. These are known implementation limits, not unresolved phase acceptance items.
+- Optional per-scene profiling and Pixel-class phone testing remain future follow-ups.
+- Next: choose and scope any new work from the backlog in `plan.md`.
 - Stress visuals are intentionally simplified low-poly instances; Phase 6 proves tracked simulation and horde behavior. Optional performance profiling can be resumed if a future regression or optimization task calls for it.
 - Local obstacle steering is a short deflection check rather than full route planning. The owner should flag groups that stall at blocked cells or bunch in narrow spaces.
 - The regular run's new horde path now has a passing production build, but has not had automated checks, browser smoke, or owner playtest. Measure normal-run performance after verification, especially with several hundred spawned and nearby active agents.
@@ -327,3 +331,7 @@ Earlier Phase 13 verification on 2026-09-29, before the second approved batch: `
 ## Handoff format for future coding sessions
 
 Keep factual evidence and the next exact task here. For later phases, include changed systems, decisions, commands and results, manual/browser checks, performance conditions, known issues, owner feedback, and commits.
+
+## Final owner review — 2026-10-03
+
+The owner confirmed that all Phases 1–17 are done and reviewed. `tracker.md` records the final acceptance for Phases 14–17; earlier implementation sections in this handoff describe intermediate checkpoints and are retained as history. No playtest, verification, or review gate remains open.
